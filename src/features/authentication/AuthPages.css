@@ -1,0 +1,132 @@
+.auth-layout {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #eef2ff, #f8fafc);
+  padding: 2rem;
+}
+.auth-card {
+  width: min(520px, 100%);
+  background: #ffffff;
+  padding: clamp(2rem, 3vw, 3.5rem);
+  border-radius: 1.5rem;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.15);
+  display: grid;
+  gap: 1.75rem;
+}
+
+.auth-card h1 {
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  margin: 0;
+}
+
+.auth-card__subtitle {
+  color: #475569;
+  margin: 0;
+}
+
+.auth-card__error {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.08);
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+}
+
+.auth-form {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.auth-form__fieldset {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.auth-form__fieldset legend {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.auth-form__field {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.auth-form__field span {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.auth-form__field input {
+  border-radius: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.6);
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.auth-form__field input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+
+.auth-form__phone-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.auth-form__phone-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+}
+
+.auth-form__phone-remove,
+.auth-form__phone-add,
+.auth-form__submit {
+  border: none;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.auth-form__phone-remove,
+.auth-form__phone-add {
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+  padding: 0.5rem 0.9rem;
+}
+
+.auth-form__phone-add {
+  justify-self: start;
+}
+
+.auth-form__submit {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff;
+  padding: 0.85rem 1.4rem;
+  margin-top: 0.5rem;
+  box-shadow: 0 15px 30px rgba(37, 99, 235, 0.25);
+}
+
+.auth-form__submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.auth-card__footer {
+  color: #475569;
+  margin: 0;
+}
+
+.auth-card__footer a {
+  color: #2563eb;
+  font-weight: 600;
+}
