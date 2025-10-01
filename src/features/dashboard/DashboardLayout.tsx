@@ -582,7 +582,7 @@ const DashboardLayout = () => {
         Skip to main content
       </a>
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-7xl items-center gap-3 px-4 py-3 lg:px-8">
+        <div className="flex w-full items-center gap-3 px-4 py-3 sm:px-6 lg:px-10 xl:px-12">
           <div className="flex flex-1 items-center gap-3">
             <Button
               variant="outline-secondary"
@@ -614,8 +614,19 @@ const DashboardLayout = () => {
               <Button variant="primary" className="rounded-pill px-4">
                 New sale
               </Button>
-              <Button variant="outline-primary" className="rounded-pill px-4">
+              <Button
+                variant="outline-primary"
+                className="rounded-pill px-4"
+                onClick={() => navigate('/app/inventory#add-product')}
+              >
                 Add product
+              </Button>
+              <Button
+                variant="outline-secondary"
+                className="rounded-pill px-4"
+                onClick={() => navigate('/app/inventory/stocks')}
+              >
+                Manage stocks
               </Button>
             </div>
             <Button
@@ -666,7 +677,7 @@ const DashboardLayout = () => {
         </div>
       </header>
 
-      <div className="mx-auto flex w-full max-w-7xl flex-1 gap-6 px-4 py-6 lg:px-8">
+  <div className="flex w-full flex-1 gap-6 px-4 py-6 sm:px-6 lg:px-10 xl:px-12">
         <aside className="hidden w-64 flex-shrink-0 flex-col rounded-3xl bg-slate-900/95 px-5 py-6 text-slate-100 xl:flex">
           <div className="mb-6 text-sm font-semibold uppercase tracking-wide text-slate-400">Navigation</div>
           {renderNavigation()}
@@ -711,7 +722,7 @@ const DashboardLayout = () => {
       </div>
 
       <footer className="border-t border-slate-200 bg-white/90 py-4">
-        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-center gap-4 px-4 text-sm text-slate-600">
+        <div className="flex w-full flex-wrap items-center justify-center gap-4 px-4 text-sm text-slate-600 sm:px-6 lg:px-10 xl:px-12">
           <span>© 2025 POS Suite</span>
           <span aria-live="polite">Status: Online</span>
           <a href="#release-notes" className="text-brand-primary">

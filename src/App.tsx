@@ -15,6 +15,7 @@ import ReportsPage from './features/dashboard/pages/ReportsPage.tsx'
 import BillingPage from './features/dashboard/pages/BillingPage.tsx'
 import CustomersPage from './features/dashboard/pages/CustomersPage.tsx'
 import SettingsPage from './features/dashboard/pages/SettingsPage.tsx'
+import ManageStocksPage from './features/dashboard/pages/ManageStocksPage.tsx'
 
 const App = () => {
   return (
@@ -29,6 +30,7 @@ const App = () => {
           <Route path="/app" element={<DashboardLayout />}>
             <Route index element={<OverviewPage />} />
             <Route path="inventory" element={<InventoryPage />} />
+            <Route path="inventory/stocks" element={<ManageStocksPage />} />
             <Route path="sales" element={<SalesPage />} />
             <Route path="customers" element={<CustomersPage />} />
             <Route path="bookkeeping" element={<BookkeepingPage />} />

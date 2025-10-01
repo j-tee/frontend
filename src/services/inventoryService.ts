@@ -8,7 +8,12 @@ import type {
   Product,
   ProductPayload,
   StockAlert,
-  StockLot,
+  StockBatch,
+  StockBatchPayload,
+  StockProduct,
+  StockProductPayload,
+  Supplier,
+  SupplierPayload,
   Storefront,
   StorefrontPayload,
   Transfer,
@@ -102,11 +107,11 @@ export const deleteStorefront = async (storefrontId: string) => {
 }
 
 export const fetchProducts = async (params?: Record<string, unknown>) => {
-  const { data } = await httpClient.get<PaginatedResponse<Product> | Product[]>(
+  const { data } = await httpClient.get<PaginatedResponse<Product>>(
     '/inventory/api/products/',
     { params },
   )
-  return extractResults(data)
+  return data
 }
 
 export const createProduct = async (payload: ProductPayload) => {
@@ -117,12 +122,91 @@ export const createProduct = async (payload: ProductPayload) => {
   return data
 }
 
-export const fetchStockLots = async (params?: Record<string, unknown>) => {
-  const { data } = await httpClient.get<PaginatedResponse<StockLot>>(
+export const fetchStockBatches = async (params?: Record<string, unknown>) => {
+  const { data } = await httpClient.get<PaginatedResponse<StockBatch>>(
     '/inventory/api/stock/',
     { params },
   )
   return data
+}
+
+export const createStockBatch = async (payload: StockBatchPayload) => {
+  const { data } = await httpClient.post<StockBatch>(
+    '/inventory/api/stock/',
+    payload,
+  )
+  return data
+}
+
+export const updateStockBatch = async (stockBatchId: string, payload: Partial<StockBatchPayload>) => {
+  const { data } = await httpClient.patch<StockBatch>(
+    `/inventory/api/stock/${stockBatchId}/`,
+    payload,
+  )
+  return data
+}
+
+export const deleteStockBatch = async (stockBatchId: string) => {
+  await httpClient.delete(`/inventory/api/stock/${stockBatchId}/`)
+}
+
+export const fetchStockProducts = async (params?: Record<string, unknown>) => {
+  const { data } = await httpClient.get<PaginatedResponse<StockProduct>>(
+    '/inventory/api/stock-products/',
+    { params },
+  )
+  return data
+}
+
+export const createStockProduct = async (payload: StockProductPayload) => {
+  const { data } = await httpClient.post<StockProduct>(
+    '/inventory/api/stock-products/',
+    payload,
+  )
+  return data
+}
+
+export const updateStockProduct = async (
+  stockProductId: string,
+  payload: Partial<StockProductPayload>,
+) => {
+  const { data } = await httpClient.patch<StockProduct>(
+    `/inventory/api/stock-products/${stockProductId}/`,
+    payload,
+  )
+  return data
+}
+
+export const deleteStockProduct = async (stockProductId: string) => {
+  await httpClient.delete(`/inventory/api/stock-products/${stockProductId}/`)
+}
+
+export const fetchSuppliers = async (params?: Record<string, unknown>) => {
+  const { data } = await httpClient.get<PaginatedResponse<Supplier>>(
+    '/inventory/api/suppliers/',
+    { params },
+  )
+  return data
+}
+
+export const createSupplier = async (payload: SupplierPayload) => {
+  const { data } = await httpClient.post<Supplier>(
+    '/inventory/api/suppliers/',
+    payload,
+  )
+  return data
+}
+
+export const updateSupplier = async (supplierId: string, payload: Partial<SupplierPayload>) => {
+  const { data } = await httpClient.patch<Supplier>(
+    `/inventory/api/suppliers/${supplierId}/`,
+    payload,
+  )
+  return data
+}
+
+export const deleteSupplier = async (supplierId: string) => {
+  await httpClient.delete(`/inventory/api/suppliers/${supplierId}/`)
 }
 
 export const fetchInventorySnapshot = async (params?: Record<string, unknown>) => {
