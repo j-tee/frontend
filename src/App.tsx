@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom'
 import LandingPage from './pages/LandingPage.tsx'
 import LoginPage from './features/authentication/LoginPage.tsx'
 import RegisterAccountPage from './features/authentication/RegisterAccountPage.tsx'
+import AcceptInvitePage from './features/authentication/AcceptInvitePage.tsx'
 import VerifyEmailPage from './features/authentication/VerifyEmailPage.tsx'
 import RegisterBusinessPage from './features/onboarding/RegisterBusinessPage.tsx'
 import ProtectedRoute from './components/ProtectedRoute.js'
@@ -16,6 +17,8 @@ import BillingPage from './features/dashboard/pages/BillingPage.tsx'
 import CustomersPage from './features/dashboard/pages/CustomersPage.tsx'
 import SettingsPage from './features/dashboard/pages/SettingsPage.tsx'
 import ManageStocksPage from './features/dashboard/pages/ManageStocksPage.tsx'
+import StorefrontsPage from './features/dashboard/pages/StorefrontsPage.tsx'
+import EmployeesPage from './features/dashboard/pages/EmployeesPage.tsx'
 
 const App = () => {
   return (
@@ -23,6 +26,7 @@ const App = () => {
       <Route index element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterAccountPage />} />
+  <Route path="/accept-invite" element={<AcceptInvitePage />} />
   <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route element={<ProtectedRoute />}>
         <Route path="/onboarding/register-business" element={<RegisterBusinessPage />} />
@@ -31,6 +35,8 @@ const App = () => {
             <Route index element={<OverviewPage />} />
             <Route path="inventory" element={<InventoryPage />} />
             <Route path="inventory/stocks" element={<ManageStocksPage />} />
+            <Route path="storefronts" element={<StorefrontsPage />} />
+            <Route path="employees" element={<EmployeesPage />} />
             <Route path="sales" element={<SalesPage />} />
             <Route path="customers" element={<CustomersPage />} />
             <Route path="bookkeeping" element={<BookkeepingPage />} />

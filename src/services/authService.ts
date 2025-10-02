@@ -1,3 +1,4 @@
+import { isAxiosError } from 'axios'
 import httpClient from './httpClient.js'
 import type {
   AuthResponse,
@@ -11,6 +12,9 @@ import type {
   UserProfile,
   VerifyEmailPayload,
   VerifyEmailResponse,
+  InvitationTokenInfo,
+  AcceptInvitationPayload,
+  AcceptInvitationResponse,
 } from '../types/auth.js'
 import type { PaginatedResponse } from '../types/common.js'
 import type { Business } from '../types/business.js'
@@ -83,4 +87,54 @@ export const confirmPasswordReset = async (payload: PasswordResetConfirmPayload)
     payload,
   )
   return data
+}
+
+const INVITATION_ENDPOINTS = Object.freeze([
+  (token: string) => `/auth/invitations/${token}/`,
+  (token: string) => `/accounts/api/auth/invitations/${token}/`,
+])
+
+const INVITATION_ACCEPT_ENDPOINTS = Object.freeze([
+  (token: string) => `/auth/invitations/${token}/accept/`,
+  (token: string) => `/accounts/api/auth/invitations/${token}/accept/`,
+])
+
+export const validateInvitationToken = async (token: string) => {
+  let lastError: unknown
+  for (const buildPath of INVITATION_ENDPOINTS) {
+    try {
+      const { data } = await httpClient.get<InvitationTokenInfo>(buildPath(token), {
+        headers: { 'X-Skip-Auth': 'true' },
+      })
+      return data
+    } catch (error) {
+      lastError = error
+      if (!isAxiosError(error) || error.response?.status !== 404) {
+        throw error
+      }
+    }
+  }
+  throw lastError ?? new Error('Unable to validate invitation token.')
+}
+
+export const acceptInvitation = async (token: string, payload: AcceptInvitationPayload) => {
+  let lastError: unknown
+  for (const buildPath of INVITATION_ACCEPT_ENDPOINTS) {
+    try {
+      const { data } = await httpClient.post<AcceptInvitationResponse>(
+        buildPath(token),
+        payload,
+        {
+          headers: { 'X-Skip-Auth': 'true' },
+        },
+      )
+      return data
+    } catch (error) {
+      lastError = error
+      if (!isAxiosError(error) || error.response?.status !== 404) {
+        throw error
+      }
+    }
+  }
+  throw lastError ?? new Error('Unable to accept invitation.')
 }

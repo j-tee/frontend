@@ -65,6 +65,42 @@ export interface AuthResponse {
   business?: BusinessSummary
 }
 
+export interface InvitationTokenInfo {
+  email: string
+  business_name: string
+  role: string
+  expires_at: string
+}
+
+export interface AcceptInvitationPayload {
+  email: string
+  name: string
+  password: string
+  phone?: string
+}
+
+export type AcceptedMembershipStorefront = UUID | { id: UUID; name?: string }
+
+export interface AcceptedMembershipSummary {
+  id: UUID
+  business: UUID
+  role: string
+  status: string
+  assigned_storefronts: AcceptedMembershipStorefront[]
+}
+
+export interface AcceptInvitationResponse {
+  user: {
+    id: UUID
+    email: string
+    name: string
+  }
+  membership: AcceptedMembershipSummary
+  auth?: {
+    token?: string
+  }
+}
+
 export interface PasswordResetRequestPayload {
   email: string
 }

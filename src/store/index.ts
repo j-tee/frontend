@@ -3,6 +3,7 @@ import authReducer from './slices/authSlice.js'
 import subscriptionReducer from './slices/subscriptionSlice.js'
 import locationReducer from './slices/locationSlice.js'
 import inventoryReducer from './slices/inventorySlice.js'
+import staffReducer from './slices/staffSlice.js'
 import { setupHttpInterceptors } from '../services/httpClient.js'
 
 export const store = configureStore({
@@ -11,6 +12,7 @@ export const store = configureStore({
     subscription: subscriptionReducer,
     locations: locationReducer,
     inventory: inventoryReducer,
+    staff: staffReducer,
   },
 })
 

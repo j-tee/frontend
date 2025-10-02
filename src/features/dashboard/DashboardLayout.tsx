@@ -32,6 +32,7 @@ type NavIconKey =
   | 'sales'
   | 'inventory'
   | 'customers'
+  | 'employees'
   | 'reports'
   | 'bookkeeping'
   | 'billing'
@@ -80,6 +81,14 @@ const ICONS: Record<NavIconKey, ReactNode> = {
       <path d="M16 17.5a4 4 0 0 1 5 3.5" strokeLinecap="round" />
     </svg>
   ),
+  employees: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <path d="M7.5 13a4.5 4.5 0 1 1 9 0v.5a3.5 3.5 0 0 1-3.5 3.5h-2a3.5 3.5 0 0 1-3.5-3.5z" strokeLinejoin="round" />
+      <path d="M4.5 20a4.5 4.5 0 0 1 4.5-4.5" strokeLinecap="round" />
+      <path d="M19.5 20a4.5 4.5 0 0 0-4.5-4.5" strokeLinecap="round" />
+      <circle cx="12" cy="7" r="3" />
+    </svg>
+  ),
   reports: (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
       <path d="M5 20v-7" strokeLinecap="round" />
@@ -126,6 +135,7 @@ const SIDE_NAV_SECTIONS: SideNavSection[] = [
       { label: 'Sales', to: '/app/sales', icon: 'sales' },
       { label: 'Inventory', to: '/app/inventory', icon: 'inventory' },
       { label: 'Customers', to: '/app/customers', icon: 'customers' },
+      { label: 'Employees', to: '/app/employees', icon: 'employees' },
     ],
   },
   {
@@ -252,6 +262,7 @@ const DashboardLayout = () => {
         payload.manager = business.owner
       }
       await dispatch(addStorefront(payload)).unwrap()
+      void dispatch(loadLocations({ storefrontPage: 1 }))
       setShowLocationSwitcher(false)
     } catch (error) {
       const message = typeof error === 'string' ? error : error instanceof Error ? error.message : null
@@ -627,6 +638,20 @@ const DashboardLayout = () => {
                 onClick={() => navigate('/app/inventory/stocks')}
               >
                 Manage stocks
+              </Button>
+              <Button
+                variant="outline-secondary"
+                className="rounded-pill px-4"
+                onClick={() => navigate('/app/storefronts')}
+              >
+                Manage store front
+              </Button>
+              <Button
+                variant="outline-secondary"
+                className="rounded-pill px-4"
+                onClick={() => navigate('/app/employees')}
+              >
+                Manage staff
               </Button>
             </div>
             <Button

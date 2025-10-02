@@ -11,6 +11,7 @@
 - **Business logic & data access**: Organise into feature-specific service files inside `src/services`. Naming convention: `<feature>Service.ts` (e.g., `inventoryService.ts`, `salesService.ts`).
 - **Types**: Declare request/response interfaces in `src/types/<feature>.ts`. Export shared enums/constants from `src/types/common.ts`.
 - **UI routing**: Public landing page at `/` with marketing copy and CTAs for registration/login. Authenticated shell under `/app/*` guarded by a token-aware route.
+- **UI routing**: Public landing page at `/` with marketing copy and CTAs for registration/login. Authenticated shell under `/app/*` guarded by a token-aware route. Invitation redemption lives at `/accept-invite?token=<token>` so employees can onboard from emailed links.
 - **Subscription guard**: Maintain subscription status inside a dedicated slice. Surface a blocking banner + redirect to billing when the backend responds with `403` in gated areas.
 
 ```

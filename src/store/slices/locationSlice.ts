@@ -14,6 +14,8 @@ import type {
 } from '../../types/inventory.js'
 import type { RootState } from '../index.js'
 
+const DEFAULT_STOREFRONT_PAGE_SIZE = 20
+
 type LocationType = 'storefront' | 'warehouse'
 
 interface SelectedLocation {
@@ -21,8 +23,17 @@ interface SelectedLocation {
   id: string
 }
 
+interface PaginationState {
+  count: number
+  next: string | null
+  previous: string | null
+  page: number
+  pageSize: number
+}
+
 interface LocationState {
   storefronts: Storefront[]
+  storefrontPagination: PaginationState
   warehouses: Warehouse[]
   status: 'idle' | 'loading' | 'succeeded' | 'failed'
   error: string | null
@@ -35,6 +46,13 @@ interface LocationState {
 
 const initialState: LocationState = {
   storefronts: [],
+  storefrontPagination: {
+    count: 0,
+    next: null,
+    previous: null,
+    page: 1,
+    pageSize: DEFAULT_STOREFRONT_PAGE_SIZE,
+  },
   warehouses: [],
   status: 'idle',
   error: null,
@@ -63,22 +81,35 @@ const extractError = (error: unknown): string => {
   return 'Failed to load locations.'
 }
 
+interface LoadLocationsArgs {
+  storefrontPage?: number
+}
+
 interface LoadLocationsResult {
   storefronts: Storefront[]
+  storefrontPagination: PaginationState
   warehouses: Warehouse[]
 }
 
-export const loadLocations = createAsyncThunk<LoadLocationsResult>(
+export const loadLocations = createAsyncThunk<LoadLocationsResult, LoadLocationsArgs | undefined>(
   'locations/loadAll',
-  async (_, thunkAPI) => {
+  async (args, thunkAPI) => {
     try {
-      const [storefronts, warehouses] = await Promise.all([
-        fetchStorefronts(),
+      const page = args?.storefrontPage ?? 1
+      const [storefrontsResponse, warehouses] = await Promise.all([
+        fetchStorefronts({ page }),
         fetchWarehouses(),
       ])
 
       return {
-        storefronts,
+        storefronts: storefrontsResponse.results,
+        storefrontPagination: {
+          count: storefrontsResponse.count,
+          next: storefrontsResponse.next,
+          previous: storefrontsResponse.previous,
+          page: storefrontsResponse.page,
+          pageSize: DEFAULT_STOREFRONT_PAGE_SIZE,
+        },
         warehouses,
       }
     } catch (error) {
@@ -135,9 +166,10 @@ const locationSlice = createSlice({
       .addCase(
         loadLocations.fulfilled,
         (state: LocationState, action: PayloadAction<LoadLocationsResult>) => {
-          const { storefronts, warehouses } = action.payload
+          const { storefronts, storefrontPagination, warehouses } = action.payload
           state.status = 'succeeded'
           state.storefronts = storefronts
+          state.storefrontPagination = storefrontPagination
           state.warehouses = warehouses
           state.error = null
 
@@ -177,7 +209,15 @@ const locationSlice = createSlice({
         addStorefront.fulfilled,
         (state: LocationState, action: PayloadAction<Storefront>) => {
           state.createStorefrontStatus = 'succeeded'
-          state.storefronts = [action.payload, ...state.storefronts]
+          state.storefrontPagination.count += 1
+          if (state.storefrontPagination.page === 1) {
+            const nextStorefronts = [action.payload, ...state.storefronts]
+            state.storefronts = nextStorefronts.slice(0, state.storefrontPagination.pageSize)
+          } else {
+            state.storefronts = [action.payload, ...state.storefronts]
+            state.storefrontPagination.page = 1
+            state.storefrontPagination.previous = null
+          }
           state.selectedLocation = { type: 'storefront', id: action.payload.id }
         },
       )
@@ -208,6 +248,7 @@ export const { selectLocation, clearSelectedLocation, resetLocationCreationState
 
 export const selectLocationsState = (state: RootState) => state.locations
 export const selectStorefronts = (state: RootState) => state.locations.storefronts
+export const selectStorefrontPagination = (state: RootState) => state.locations.storefrontPagination
 export const selectWarehouses = (state: RootState) => state.locations.warehouses
 export const selectLocationStatus = (state: RootState) => state.locations.status
 export const selectLocationError = (state: RootState) => state.locations.error

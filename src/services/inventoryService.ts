@@ -73,11 +73,27 @@ export const deleteWarehouse = async (warehouseId: string) => {
   await httpClient.delete(`/inventory/api/warehouses/${warehouseId}/`)
 }
 
-export const fetchStorefronts = async () => {
-  const { data } = await httpClient.get<PaginatedResponse<Storefront> | Storefront[]>(
+interface FetchStorefrontsParams {
+  page?: number
+}
+
+export const fetchStorefronts = async (params?: FetchStorefrontsParams) => {
+  const page = params?.page ?? 1
+  const { data } = await httpClient.get<PaginatedResponse<Storefront>>(
     '/inventory/api/storefronts/',
+    {
+      params: { page },
+    },
   )
-  return extractResults(data)
+  return {
+    ...data,
+    page,
+  }
+}
+
+export const fetchStorefront = async (storefrontId: string) => {
+  const { data } = await httpClient.get<Storefront>(`/inventory/api/storefronts/${storefrontId}/`)
+  return data
 }
 
 export const createStorefront = async (payload: StorefrontPayload) => {

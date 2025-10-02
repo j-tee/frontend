@@ -1,4 +1,5 @@
 import axios, {
+  AxiosHeaders,
   type AxiosError,
   type AxiosInstance,
   type AxiosResponse,
@@ -21,11 +22,34 @@ const httpClient: AxiosInstance = axios.create({
 
 export const setupHttpInterceptors = (store: Store<RootState>) => {
   httpClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+    const headers = config.headers
+    const isAxiosHeaders = headers instanceof AxiosHeaders
+    const skipAuthValue = isAxiosHeaders
+      ? headers.get('X-Skip-Auth') ?? headers.get('x-skip-auth')
+      : (headers?.['X-Skip-Auth'] ?? headers?.['x-skip-auth'])
+
+    if (skipAuthValue) {
+      if (isAxiosHeaders) {
+        headers.delete('X-Skip-Auth')
+        headers.delete('x-skip-auth')
+        headers.delete('Authorization')
+      } else if (headers) {
+        delete (headers as Record<string, unknown>)['X-Skip-Auth']
+        delete (headers as Record<string, unknown>)['x-skip-auth']
+        delete (headers as Record<string, unknown>)['Authorization']
+      }
+      return config
+    }
+
     const state = store.getState()
     const token = state.auth.token
     if (token) {
-      config.headers = config.headers ?? {}
-      config.headers.Authorization = `Token ${token}`
+      if (isAxiosHeaders) {
+        headers.set('Authorization', `Token ${token}`)
+      } else {
+        config.headers = config.headers ?? {}
+        ;(config.headers as Record<string, unknown>)['Authorization'] = `Token ${token}`
+      }
     }
     return config
   })
