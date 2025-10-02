@@ -2,7 +2,6 @@ import { createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/tool
 import { isAxiosError, type AxiosError } from 'axios'
 import {
   changePassword as changePasswordRequest,
-  fetchBusinessesWithToken,
   fetchCurrentUser as fetchCurrentUserRequest,
   login as loginRequest,
   logout as logoutRequest,
@@ -10,25 +9,27 @@ import {
   registerBusiness as registerBusinessRequest,
   verifyEmail as verifyEmailRequest,
 } from '../../services/authService.js'
+import { fetchBusinesses } from '../../services/businessService.js'
 import type {
+  AccountType,
   AuthResponse,
+  BusinessSummary,
+  EmploymentContext,
+  LoginPayload,
   RegisterAccountPayload,
   RegisterAccountResponse,
-  BusinessSummary,
-  LoginPayload,
   RegisterBusinessPayload,
   UserProfile,
-  AccountType,
   VerifyEmailPayload,
   VerifyEmailResponse,
 } from '../../types/auth.js'
 import type { Business } from '../../types/business.js'
-import type { PaginatedResponse } from '../../types/common.js'
 import type { UUID } from '../../types/common.js'
 import type { RootState } from '../index.js'
 
 const TOKEN_STORAGE_KEY = 'pos_token'
 const BUSINESS_STORAGE_KEY = 'pos_business'
+const EMPLOYMENT_STORAGE_KEY = 'pos_employment'
 
 const readTokenFromStorage = () => {
   if (typeof window === 'undefined') return null
@@ -65,6 +66,43 @@ const writeBusinessToStorage = (business: BusinessSummary | null) => {
   }
 }
 
+const readEmploymentFromStorage = (): EmploymentContext | null => {
+  if (typeof window === 'undefined') return null
+  const raw = window.localStorage.getItem(EMPLOYMENT_STORAGE_KEY)
+  if (!raw) return null
+  try {
+    return JSON.parse(raw) as EmploymentContext
+  } catch (error) {
+    void error
+    return null
+  }
+}
+
+const writeEmploymentToStorage = (employment: EmploymentContext | null) => {
+  if (typeof window === 'undefined') return
+  if (employment) {
+    window.localStorage.setItem(EMPLOYMENT_STORAGE_KEY, JSON.stringify(employment))
+  } else {
+    window.localStorage.removeItem(EMPLOYMENT_STORAGE_KEY)
+  }
+}
+
+const toBusinessSummary = (business: Business): BusinessSummary => ({
+  id: business.id,
+  name: business.name,
+  tin: business.tin,
+  email: business.email,
+  address: business.address,
+  website: business.website ?? null,
+  phone_numbers: business.phone_numbers,
+  social_handles: business.social_handles,
+  is_active: business.is_active,
+  owner: business.owner,
+  owner_name: business.owner_name,
+  created_at: business.created_at,
+  updated_at: business.updated_at,
+})
+
 interface PendingVerification {
   user_id: UUID
   account_type: AccountType
@@ -73,7 +111,10 @@ interface PendingVerification {
 interface AuthState {
   token: string | null
   user: UserProfile | null
+  employment: EmploymentContext | null
   business: BusinessSummary | null
+  businessStatus: 'idle' | 'loading' | 'succeeded' | 'failed'
+  businessError: string | null
   status: 'idle' | 'loading' | 'succeeded' | 'failed'
   error: string | null
   registrationSuccessMessage: string | null
@@ -83,10 +124,17 @@ interface AuthState {
   verificationSuccessMessage: string | null
 }
 
+const persistedEmployment = readEmploymentFromStorage()
+const persistedBusinessFromStorage = readBusinessFromStorage()
+const persistedBusiness = persistedEmployment?.business ?? persistedBusinessFromStorage
+
 const initialState: AuthState = {
   token: readTokenFromStorage(),
   user: null,
-  business: readBusinessFromStorage(),
+  employment: persistedEmployment,
+  business: persistedBusiness,
+  businessStatus: persistedBusiness ? 'succeeded' : 'idle',
+  businessError: null,
   status: 'idle',
   error: null,
   registrationSuccessMessage: null,
@@ -97,17 +145,26 @@ const initialState: AuthState = {
 }
 
 const handleAuthFulfilled = (state: AuthState, payload: AuthResponse) => {
-  const nextToken = payload.token ?? state.token ?? null
-  const nextUser = payload.user ?? state.user
-  const nextBusiness = payload.business ?? state.business ?? null
+  const tokenCandidate = payload.token !== undefined ? payload.token : state.token
+  const nextToken = tokenCandidate ?? null
+  const userCandidate = payload.user !== undefined ? payload.user : state.user
+  const nextUser = userCandidate ?? null
+  const employmentCandidate = payload.employment !== undefined ? payload.employment : state.employment
+  const nextEmployment = employmentCandidate ?? null
+  const businessCandidate = payload.business !== undefined ? payload.business : state.business
+  const nextBusiness = nextEmployment?.business ?? businessCandidate ?? null
 
   state.token = nextToken
-  state.user = nextUser ?? null
+  state.user = nextUser
+  state.employment = nextEmployment
   state.business = nextBusiness
+  state.businessStatus = nextBusiness ? 'succeeded' : 'idle'
+  state.businessError = null
   state.status = 'succeeded'
   state.error = null
   state.pendingVerification = null
   writeTokenToStorage(nextToken)
+  writeEmploymentToStorage(nextEmployment)
   writeBusinessToStorage(nextBusiness)
 }
 
@@ -194,24 +251,6 @@ export const login = createAsyncThunk<
 >('auth/login', async (payload: LoginPayload, thunkAPI) => {
   try {
     const response = await loginRequest(payload)
-    const authUser = response.user
-    const authToken = response.token
-
-    if (authUser?.account_type?.toUpperCase() === 'OWNER' && !response.business && authToken) {
-      try {
-        const businessesResponse: PaginatedResponse<Business> = await fetchBusinessesWithToken(authToken)
-        const ownedBusiness = businessesResponse.results.find(
-          (business: Business) => business.owner === authUser.id,
-        )
-
-        if (ownedBusiness) {
-          return { ...response, business: ownedBusiness }
-        }
-      } catch (businessLookupError: unknown) {
-        void businessLookupError
-      }
-    }
-
     return response
   } catch (error: unknown) {
     return thunkAPI.rejectWithValue(extractErrorPayload(error) as RejectValue)
@@ -261,6 +300,34 @@ export const fetchCurrentUser = createAsyncThunk<
   }
 })
 
+export const hydrateBusinessContext = createAsyncThunk<
+  BusinessSummary | null,
+  void,
+  { rejectValue: RejectValue; state: RootState }
+>('auth/hydrateBusinessContext', async (_, thunkAPI) => {
+  try {
+    const state = thunkAPI.getState() as RootState
+    const { token, business, employment } = state.auth
+    if (!token) {
+      return null
+    }
+    if (business) {
+      return business
+    }
+    if (employment?.business) {
+      return employment.business
+    }
+    const businessesResponse = await fetchBusinesses()
+    const businesses = businessesResponse.results ?? []
+    if (businesses.length === 0) {
+      return null
+    }
+    return toBusinessSummary(businesses[0])
+  } catch (error: unknown) {
+    return thunkAPI.rejectWithValue(extractErrorPayload(error) as RejectValue)
+  }
+})
+
 const authSlice = createSlice({
   name: 'auth',
   initialState,
@@ -272,7 +339,10 @@ const authSlice = createSlice({
       void action
       state.token = null
       state.user = null
+      state.employment = null
       state.business = null
+      state.businessStatus = 'idle'
+      state.businessError = null
       state.status = 'idle'
       state.error = null
       state.registrationSuccessMessage = null
@@ -281,6 +351,7 @@ const authSlice = createSlice({
       state.verificationError = null
       state.verificationSuccessMessage = null
       writeTokenToStorage(null)
+      writeEmploymentToStorage(null)
       writeBusinessToStorage(null)
     },
     setAuthToken: (state: AuthState, action: PayloadAction<string | null>) => {
@@ -347,6 +418,7 @@ const authSlice = createSlice({
         state.error = null
         state.registrationSuccessMessage = null
         state.pendingVerification = null
+        state.businessError = null
       })
       .addCase(
         login.fulfilled,
@@ -356,6 +428,14 @@ const authSlice = createSlice({
           if (!authUser) {
             state.status = 'failed'
             state.error = 'Unable to load account details. Please try again.'
+            state.token = null
+            state.user = null
+            state.employment = null
+            state.business = null
+            state.pendingVerification = null
+            writeTokenToStorage(null)
+            writeEmploymentToStorage(null)
+            writeBusinessToStorage(null)
             return
           }
 
@@ -365,9 +445,11 @@ const authSlice = createSlice({
               'Email not verified. Please check your inbox for the verification link.'
             state.token = null
             state.user = null
+            state.employment = null
             state.business = null
             state.pendingVerification = null
             writeTokenToStorage(null)
+            writeEmploymentToStorage(null)
             writeBusinessToStorage(null)
             return
           }
@@ -377,9 +459,11 @@ const authSlice = createSlice({
             state.error = 'User account is disabled.'
             state.token = null
             state.user = null
+            state.employment = null
             state.business = null
             state.pendingVerification = null
             writeTokenToStorage(null)
+            writeEmploymentToStorage(null)
             writeBusinessToStorage(null)
             return
           }
@@ -397,11 +481,15 @@ const authSlice = createSlice({
       .addCase(logout.fulfilled, (state: AuthState) => {
         state.token = null
         state.user = null
+        state.employment = null
         state.business = null
+        state.businessStatus = 'idle'
+        state.businessError = null
         state.status = 'idle'
         state.error = null
         state.pendingVerification = null
         writeTokenToStorage(null)
+        writeEmploymentToStorage(null)
         writeBusinessToStorage(null)
       })
       .addCase(changePassword.pending, (state: AuthState) => {
@@ -442,10 +530,39 @@ const authSlice = createSlice({
           state.error = normalizeErrorMessage(action.payload)
           state.token = null
           state.user = null
+          state.employment = null
           state.business = null
+          state.businessStatus = 'idle'
+          state.businessError = null
           state.pendingVerification = null
           writeTokenToStorage(null)
+          writeEmploymentToStorage(null)
           writeBusinessToStorage(null)
+        },
+      )
+      .addCase(hydrateBusinessContext.pending, (state: AuthState) => {
+        state.businessStatus = 'loading'
+        state.businessError = null
+      })
+      .addCase(
+        hydrateBusinessContext.fulfilled,
+        (state: AuthState, action: PayloadAction<BusinessSummary | null>) => {
+          if (action.payload) {
+            state.businessStatus = 'succeeded'
+            state.business = action.payload
+            writeBusinessToStorage(action.payload)
+          } else {
+            state.businessStatus = 'idle'
+            state.business = null
+            writeBusinessToStorage(null)
+          }
+        },
+      )
+      .addCase(
+        hydrateBusinessContext.rejected,
+        (state: AuthState, action) => {
+          state.businessStatus = 'failed'
+          state.businessError = normalizeErrorMessage(action.payload)
         },
       )
       .addCase(verifyEmail.pending, (state: AuthState) => {
@@ -480,6 +597,7 @@ export const selectAuthState = (state: RootState) => state.auth
 export const selectIsAuthenticated = (state: RootState) => Boolean(state.auth.token)
 export const selectCurrentUser = (state: RootState) => state.auth.user
 export const selectCurrentBusiness = (state: RootState) => state.auth.business
+export const selectEmploymentContext = (state: RootState) => state.auth.employment
 export const selectPendingVerification = (state: RootState) => state.auth.pendingVerification
 export const selectVerificationFeedback = (state: RootState) => ({
   status: state.auth.verificationStatus,

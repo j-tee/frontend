@@ -11,7 +11,7 @@ import StorefrontAssignmentManager from '../components/employees/StorefrontAssig
 import InvitationList from '../components/employees/InvitationList'
 import { MEMBERSHIP_ROLES, type UUID } from '../../../types/common'
 import type { EmployeeRole } from '../../../types/employees'
-import { useAppDispatch, useAppSelector } from '../../../hooks'
+import { useAppDispatch, useAppSelector, usePermissions } from '../../../hooks'
 import { selectStorefronts } from '../../../store/slices/locationSlice'
 import {
   loadInvitations,
@@ -33,6 +33,7 @@ import {
   selectAssignmentStatuses,
   resetInviteState,
 } from '../../../store/slices/staffSlice'
+import { CAPABILITIES } from '../../../utils/permissions'
 
 const toErrorMessage = (error: unknown) => {
   if (typeof error === 'string') return error
@@ -46,6 +47,8 @@ const toErrorMessage = (error: unknown) => {
 
 const EmployeesPage = () => {
   const dispatch = useAppDispatch()
+  const { can } = usePermissions()
+  const canManageEmployees = can(CAPABILITIES.EMPLOYEES_MANAGE)
 
   const storefronts = useAppSelector(selectStorefronts)
   const storefrontOptions = useMemo(
@@ -106,9 +109,20 @@ const EmployeesPage = () => {
     }
   }, [inviteStatus, lastInvitedEmail, dispatch])
 
+  useEffect(() => {
+    if (!canManageEmployees && showAssignments) {
+      setShowAssignments(false)
+      setActiveMembershipId(null)
+    }
+  }, [canManageEmployees, showAssignments])
+
   const handleInviteEmployee = async (values: InviteEmployeeFormValues) => {
     setBanner(null)
     setLastInvitedEmail(values.email)
+    if (!canManageEmployees) {
+      setLastInvitedEmail(null)
+      throw new Error('You do not have permission to invite employees.')
+    }
     const payload = {
       email: values.email,
       role: values.role as EmployeeRole,
@@ -126,12 +140,20 @@ const EmployeesPage = () => {
   }
 
   const handleManageAssignments = (membershipId: UUID) => {
+    if (!canManageEmployees) {
+      setBanner({ variant: 'danger', message: 'You do not have permission to manage assignments.' })
+      return
+    }
     setActiveMembershipId(membershipId)
     setShowAssignments(true)
   }
 
   const handleSaveAssignments = async (membershipId: UUID, storefrontIds: UUID[]) => {
     setBanner(null)
+    if (!canManageEmployees) {
+      setBanner({ variant: 'danger', message: 'You do not have permission to update assignments.' })
+      throw new Error('You do not have permission to update assignments.')
+    }
     try {
       await dispatch(updateMemberAssignments({ membershipId, storefronts: storefrontIds })).unwrap()
       const membership = memberships.find((member) => member.id === membershipId)
@@ -150,6 +172,10 @@ const EmployeesPage = () => {
 
   const handleResendInvite = async (invitationId: UUID) => {
     setBanner(null)
+    if (!canManageEmployees) {
+      setBanner({ variant: 'danger', message: 'You do not have permission to resend invitations.' })
+      return
+    }
     try {
       await dispatch(resendEmployeeInvitation(invitationId)).unwrap()
       setBanner({ variant: 'success', message: 'Invitation email resent.' })
@@ -160,6 +186,10 @@ const EmployeesPage = () => {
 
   const handleRevokeInvite = async (invitationId: UUID) => {
     setBanner(null)
+    if (!canManageEmployees) {
+      setBanner({ variant: 'danger', message: 'You do not have permission to revoke invitations.' })
+      return
+    }
     try {
       await dispatch(revokeEmployeeInvitation(invitationId)).unwrap()
       setBanner({ variant: 'success', message: 'Invitation revoked.' })
@@ -173,6 +203,11 @@ const EmployeesPage = () => {
       {banner ? (
         <Alert variant={banner.variant} className="rounded-3xl border border-slate-200">
           {banner.message}
+        </Alert>
+      ) : null}
+      {!canManageEmployees ? (
+        <Alert variant="info" className="rounded-3xl border border-slate-200 bg-slate-50 text-slate-700">
+          You have read-only access to the staffing workspace. Contact an administrator to invite or manage employees.
         </Alert>
       ) : null}
 
@@ -219,13 +254,19 @@ const EmployeesPage = () => {
                 guide them through account activation.
               </Card.Text>
             </div>
-            <InviteEmployeeForm
-              roles={MEMBERSHIP_ROLES}
-              storefrontOptions={storefrontOptions}
-              isSubmitting={inviteStatus === 'loading'}
-              error={inviteError}
-              onSubmit={handleInviteEmployee}
-            />
+            {canManageEmployees ? (
+              <InviteEmployeeForm
+                roles={MEMBERSHIP_ROLES}
+                storefrontOptions={storefrontOptions}
+                isSubmitting={inviteStatus === 'loading'}
+                error={inviteError}
+                onSubmit={handleInviteEmployee}
+              />
+            ) : (
+              <Alert variant="secondary" className="rounded-3xl border border-slate-200 bg-slate-50 text-slate-700">
+                You can view pending invitations, but only administrators can invite new team members.
+              </Alert>
+            )}
           </Card.Body>
         </Card>
 
@@ -246,6 +287,7 @@ const EmployeesPage = () => {
               revokeStatuses={revokeStatuses}
               onResend={handleResendInvite}
               onRevoke={handleRevokeInvite}
+              canManage={canManageEmployees}
             />
           </Card.Body>
         </Card>
@@ -257,7 +299,12 @@ const EmployeesPage = () => {
             <h3 className="text-lg font-semibold text-slate-900">Employee roster</h3>
             <p className="text-sm text-slate-600">Searchable list of everyone with access to your POS workspace.</p>
           </div>
-          <Button variant="outline-secondary" className="rounded-pill px-4" onClick={() => setShowAssignments(true)}>
+          <Button
+            variant="outline-secondary"
+            className="rounded-pill px-4"
+            onClick={() => canManageEmployees && setShowAssignments(true)}
+            disabled={!canManageEmployees}
+          >
             Assign storefronts
           </Button>
         </div>
@@ -272,7 +319,11 @@ const EmployeesPage = () => {
             Loading roster…
           </div>
         ) : (
-          <EmployeeRosterTable memberships={memberships} onManageAssignments={handleManageAssignments} />
+          <EmployeeRosterTable
+            memberships={memberships}
+            onManageAssignments={canManageEmployees ? handleManageAssignments : undefined}
+            canManageAssignments={canManageEmployees}
+          />
         )}
       </section>
 
@@ -298,7 +349,7 @@ const EmployeesPage = () => {
       </section>
 
       <StorefrontAssignmentManager
-        show={showAssignments}
+        show={canManageEmployees && showAssignments}
         onClose={() => {
           setShowAssignments(false)
           setActiveMembershipId(null)

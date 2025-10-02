@@ -19,6 +19,8 @@ import SettingsPage from './features/dashboard/pages/SettingsPage.tsx'
 import ManageStocksPage from './features/dashboard/pages/ManageStocksPage.tsx'
 import StorefrontsPage from './features/dashboard/pages/StorefrontsPage.tsx'
 import EmployeesPage from './features/dashboard/pages/EmployeesPage.tsx'
+import RequirePermission from './components/RequirePermission.tsx'
+import { CAPABILITIES } from './utils/permissions.ts'
 
 const App = () => {
   return (
@@ -32,17 +34,94 @@ const App = () => {
         <Route path="/onboarding/register-business" element={<RegisterBusinessPage />} />
         <Route element={<RequireBusiness />}>
           <Route path="/app" element={<DashboardLayout />}>
-            <Route index element={<OverviewPage />} />
-            <Route path="inventory" element={<InventoryPage />} />
-            <Route path="inventory/stocks" element={<ManageStocksPage />} />
-            <Route path="storefronts" element={<StorefrontsPage />} />
-            <Route path="employees" element={<EmployeesPage />} />
-            <Route path="sales" element={<SalesPage />} />
-            <Route path="customers" element={<CustomersPage />} />
-            <Route path="bookkeeping" element={<BookkeepingPage />} />
-            <Route path="reports" element={<ReportsPage />} />
-            <Route path="billing" element={<BillingPage />} />
-            <Route path="settings" element={<SettingsPage />} />
+            <Route
+              index
+              element={(
+                <RequirePermission capability={CAPABILITIES.DASHBOARD_VIEW}>
+                  <OverviewPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="inventory"
+              element={(
+                <RequirePermission capability={CAPABILITIES.INVENTORY_VIEW}>
+                  <InventoryPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="inventory/stocks"
+              element={(
+                <RequirePermission capability={CAPABILITIES.INVENTORY_MANAGE}>
+                  <ManageStocksPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="storefronts"
+              element={(
+                <RequirePermission capability={CAPABILITIES.LOCATIONS_MANAGE}>
+                  <StorefrontsPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="employees"
+              element={(
+                <RequirePermission capability={CAPABILITIES.EMPLOYEES_VIEW}>
+                  <EmployeesPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="sales"
+              element={(
+                <RequirePermission capability={CAPABILITIES.SALES_VIEW}>
+                  <SalesPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="customers"
+              element={(
+                <RequirePermission capability={CAPABILITIES.CUSTOMERS_VIEW}>
+                  <CustomersPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="bookkeeping"
+              element={(
+                <RequirePermission capability={CAPABILITIES.BOOKKEEPING_VIEW}>
+                  <BookkeepingPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="reports"
+              element={(
+                <RequirePermission capability={CAPABILITIES.REPORTS_VIEW}>
+                  <ReportsPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="billing"
+              element={(
+                <RequirePermission capability={CAPABILITIES.BILLING_MANAGE}>
+                  <BillingPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="settings"
+              element={(
+                <RequirePermission capability={CAPABILITIES.SETTINGS_MANAGE}>
+                  <SettingsPage />
+                </RequirePermission>
+              )}
+            />
           </Route>
         </Route>
       </Route>

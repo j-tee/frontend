@@ -91,26 +91,66 @@ interface LoadLocationsResult {
   warehouses: Warehouse[]
 }
 
-export const loadLocations = createAsyncThunk<LoadLocationsResult, LoadLocationsArgs | undefined>(
+export const loadLocations = createAsyncThunk<
+  LoadLocationsResult,
+  LoadLocationsArgs | undefined,
+  { state: RootState }
+>(
   'locations/loadAll',
   async (args, thunkAPI) => {
     try {
       const page = args?.storefrontPage ?? 1
+      const state = thunkAPI.getState()
+      const targetBusinessId = state.auth.employment?.business.id ?? state.auth.business?.id ?? null
+
+      const resolveBusinessId = (item: unknown): string | null => {
+        if (!item || typeof item !== 'object') return null
+        const record = item as Record<string, unknown>
+        const direct = record.business
+        if (typeof direct === 'string') return direct
+        if (direct && typeof direct === 'object' && 'id' in direct) {
+          const nestedId = (direct as { id?: unknown }).id
+          if (typeof nestedId === 'string') return nestedId
+        }
+        const snake = record.business_id
+        if (typeof snake === 'string') return snake
+        const camel = record.businessId
+        if (typeof camel === 'string') return camel
+        return null
+      }
+
+      const filterByBusiness = <T>(items: T[]): T[] => {
+        if (!targetBusinessId) return items
+        const hasBusinessMetadata = items.some((item) => resolveBusinessId(item) !== null)
+        if (!hasBusinessMetadata) {
+          return items
+        }
+        return items.filter((item) => resolveBusinessId(item) === targetBusinessId)
+      }
+
+      const storefrontParams = targetBusinessId ? { page, business: targetBusinessId } : { page }
+      const warehouseParams = targetBusinessId ? { business: targetBusinessId } : undefined
       const [storefrontsResponse, warehouses] = await Promise.all([
-        fetchStorefronts({ page }),
-        fetchWarehouses(),
+        fetchStorefronts(storefrontParams),
+        fetchWarehouses(warehouseParams),
       ])
 
+      const storefronts = filterByBusiness(storefrontsResponse.results)
+      const scopedWarehouses = filterByBusiness(warehouses)
+
+      const storefrontsWereFiltered = storefronts.length !== storefrontsResponse.results.length
+      const shouldPaginate = !targetBusinessId
+
       return {
-        storefronts: storefrontsResponse.results,
+        storefronts,
         storefrontPagination: {
-          count: storefrontsResponse.count,
-          next: storefrontsResponse.next,
-          previous: storefrontsResponse.previous,
+          count: storefrontsWereFiltered || targetBusinessId ? storefronts.length : storefrontsResponse.count,
+          next: shouldPaginate ? storefrontsResponse.next : null,
+          previous: shouldPaginate ? storefrontsResponse.previous : null,
           page: storefrontsResponse.page,
           pageSize: DEFAULT_STOREFRONT_PAGE_SIZE,
         },
-        warehouses,
+        warehouses: scopedWarehouses,
       }
     } catch (error) {
       return thunkAPI.rejectWithValue(extractError(error))

@@ -6,6 +6,7 @@ import type { Membership } from '../../../../types/employees'
 interface EmployeeRosterTableProps {
   memberships: Membership[]
   onManageAssignments?: (membershipId: string) => void
+  canManageAssignments?: boolean
 }
 
 const statusVariantMap: Record<string, string> = {
@@ -14,7 +15,7 @@ const statusVariantMap: Record<string, string> = {
   PENDING: 'info',
 }
 
-const EmployeeRosterTable = ({ memberships, onManageAssignments }: EmployeeRosterTableProps) => {
+const EmployeeRosterTable = ({ memberships, onManageAssignments, canManageAssignments = true }: EmployeeRosterTableProps) => {
   if (memberships.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-600">
@@ -55,16 +56,20 @@ const EmployeeRosterTable = ({ memberships, onManageAssignments }: EmployeeRoste
                 : 'Unassigned'}
             </td>
             <td className="align-middle">
-              <div className="flex justify-end gap-2">
-                <Button
-                  size="sm"
-                  variant="outline-primary"
-                  className="rounded-pill px-3"
-                  onClick={() => onManageAssignments?.(membership.id)}
-                >
-                  Manage
-                </Button>
-              </div>
+              {onManageAssignments && canManageAssignments ? (
+                <div className="flex justify-end gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline-primary"
+                    className="rounded-pill px-3"
+                    onClick={() => onManageAssignments(membership.id)}
+                  >
+                    Manage
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-end text-xs text-slate-400">No actions</div>
+              )}
             </td>
           </tr>
         ))}

@@ -18,6 +18,8 @@ export interface Warehouse {
   id: UUID
   name: string
   location: string
+  business?: UUID
+  business_name?: string
   manager?: UUID | null
   manager_name?: string | null
   created_at?: string
@@ -29,6 +31,8 @@ export interface Storefront {
   user: UUID
   name: string
   location: string
+  business?: UUID
+  business_name?: string
   manager?: UUID | null
   user_name?: string
   manager_name?: string | null

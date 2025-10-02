@@ -17,6 +17,7 @@ interface InvitationListProps {
   revokeStatuses: Record<string, RequestStatus>
   onResend: (invitationId: string) => void
   onRevoke: (invitationId: string) => void
+  canManage?: boolean
 }
 
 const statusVariantMap: Record<BusinessInvitation['status'], string> = {
@@ -51,8 +52,10 @@ const InvitationList = ({
   revokeStatuses,
   onResend,
   onRevoke,
+  canManage = true,
 }: InvitationListProps) => {
   const storefrontNameMap = useMemo(() => new Map(storefrontOptions.map((storefront) => [storefront.id, storefront.name])), [storefrontOptions])
+  const allowActions = canManage
 
   if (error) {
     return (
@@ -74,7 +77,9 @@ const InvitationList = ({
   if (invitations.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-600">
-        No pending invitations. Invite a teammate to get them set up.
+        {allowActions
+          ? 'No pending invitations. Invite a teammate to get them set up.'
+          : 'No pending invitations. Contact an administrator to invite additional teammates.'}
       </div>
     )
   }
@@ -124,8 +129,8 @@ const InvitationList = ({
                     size="sm"
                     variant="outline-secondary"
                     className="rounded-pill px-3"
-                    onClick={() => onResend(invitation.id)}
-                    disabled={!isPending || resendStatus === 'loading'}
+                    onClick={() => allowActions && onResend(invitation.id)}
+                    disabled={!allowActions || !isPending || resendStatus === 'loading'}
                   >
                     {resendStatus === 'loading' ? (
                       <span className="flex items-center gap-2">
@@ -140,8 +145,8 @@ const InvitationList = ({
                     size="sm"
                     variant="outline-danger"
                     className="rounded-pill px-3"
-                    onClick={() => onRevoke(invitation.id)}
-                    disabled={!isPending || revokeStatus === 'loading'}
+                    onClick={() => allowActions && onRevoke(invitation.id)}
+                    disabled={!allowActions || !isPending || revokeStatus === 'loading'}
                   >
                     {revokeStatus === 'loading' ? (
                       <span className="flex items-center gap-2">

@@ -1,4 +1,4 @@
-import type { UUID } from './common'
+import type { MembershipRole, UUID } from './common'
 
 export interface UserProfile {
   id: UUID
@@ -6,6 +6,7 @@ export interface UserProfile {
   email: string
   account_type: AccountType
   email_verified: boolean
+  platform_role?: string | null
   role: string | null
   role_name: string | null
   picture_url: string | null
@@ -63,6 +64,7 @@ export interface AuthResponse {
   token?: string
   user?: UserProfile
   business?: BusinessSummary
+  employment?: EmploymentContext | null
 }
 
 export interface InvitationTokenInfo {
@@ -141,4 +143,14 @@ export interface BusinessSummary {
   owner_name: string
   created_at: string
   updated_at: string
+}
+
+export interface EmploymentContext {
+  id: UUID
+  role: MembershipRole
+  is_admin: boolean
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  business: BusinessSummary
 }

@@ -40,9 +40,15 @@ const extractResults = <T>(data: PaginatedResponse<T> | T[]): T[] => {
   return data.results ?? []
 }
 
-export const fetchWarehouses = async () => {
+interface FetchWarehousesParams {
+  business?: string
+}
+
+export const fetchWarehouses = async (params?: FetchWarehousesParams) => {
+  const requestParams = params?.business ? { business: params.business } : undefined
   const { data } = await httpClient.get<PaginatedResponse<Warehouse> | Warehouse[]>(
     '/inventory/api/warehouses/',
+    { params: requestParams },
   )
   return extractResults(data)
 }
@@ -75,14 +81,19 @@ export const deleteWarehouse = async (warehouseId: string) => {
 
 interface FetchStorefrontsParams {
   page?: number
+  business?: string
 }
 
 export const fetchStorefronts = async (params?: FetchStorefrontsParams) => {
   const page = params?.page ?? 1
+  const requestParams: Record<string, unknown> = { page }
+  if (params?.business) {
+    requestParams.business = params.business
+  }
   const { data } = await httpClient.get<PaginatedResponse<Storefront>>(
     '/inventory/api/storefronts/',
     {
-      params: { page },
+      params: requestParams,
     },
   )
   return {
