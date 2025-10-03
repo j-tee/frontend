@@ -28,6 +28,7 @@ import type {
   TransferRequestCreatePayload,
   TransferRequestFulfillPayload,
   TransferRequestUpdatePayload,
+  TransferRequestUpdateStatusPayload,
   TransferUpdatePayload,
   Warehouse,
   WarehousePayload,
@@ -323,6 +324,14 @@ export const cancelTransferRequest = async (id: string, payload?: TransferReques
 export const fulfillTransferRequest = async (id: string, payload?: TransferRequestFulfillPayload) => {
   const { data } = await httpClient.post<TransferRequest>(
     `/inventory/api/transfer-requests/${id}/fulfill/`,
+    payload,
+  )
+  return data
+}
+
+export const updateTransferRequestStatus = async (id: string, payload: TransferRequestUpdateStatusPayload) => {
+  const { data } = await httpClient.post<TransferRequest>(
+    `/inventory/api/transfer-requests/${id}/update-status/`,
     payload,
   )
   return data

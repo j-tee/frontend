@@ -297,6 +297,11 @@ export interface TransferRequestFulfillPayload {
   notes?: string
 }
 
+export interface TransferRequestUpdateStatusPayload {
+  status: TransferRequestStatus
+  force?: boolean
+}
+
 export interface TransferLineItem {
   id: UUID
   product: UUID

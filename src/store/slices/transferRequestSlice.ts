@@ -8,6 +8,7 @@ import {
   fetchTransferRequests,
   fulfillTransferRequest as fulfillTransferRequestApi,
   updateTransferRequest as updateTransferRequestApi,
+  updateTransferRequestStatus as updateTransferRequestStatusApi,
 } from '../../services/inventoryService.js'
 import type {
   TransferRequest,
@@ -15,12 +16,13 @@ import type {
   TransferRequestCreatePayload,
   TransferRequestFulfillPayload,
   TransferRequestUpdatePayload,
+  TransferRequestUpdateStatusPayload,
 } from '../../types/inventory.js'
 import type { PaginatedResponse } from '../../types/common.js'
 
 type AsyncStatus = 'idle' | 'loading' | 'succeeded' | 'failed'
 
-type TransferRequestMutation = 'create' | 'update' | 'cancel' | 'fulfill'
+type TransferRequestMutation = 'create' | 'update' | 'cancel' | 'fulfill' | 'updateStatus'
 
 interface TransferRequestFilters {
   status: string | null
@@ -66,6 +68,7 @@ const buildInitialMutationStatus = (): Record<TransferRequestMutation, AsyncStat
   update: 'idle',
   cancel: 'idle',
   fulfill: 'idle',
+  updateStatus: 'idle',
 })
 
 const buildInitialMutationErrors = (): Record<TransferRequestMutation, string | null> => ({
@@ -73,6 +76,7 @@ const buildInitialMutationErrors = (): Record<TransferRequestMutation, string | 
   update: null,
   cancel: null,
   fulfill: null,
+  updateStatus: null,
 })
 
 const initialState: TransferRequestState = {
@@ -243,6 +247,17 @@ export const fulfillTransferRequest = createAsyncThunk<TransferRequest, { reques
   },
 )
 
+export const updateTransferRequestStatus = createAsyncThunk<TransferRequest, { requestId: string; payload: TransferRequestUpdateStatusPayload }>(
+  'transferRequests/updateStatus',
+  async ({ requestId, payload }, thunkAPI) => {
+    try {
+      return await updateTransferRequestStatusApi(requestId, payload)
+    } catch (error) {
+      return thunkAPI.rejectWithValue(extractErrorMessage(error))
+    }
+  },
+)
+
 const transferRequestSlice = createSlice({
   name: 'transferRequests',
   initialState,
@@ -379,6 +394,21 @@ const transferRequestSlice = createSlice({
       .addCase(fulfillTransferRequest.rejected, (state, action) => {
         state.mutationStatus.fulfill = 'failed'
         state.mutationErrors.fulfill = (action.payload as string) ?? 'Failed to mark request as fulfilled.'
+      })
+
+      .addCase(updateTransferRequestStatus.pending, (state) => {
+        state.mutationStatus.updateStatus = 'loading'
+        state.mutationErrors.updateStatus = null
+      })
+      .addCase(updateTransferRequestStatus.fulfilled, (state, action) => {
+        state.mutationStatus.updateStatus = 'succeeded'
+        state.detail = action.payload
+        state.detailStatus = 'succeeded'
+        state.requests = ensureUniqueById([action.payload, ...state.requests])
+      })
+      .addCase(updateTransferRequestStatus.rejected, (state, action) => {
+        state.mutationStatus.updateStatus = 'failed'
+        state.mutationErrors.updateStatus = (action.payload as string) ?? 'Failed to update request status.'
       })
   },
 })

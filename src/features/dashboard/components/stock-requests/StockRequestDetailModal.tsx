@@ -1,10 +1,13 @@
+import { useState } from 'react'
 import Alert from 'react-bootstrap/Alert'
 import Badge from 'react-bootstrap/Badge'
 import Button from 'react-bootstrap/Button'
+import Dropdown from 'react-bootstrap/Dropdown'
 import Modal from 'react-bootstrap/Modal'
 import Spinner from 'react-bootstrap/Spinner'
 import Table from 'react-bootstrap/Table'
 import type { TransferRequest } from '../../../../types/inventory.js'
+import usePermissions from '../../../../hooks/usePermissions.js'
 
 interface StockRequestDetailModalProps {
   show: boolean
@@ -12,10 +15,13 @@ interface StockRequestDetailModalProps {
   onClose: () => void
   onCancel?: (requestId: string, reason?: string) => Promise<void>
   onFulfill?: (requestId: string) => Promise<void>
+  onUpdateStatus?: (requestId: string, status: string, force?: boolean) => Promise<void>
   isCancelling?: boolean
   isFulfilling?: boolean
+  isUpdatingStatus?: boolean
   cancelError?: string | null
   fulfillError?: string | null
+  updateStatusError?: string | null
 }
 
 const getStatusBadge = (status: string) => {
@@ -64,15 +70,29 @@ const StockRequestDetailModal = ({
   onClose,
   onCancel,
   onFulfill,
+  onUpdateStatus,
   isCancelling = false,
   isFulfilling = false,
+  isUpdatingStatus = false,
   cancelError,
   fulfillError,
+  updateStatusError,
 }: StockRequestDetailModalProps) => {
+  const [showStatusConfirm, setShowStatusConfirm] = useState(false)
+  const [targetStatus, setTargetStatus] = useState<string>('')
+  const permissions = usePermissions()
+
   if (!request) return null
 
   const canCancel = (request.status === 'NEW' || request.status === 'ASSIGNED') && onCancel
   const canFulfill = (request.status === 'ASSIGNED') && onFulfill
+  
+  // Privileged users (Manager, Admin, Owner) can manually override status
+  const canManageStatus = onUpdateStatus && (
+    permissions.role === 'MANAGER' || 
+    permissions.role === 'ADMIN' || 
+    permissions.role === 'OWNER'
+  )
 
   const handleCancel = async () => {
     if (!onCancel) return
@@ -84,6 +104,25 @@ const StockRequestDetailModal = ({
     await onFulfill(request.id)
   }
 
+  const handleStatusChange = (newStatus: string) => {
+    if (newStatus === request.status) return
+    setTargetStatus(newStatus)
+    setShowStatusConfirm(true)
+  }
+
+  const confirmStatusChange = async () => {
+    if (!onUpdateStatus || !targetStatus) return
+    // Use force=true for manual status overrides by managers
+    await onUpdateStatus(request.id, targetStatus, true)
+    setShowStatusConfirm(false)
+    setTargetStatus('')
+  }
+
+  const cancelStatusChange = () => {
+    setShowStatusConfirm(false)
+    setTargetStatus('')
+  }
+
   return (
     <Modal show={show} onHide={onClose} size="lg">
       <Modal.Header closeButton>
@@ -92,6 +131,26 @@ const StockRequestDetailModal = ({
       <Modal.Body>
         {cancelError && <Alert variant="danger">{cancelError}</Alert>}
         {fulfillError && <Alert variant="danger">{fulfillError}</Alert>}
+        {updateStatusError && <Alert variant="danger">{updateStatusError}</Alert>}
+        
+        {showStatusConfirm && (
+          <Alert variant="warning" className="mb-3">
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <strong>Confirm status change:</strong> Change status from <Badge bg="secondary">{request.status}</Badge> to <Badge bg="primary">{targetStatus}</Badge>?
+              </div>
+              <div className="btn-group btn-group-sm">
+                <Button variant="success" size="sm" onClick={confirmStatusChange} disabled={isUpdatingStatus}>
+                  {isUpdatingStatus && <Spinner animation="border" size="sm" className="me-1" />}
+                  Confirm
+                </Button>
+                <Button variant="secondary" size="sm" onClick={cancelStatusChange} disabled={isUpdatingStatus}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </Alert>
+        )}
 
         <div className="mb-4">
           <div className="row g-3">
@@ -101,7 +160,22 @@ const StockRequestDetailModal = ({
             </div>
             <div className="col-md-3">
               <label className="form-label text-muted small">Status</label>
-              <div>{getStatusBadge(request.status)}</div>
+              <div className="d-flex align-items-center gap-2">
+                {getStatusBadge(request.status)}
+                {canManageStatus && (
+                  <Dropdown onSelect={(eventKey) => handleStatusChange(eventKey || '')}>
+                    <Dropdown.Toggle variant="outline-secondary" size="sm" disabled={isUpdatingStatus}>
+                      Change
+                    </Dropdown.Toggle>
+                    <Dropdown.Menu>
+                      <Dropdown.Item eventKey="NEW" active={request.status === 'NEW'}>New</Dropdown.Item>
+                      <Dropdown.Item eventKey="ASSIGNED" active={request.status === 'ASSIGNED'}>Assigned</Dropdown.Item>
+                      <Dropdown.Item eventKey="FULFILLED" active={request.status === 'FULFILLED'}>Fulfilled</Dropdown.Item>
+                      <Dropdown.Item eventKey="CANCELLED" active={request.status === 'CANCELLED'}>Cancelled</Dropdown.Item>
+                    </Dropdown.Menu>
+                  </Dropdown>
+                )}
+              </div>
             </div>
             <div className="col-md-3">
               <label className="form-label text-muted small">Priority</label>

@@ -74,6 +74,7 @@ import {
   setTransferRequestFilters,
   setTransferRequestPage,
   setTransferRequestPageSize,
+  updateTransferRequestStatus,
 } from '../../../store/slices/transferRequestSlice.js'
 import type { Product, StockProduct, StockProductPayload, Storefront, SupplierPayload, TransferRequest, TransferRequestCreatePayload } from '../../../types/inventory.js'
 
@@ -523,6 +524,16 @@ const ManageStocksPage = () => {
     dispatch(clearTransferRequestMutation('fulfill'))
   }
 
+  const handleUpdateStockRequestStatus = async (requestId: string, status: string, force?: boolean) => {
+    await dispatch(updateTransferRequestStatus({ 
+      requestId, 
+      payload: { status: status as 'NEW' | 'ASSIGNED' | 'FULFILLED' | 'CANCELLED', force } 
+    })).unwrap()
+    void dispatch(loadTransferRequests())
+    // Don't close modal, allow user to see the updated status
+    dispatch(clearTransferRequestMutation('updateStatus'))
+  }
+
   const transferRequestTotalPages = Math.max(
     1,
     Math.ceil((transferRequestsPagination?.count || 0) / transferRequestsPageSize)
@@ -924,10 +935,13 @@ const ManageStocksPage = () => {
         }}
         onCancel={handleCancelStockRequest}
         onFulfill={handleFulfillStockRequest}
+        onUpdateStatus={handleUpdateStockRequestStatus}
         isCancelling={transferRequestMutationStatus.cancel === 'loading'}
         isFulfilling={transferRequestMutationStatus.fulfill === 'loading'}
+        isUpdatingStatus={transferRequestMutationStatus.updateStatus === 'loading'}
         cancelError={transferRequestMutationErrors.cancel}
         fulfillError={transferRequestMutationErrors.fulfill}
+        updateStatusError={transferRequestMutationErrors.updateStatus}
       />
     </div>
   )
