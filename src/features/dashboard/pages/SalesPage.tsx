@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Container, Row, Col, Card, Button, Tab, Tabs, Alert } from 'react-bootstrap'
 import { useAppDispatch, useAppSelector } from '../../../hooks'
 import {
@@ -9,18 +9,20 @@ import {
   clearCart,
   clearMutationError,
 } from '../../../store/slices/salesSlice'
-import { selectCurrentLocation } from '../../../store/slices/locationSlice'
-import { SaleCart } from '../components/sales/SaleCart'
-import { ProductSearchPanel } from '../components/sales/ProductSearchPanel'
-import { CustomerSelectPanel } from '../components/sales/CustomerSelectPanel'
-import { PaymentPanel } from '../components/sales/PaymentPanel'
-import { SalesHistory } from '../components/sales/SalesHistory'
+import { selectActiveLocation } from '../../../store/slices/locationSlice'
+import {
+  SaleCart,
+  ProductSearchPanel,
+  CustomerSelectPanel,
+  PaymentPanel,
+  SalesHistory,
+} from '../components/sales'
 import type { UUID } from '../../../types/common'
 
 const SalesPage = () => {
   const dispatch = useAppDispatch()
   const currentCart = useAppSelector(selectCurrentCart)
-  const currentLocation = useAppSelector(selectCurrentLocation)
+  const currentLocation = useAppSelector(selectActiveLocation)
   const mutations = useAppSelector(selectMutations)
   const errors = useAppSelector(selectErrors)
   
@@ -30,13 +32,7 @@ const SalesPage = () => {
   const [showPayment, setShowPayment] = useState(false)
 
   // Start new cart when location is selected
-  useEffect(() => {
-    if (currentLocation && !currentCart && activeTab === 'new-sale') {
-      handleStartNewSale()
-    }
-  }, [currentLocation, activeTab])
-
-  const handleStartNewSale = async () => {
+  const handleStartNewSale = useCallback(async () => {
     if (!currentLocation) {
       return
     }
@@ -48,7 +44,13 @@ const SalesPage = () => {
         customer: selectedCustomer || undefined,
       })
     )
-  }
+  }, [currentLocation, saleType, selectedCustomer, dispatch])
+
+  useEffect(() => {
+    if (currentLocation && !currentCart && activeTab === 'new-sale') {
+      handleStartNewSale()
+    }
+  }, [currentLocation, currentCart, activeTab, handleStartNewSale])
 
   const handleClearCart = () => {
     if (window.confirm('Are you sure you want to clear this sale?')) {
