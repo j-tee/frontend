@@ -529,8 +529,9 @@ const ManageStocksPage = () => {
       requestId, 
       payload: { status: status as 'NEW' | 'ASSIGNED' | 'FULFILLED' | 'CANCELLED', force } 
     })).unwrap()
+    // Reload both the list and the detail to show updated status
     void dispatch(loadTransferRequests())
-    // Don't close modal, allow user to see the updated status
+    void dispatch(loadTransferRequestDetail(requestId))
     dispatch(clearTransferRequestMutation('updateStatus'))
   }
 

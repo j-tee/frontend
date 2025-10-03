@@ -88,11 +88,8 @@ const StockRequestDetailModal = ({
   const canFulfill = (request.status === 'ASSIGNED') && onFulfill
   
   // Privileged users (Manager, Admin, Owner) can manually override status
-  const canManageStatus = onUpdateStatus && (
-    permissions.role === 'MANAGER' || 
-    permissions.role === 'ADMIN' || 
-    permissions.role === 'OWNER'
-  )
+  // Check using capability instead of direct role comparison for more robust permissions
+  const canManageStatus = onUpdateStatus && permissions.can('inventory.requests.manage')
 
   const handleCancel = async () => {
     if (!onCancel) return
