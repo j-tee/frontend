@@ -11,6 +11,7 @@ import StockProductDetailModal from '../components/StockProductDetailModal'
 import StockRequestForm from '../components/stock-requests/StockRequestForm'
 import StockRequestList from '../components/stock-requests/StockRequestList'
 import StockRequestDetailModal from '../components/stock-requests/StockRequestDetailModal'
+import { ReturnRequestForm } from '../components/returns/index.js'
 import { fetchProducts, fetchStorefronts } from '../../../services/inventoryService.js'
 import {
   addStockBatch,
@@ -67,7 +68,7 @@ import {
   selectTransferRequestMutationStatus,
   selectTransferRequests,
   selectTransferRequestsError,
-  selectTransferRequestsPagination,
+  // selectTransferRequestsPagination, // Using client-side filtering
   selectTransferRequestsPage,
   selectTransferRequestsPageSize,
   selectTransferRequestsStatus,
@@ -151,7 +152,7 @@ const ManageStocksPage = () => {
   const transferRequests = useAppSelector(selectTransferRequests)
   const transferRequestsStatus = useAppSelector(selectTransferRequestsStatus)
   const transferRequestsError = useAppSelector(selectTransferRequestsError)
-  const transferRequestsPagination = useAppSelector(selectTransferRequestsPagination)
+  // const transferRequestsPagination = useAppSelector(selectTransferRequestsPagination) // Using client-side filtering for now
   const transferRequestsPage = useAppSelector(selectTransferRequestsPage)
   const transferRequestsPageSize = useAppSelector(selectTransferRequestsPageSize)
   const transferRequestFilters = useAppSelector(selectTransferRequestFilters)
@@ -535,11 +536,6 @@ const ManageStocksPage = () => {
     dispatch(clearTransferRequestMutation('updateStatus'))
   }
 
-  const transferRequestTotalPages = Math.max(
-    1,
-    Math.ceil((transferRequestsPagination?.count || 0) / transferRequestsPageSize)
-  )
-
   return (
     <div className="space-y-6">
       <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -563,6 +559,11 @@ const ManageStocksPage = () => {
         <Nav.Item>
           <Nav.Link active={activeTab === 'stock-requests'} onClick={() => setActiveTab('stock-requests')}>
             Stock requests
+          </Nav.Link>
+        </Nav.Item>
+        <Nav.Item>
+          <Nav.Link active={activeTab === 'returns'} onClick={() => setActiveTab('returns')}>
+            Returns
           </Nav.Link>
         </Nav.Item>
       </Nav>
@@ -868,15 +869,15 @@ const ManageStocksPage = () => {
               )}
 
               <StockRequestList
-                requests={transferRequests}
+                requests={transferRequests.filter(req => req.direction === 'FORWARD')}
                 storefronts={storefronts}
                 isLoading={transferRequestsStatus === 'loading'}
                 error={transferRequestsError}
                 pagination={{
-                  count: transferRequestsPagination?.count || 0,
+                  count: transferRequests.filter(req => req.direction === 'FORWARD').length,
                   page: transferRequestsPage,
                   pageSize: transferRequestsPageSize,
-                  totalPages: transferRequestTotalPages,
+                  totalPages: Math.max(1, Math.ceil(transferRequests.filter(req => req.direction === 'FORWARD').length / transferRequestsPageSize)),
                 }}
                 filters={transferRequestFilters}
                 onFilterChange={handleStockRequestFilterChange}
@@ -886,6 +887,62 @@ const ManageStocksPage = () => {
                 onViewDetail={handleViewStockRequest}
               />
             </div>
+      )}
+
+      {/* Returns Tab */}
+      {activeTab === 'returns' && (
+        <div className="space-y-6">
+          <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h3 className="text-xl font-semibold text-slate-900">Returns to warehouse</h3>
+                <p className="text-slate-600">
+                  Return excess stock, damaged items, or incorrect shipments from storefronts back to the warehouse.
+                </p>
+              </div>
+              <Button
+                variant="warning"
+                className="rounded-pill px-4"
+                onClick={() => setShowCreateRequestForm(!showCreateRequestForm)}
+              >
+                {showCreateRequestForm ? 'Cancel' : 'Create return request'}
+              </Button>
+            </div>
+          </section>
+
+          {showCreateRequestForm && (
+            <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h4 className="text-lg font-semibold text-slate-900">New return request</h4>
+              <ReturnRequestForm
+                storefronts={storefronts}
+                products={productLookup}
+                isSubmitting={transferRequestMutationStatus.create === 'loading'}
+                error={transferRequestMutationErrors.create}
+                onSubmit={handleCreateStockRequest}
+                onCancel={() => setShowCreateRequestForm(false)}
+              />
+            </section>
+          )}
+
+          <StockRequestList
+            requests={transferRequests.filter(req => req.direction === 'REVERSE')}
+            storefronts={storefronts}
+            isLoading={transferRequestsStatus === 'loading'}
+            error={transferRequestsError}
+            pagination={{
+              count: transferRequests.filter(req => req.direction === 'REVERSE').length,
+              page: transferRequestsPage,
+              pageSize: transferRequestsPageSize,
+              totalPages: Math.max(1, Math.ceil(transferRequests.filter(req => req.direction === 'REVERSE').length / transferRequestsPageSize)),
+            }}
+            filters={transferRequestFilters}
+            onFilterChange={handleStockRequestFilterChange}
+            onPageChange={handleStockRequestPageChange}
+            onPageSizeChange={handleStockRequestPageSizeChange}
+            onRefresh={handleStockRequestRefresh}
+            onViewDetail={handleViewStockRequest}
+          />
+        </div>
       )}
 
       {/* Modals */}

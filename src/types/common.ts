@@ -111,3 +111,10 @@ export const TRANSFER_REQUEST_PRIORITIES = [
 ] as const
 
 export type TransferRequestPriority = (typeof TRANSFER_REQUEST_PRIORITIES)[number]
+
+export const TRANSFER_DIRECTIONS = [
+  'FORWARD',  // Warehouse → Storefront (stock replenishment)
+  'REVERSE',  // Storefront → Warehouse (returns, excess inventory)
+] as const
+
+export type TransferDirection = (typeof TRANSFER_DIRECTIONS)[number]

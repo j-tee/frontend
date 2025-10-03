@@ -15,7 +15,7 @@ interface LineItem {
   notes: string
 }
 
-interface StockRequestFormProps {
+interface ReturnRequestFormProps {
   storefronts: Storefront[]
   products: Product[]
   isSubmitting: boolean
@@ -24,14 +24,14 @@ interface StockRequestFormProps {
   onCancel?: () => void
 }
 
-const StockRequestForm = ({
+const ReturnRequestForm = ({
   storefronts,
   products,
   isSubmitting,
   error,
   onSubmit,
   onCancel,
-}: StockRequestFormProps) => {
+}: ReturnRequestFormProps) => {
   const [storefront, setStorefront] = useState('')
   const [priority, setPriority] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('MEDIUM')
   const [notes, setNotes] = useState('')
@@ -78,7 +78,7 @@ const StockRequestForm = ({
 
     const payload: TransferRequestCreatePayload = {
       storefront,
-      direction: 'FORWARD',  // Stock requests are always FORWARD (warehouse → storefront)
+      direction: 'REVERSE',  // Returns are always REVERSE (storefront → warehouse)
       priority,
       notes: notes.trim() || undefined,
       line_items: lineItems.map((item) => ({
@@ -99,7 +99,7 @@ const StockRequestForm = ({
       {error && <Alert variant="danger">{error}</Alert>}
 
       <div className="mb-4">
-        <h5 className="mb-3">Request details</h5>
+        <h5 className="mb-3">Return details</h5>
         <div className="row g-3">
           <Form.Group className="col-md-6" controlId="storefront">
             <Form.Label>Storefront <span className="text-danger">*</span></Form.Label>
@@ -116,6 +116,9 @@ const StockRequestForm = ({
                 </option>
               ))}
             </Form.Select>
+            <Form.Text className="text-muted">
+              Returning items from this storefront to the warehouse
+            </Form.Text>
           </Form.Group>
 
           <Form.Group className="col-md-6" controlId="priority">
@@ -132,21 +135,21 @@ const StockRequestForm = ({
           </Form.Group>
 
           <Form.Group className="col-12" controlId="notes">
-            <Form.Label>Request notes</Form.Label>
+            <Form.Label>Return reason/notes</Form.Label>
             <Form.Control
               as="textarea"
               rows={2}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               disabled={isSubmitting}
-              placeholder="Add any additional information or context..."
+              placeholder="Explain why these items are being returned (e.g., excess stock, damaged, incorrect shipment)..."
             />
           </Form.Group>
         </div>
       </div>
 
       <div className="mb-4">
-        <h5 className="mb-3">Add items</h5>
+        <h5 className="mb-3">Add items to return</h5>
         <div className="row g-3 mb-3 p-3 bg-light rounded">
           <Form.Group className="col-md-4" controlId="product">
             <Form.Label>Product</Form.Label>
@@ -183,54 +186,53 @@ const StockRequestForm = ({
               value={unitOfMeasure}
               onChange={(e) => setUnitOfMeasure(e.target.value)}
               disabled={isSubmitting}
-              placeholder="e.g., box, carton"
             />
           </Form.Group>
 
-          <Form.Group className="col-md-4" controlId="lineNotes">
+          <Form.Group className="col-md-3" controlId="lineNotes">
             <Form.Label>Item notes</Form.Label>
             <Form.Control
               type="text"
               value={lineNotes}
               onChange={(e) => setLineNotes(e.target.value)}
               disabled={isSubmitting}
-              placeholder="Optional notes"
+              placeholder="Optional notes..."
             />
           </Form.Group>
 
-          <div className="col-12">
+          <div className="col-md-1 d-flex align-items-end">
             <Button
-              variant="outline-primary"
-              size="sm"
+              variant="primary"
               onClick={handleAddLineItem}
-              disabled={!selectedProduct || !quantity || Number(quantity) <= 0 || isSubmitting}
+              disabled={!selectedProduct || Number(quantity) <= 0 || isSubmitting}
+              className="w-100"
             >
-              + Add item
+              Add
             </Button>
           </div>
         </div>
 
         {lineItems.length > 0 && (
           <div>
-            <h6 className="mb-2">Requested items ({lineItems.length})</h6>
-            <Table responsive hover size="sm">
+            <h6 className="mb-2">Items to return ({lineItems.length})</h6>
+            <Table responsive hover size="sm" bordered>
               <thead>
                 <tr>
                   <th>Product</th>
                   <th className="text-end">Quantity</th>
                   <th>Unit</th>
                   <th>Notes</th>
-                  <th className="text-end">Actions</th>
+                  <th className="text-center" style={{ width: '100px' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {lineItems.map((item) => (
                   <tr key={item.tempId}>
-                    <td>{item.productName}</td>
+                    <td className="fw-semibold">{item.productName}</td>
                     <td className="text-end">{item.requestedQuantity}</td>
                     <td>{item.unitOfMeasure}</td>
-                    <td>{item.notes || '—'}</td>
-                    <td className="text-end">
+                    <td className="text-muted small">{item.notes || '—'}</td>
+                    <td className="text-center">
                       <Button
                         variant="outline-danger"
                         size="sm"
@@ -246,12 +248,6 @@ const StockRequestForm = ({
             </Table>
           </div>
         )}
-
-        {lineItems.length === 0 && (
-          <Alert variant="info" className="mb-0">
-            <small>Add at least one product to submit this request.</small>
-          </Alert>
-        )}
       </div>
 
       <div className="d-flex gap-2 justify-content-end">
@@ -260,13 +256,13 @@ const StockRequestForm = ({
             Cancel
           </Button>
         )}
-        <Button type="submit" variant="primary" disabled={!canSubmit}>
+        <Button variant="primary" type="submit" disabled={!canSubmit}>
           {isSubmitting && <Spinner animation="border" size="sm" className="me-2" />}
-          Submit stock request
+          Submit return request
         </Button>
       </div>
     </Form>
   )
 }
 
-export default StockRequestForm
+export default ReturnRequestForm

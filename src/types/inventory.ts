@@ -1,4 +1,4 @@
-import type { StockAlertType, TransferStatus, TransferRequestStatus, TransferRequestPriority, UUID } from './common'
+import type { StockAlertType, TransferStatus, TransferRequestStatus, TransferRequestPriority, TransferDirection, UUID } from './common'
 
 export interface Category {
   id: UUID
@@ -250,6 +250,7 @@ export interface TransferRequest {
   business: UUID
   storefront: UUID
   storefront_name: string
+  direction: TransferDirection  // FORWARD (warehouse→storefront) or REVERSE (storefront→warehouse)
   requested_by: UUID
   requested_by_name: string
   priority: TransferRequestPriority
@@ -261,6 +262,8 @@ export interface TransferRequest {
   fulfilled_at?: string | null
   fulfilled_by?: UUID | null
   cancelled_at?: string | null
+  cancelled_by?: UUID | null
+  cancelled_reason?: string | null
   line_items: TransferRequestLineItem[]
   created_at: string
   updated_at: string
@@ -268,6 +271,7 @@ export interface TransferRequest {
 
 export interface TransferRequestCreatePayload {
   storefront: UUID
+  direction: TransferDirection  // FORWARD for stock requests, REVERSE for returns
   priority: TransferRequestPriority
   notes?: string
   line_items: Array<{

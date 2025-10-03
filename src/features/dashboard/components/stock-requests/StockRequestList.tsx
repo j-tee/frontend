@@ -194,12 +194,12 @@ const StockRequestList = ({
             <thead>
               <tr>
                 <th>Storefront</th>
+                <th>Type</th>
                 <th>Status</th>
                 <th>Priority</th>
                 <th>Requested by</th>
                 <th>Items</th>
                 <th>Created</th>
-                <th>Updated</th>
                 <th className="text-end">Actions</th>
               </tr>
             </thead>
@@ -214,12 +214,18 @@ const StockRequestList = ({
                 requests.map((request) => (
                   <tr key={request.id}>
                     <td className="font-medium">{request.storefront_name}</td>
+                    <td>
+                      {request.direction === 'FORWARD' ? (
+                        <Badge bg="primary" className="text-xs">Request</Badge>
+                      ) : (
+                        <Badge bg="warning" className="text-xs">Return</Badge>
+                      )}
+                    </td>
                     <td>{getStatusBadge(request.status)}</td>
                     <td>{getPriorityBadge(request.priority)}</td>
                     <td>{request.requested_by_name}</td>
                     <td>{request.line_items?.length || 0} items</td>
                     <td>{formatDate(request.created_at)}</td>
-                    <td>{formatDate(request.updated_at)}</td>
                     <td className="text-end">
                       {onViewDetail && (
                         <Button
