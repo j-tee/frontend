@@ -262,8 +262,6 @@ export interface TransferRequest {
   fulfilled_at?: string | null
   fulfilled_by?: UUID | null
   cancelled_at?: string | null
-  cancelled_by?: UUID | null
-  cancelled_reason?: string | null
   line_items: TransferRequestLineItem[]
   created_at: string
   updated_at: string
@@ -286,7 +284,7 @@ export interface TransferRequestUpdatePayload {
   priority?: TransferRequestPriority
   notes?: string
   line_items?: Array<{
-    id?: UUID
+    id?: UUID  // Include ID for existing items to update
     product: UUID
     requested_quantity: number
     unit_of_measure: string
