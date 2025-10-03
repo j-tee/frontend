@@ -3,6 +3,7 @@ import type { PaginatedResponse } from '../types/common.js'
 import type {
   Category,
   CategoryPayload,
+  EmployeeWorkspaceResponse,
   InventorySnapshot,
   OwnerWorkspaceSnapshot,
   Product,
@@ -17,6 +18,17 @@ import type {
   Storefront,
   StorefrontPayload,
   Transfer,
+  TransferApprovePayload,
+  TransferConfirmReceiptPayload,
+  TransferCreatePayload,
+  TransferFulfillmentPayload,
+  TransferRejectPayload,
+  TransferRequest,
+  TransferRequestCancelPayload,
+  TransferRequestCreatePayload,
+  TransferRequestFulfillPayload,
+  TransferRequestUpdatePayload,
+  TransferUpdatePayload,
   Warehouse,
   WarehousePayload,
 } from '../types/inventory.js'
@@ -263,6 +275,147 @@ export const fetchStockAlerts = async (params?: Record<string, unknown>) => {
 export const fetchOwnerWorkspace = async () => {
   const { data } = await httpClient.get<OwnerWorkspaceSnapshot>(
     '/inventory/api/owner/workspace/',
+  )
+  return data
+}
+
+// Transfer Request APIs (Stock Request workflow)
+
+export const fetchTransferRequests = async (params?: Record<string, unknown>) => {
+  const { data } = await httpClient.get<PaginatedResponse<TransferRequest>>(
+    '/inventory/api/transfer-requests/',
+    { params },
+  )
+  return data
+}
+
+export const fetchTransferRequestDetail = async (id: string) => {
+  const { data} = await httpClient.get<TransferRequest>(
+    `/inventory/api/transfer-requests/${id}/`,
+  )
+  return data
+}
+
+export const createTransferRequest = async (payload: TransferRequestCreatePayload) => {
+  const { data } = await httpClient.post<TransferRequest>(
+    '/inventory/api/transfer-requests/',
+    payload,
+  )
+  return data
+}
+
+export const updateTransferRequest = async (id: string, payload: TransferRequestUpdatePayload) => {
+  const { data } = await httpClient.patch<TransferRequest>(
+    `/inventory/api/transfer-requests/${id}/`,
+    payload,
+  )
+  return data
+}
+
+export const cancelTransferRequest = async (id: string, payload?: TransferRequestCancelPayload) => {
+  const { data } = await httpClient.post<TransferRequest>(
+    `/inventory/api/transfer-requests/${id}/cancel/`,
+    payload,
+  )
+  return data
+}
+
+export const fulfillTransferRequest = async (id: string, payload?: TransferRequestFulfillPayload) => {
+  const { data } = await httpClient.post<TransferRequest>(
+    `/inventory/api/transfer-requests/${id}/fulfill/`,
+    payload,
+  )
+  return data
+}
+
+// Transfer APIs (continuation of workflow)
+
+export const fetchTransferDetail = async (id: string) => {
+  const { data } = await httpClient.get<Transfer>(
+    `/inventory/api/transfers/${id}/`,
+  )
+  return data
+}
+
+export const createTransfer = async (payload: TransferCreatePayload) => {
+  const { data } = await httpClient.post<Transfer>(
+    '/inventory/api/transfers/',
+    payload,
+  )
+  return data
+}
+
+export const updateTransfer = async (id: string, payload: TransferUpdatePayload) => {
+  const { data } = await httpClient.patch<Transfer>(
+    `/inventory/api/transfers/${id}/`,
+    payload,
+  )
+  return data
+}
+
+export const deleteTransfer = async (id: string) => {
+  await httpClient.delete(`/inventory/api/transfers/${id}/`)
+}
+
+export const submitTransfer = async (id: string) => {
+  const { data } = await httpClient.post<Transfer>(
+    `/inventory/api/transfers/${id}/submit/`,
+  )
+  return data
+}
+
+export const approveTransfer = async (id: string, payload?: TransferApprovePayload) => {
+  const { data } = await httpClient.post<Transfer>(
+    `/inventory/api/transfers/${id}/approve/`,
+    payload,
+  )
+  return data
+}
+
+export const rejectTransfer = async (id: string, payload: TransferRejectPayload) => {
+  const { data } = await httpClient.post<Transfer>(
+    `/inventory/api/transfers/${id}/reject/`,
+    payload,
+  )
+  return data
+}
+
+export const markTransferInTransit = async (id: string, payload?: TransferFulfillmentPayload) => {
+  const { data } = await httpClient.post<Transfer>(
+    `/inventory/api/transfers/${id}/dispatch/`,
+    payload,
+  )
+  return data
+}
+
+export const completeTransfer = async (id: string, payload?: TransferFulfillmentPayload) => {
+  const { data } = await httpClient.post<Transfer>(
+    `/inventory/api/transfers/${id}/complete/`,
+    payload,
+  )
+  return data
+}
+
+export const cancelTransfer = async (id: string) => {
+  const { data } = await httpClient.post<Transfer>(
+    `/inventory/api/transfers/${id}/cancel/`,
+  )
+  return data
+}
+
+export const confirmTransferReceipt = async (id: string, payload?: TransferConfirmReceiptPayload) => {
+  const { data } = await httpClient.post<Transfer>(
+    `/inventory/api/transfers/${id}/confirm-receipt/`,
+    payload,
+  )
+  return data
+}
+
+// Workspace Dashboard API
+
+export const fetchEmployeeWorkspace = async () => {
+  const { data } = await httpClient.get<EmployeeWorkspaceResponse>(
+    '/inventory/api/employee/workspace/',
   )
   return data
 }

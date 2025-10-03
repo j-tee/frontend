@@ -2,12 +2,16 @@ import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 import Alert from 'react-bootstrap/Alert'
 import Button from 'react-bootstrap/Button'
 import Form from 'react-bootstrap/Form'
+import Nav from 'react-bootstrap/Nav'
 import Spinner from 'react-bootstrap/Spinner'
 import Table from 'react-bootstrap/Table'
 import { useAppDispatch, useAppSelector } from '../../../hooks/index.js'
 import StockIntakeModal from '../components/StockIntakeModal'
 import StockProductDetailModal from '../components/StockProductDetailModal'
-import { fetchProducts } from '../../../services/inventoryService.js'
+import StockRequestForm from '../components/stock-requests/StockRequestForm'
+import StockRequestList from '../components/stock-requests/StockRequestList'
+import StockRequestDetailModal from '../components/stock-requests/StockRequestDetailModal'
+import { fetchProducts, fetchStorefronts } from '../../../services/inventoryService.js'
 import {
   addStockBatch,
   addStockProduct,
@@ -49,7 +53,29 @@ import {
   setStockProductsPageSize,
 } from '../../../store/slices/inventorySlice.js'
 import { selectWarehouses } from '../../../store/slices/locationSlice.js'
-import type { Product, StockProduct, StockProductPayload, SupplierPayload } from '../../../types/inventory.js'
+import {
+  cancelTransferRequest,
+  clearTransferRequestDetail,
+  clearTransferRequestMutation,
+  createTransferRequest,
+  fulfillTransferRequest,
+  loadTransferRequestDetail,
+  loadTransferRequests,
+  selectTransferRequestDetail,
+  selectTransferRequestFilters,
+  selectTransferRequestMutationErrors,
+  selectTransferRequestMutationStatus,
+  selectTransferRequests,
+  selectTransferRequestsError,
+  selectTransferRequestsPagination,
+  selectTransferRequestsPage,
+  selectTransferRequestsPageSize,
+  selectTransferRequestsStatus,
+  setTransferRequestFilters,
+  setTransferRequestPage,
+  setTransferRequestPageSize,
+} from '../../../store/slices/transferRequestSlice.js'
+import type { Product, StockProduct, StockProductPayload, Storefront, SupplierPayload, TransferRequest, TransferRequestCreatePayload } from '../../../types/inventory.js'
 
 const formatDecimal = (value?: string | null) => {
   if (!value) return '—'
@@ -120,6 +146,20 @@ const ManageStocksPage = () => {
   const deleteStockProductStatus = useAppSelector(selectDeleteStockProductStatus)
   const deleteStockProductError = useAppSelector(selectDeleteStockProductError)
 
+  // Stock Request selectors
+  const transferRequests = useAppSelector(selectTransferRequests)
+  const transferRequestsStatus = useAppSelector(selectTransferRequestsStatus)
+  const transferRequestsError = useAppSelector(selectTransferRequestsError)
+  const transferRequestsPagination = useAppSelector(selectTransferRequestsPagination)
+  const transferRequestsPage = useAppSelector(selectTransferRequestsPage)
+  const transferRequestsPageSize = useAppSelector(selectTransferRequestsPageSize)
+  const transferRequestFilters = useAppSelector(selectTransferRequestFilters)
+  const transferRequestMutationStatus = useAppSelector(selectTransferRequestMutationStatus)
+  const transferRequestMutationErrors = useAppSelector(selectTransferRequestMutationErrors)
+  const transferRequestDetail = useAppSelector(selectTransferRequestDetail)
+
+  // Local state
+  const [activeTab, setActiveTab] = useState('stock-products')
   const [searchTerm, setSearchTerm] = useState(stockProductsFilters.search)
   const [selectedBatch, setSelectedBatch] = useState<string | null>(stockProductsFilters.stock)
   const [selectedSupplier, setSelectedSupplier] = useState<string | null>(stockProductsFilters.supplier)
@@ -131,6 +171,10 @@ const ManageStocksPage = () => {
   const [productLookup, setProductLookup] = useState<Product[]>([])
   const [isLoadingProductLookup, setIsLoadingProductLookup] = useState(false)
   const [productLookupError, setProductLookupError] = useState<string | null>(null)
+  const [storefronts, setStorefronts] = useState<Storefront[]>([])
+  const [showCreateRequestForm, setShowCreateRequestForm] = useState(false)
+  const [showRequestDetailModal, setShowRequestDetailModal] = useState(false)
+  const [selectedRequest, setSelectedRequest] = useState<TransferRequest | null>(null)
 
   useEffect(() => {
     if (stockProductsStatus === 'idle') {
@@ -212,6 +256,35 @@ const ManageStocksPage = () => {
       setSelectedStockProduct(refreshed)
     }
   }, [selectedStockProduct, stockProducts])
+
+  // Load storefronts for stock requests
+  useEffect(() => {
+    let ignore = false
+
+    const loadStorefrontsData = async () => {
+      try {
+        const response = await fetchStorefronts({ page: 1 })
+        if (!ignore && response.results) {
+          setStorefronts(response.results)
+        }
+      } catch (error) {
+        console.error('Failed to load storefronts:', error)
+      }
+    }
+
+    void loadStorefrontsData()
+
+    return () => {
+      ignore = true
+    }
+  }, [])
+
+  // Load stock requests when on that tab
+  useEffect(() => {
+    if (activeTab === 'stock-requests' && transferRequestsStatus === 'idle') {
+      void dispatch(loadTransferRequests())
+    }
+  }, [activeTab, dispatch, transferRequestsStatus])
 
   const isLoading = stockProductsStatus === 'loading'
   const totalItems = stockProductsPagination.count ?? 0
@@ -401,35 +474,116 @@ const ManageStocksPage = () => {
   const activeFiltersCount = [selectedBatch, selectedSupplier, onlyInStock ? 'inStock' : null, ordering, searchTerm.trim() ? 'search' : null]
     .filter(Boolean).length
 
+  // Stock request handlers
+  const handleCreateStockRequest = async (payload: TransferRequestCreatePayload) => {
+    await dispatch(createTransferRequest(payload)).unwrap()
+    setShowCreateRequestForm(false)
+    void dispatch(loadTransferRequests())
+    dispatch(clearTransferRequestMutation('create'))
+  }
+
+  const handleStockRequestFilterChange = (filters: Partial<typeof transferRequestFilters>) => {
+    dispatch(setTransferRequestFilters(filters))
+    dispatch(setTransferRequestPage(1))
+    void dispatch(loadTransferRequests())
+  }
+
+  const handleStockRequestPageChange = (page: number) => {
+    dispatch(setTransferRequestPage(page))
+    void dispatch(loadTransferRequests())
+  }
+
+  const handleStockRequestPageSizeChange = (pageSize: number) => {
+    dispatch(setTransferRequestPageSize(pageSize))
+    dispatch(setTransferRequestPage(1))
+    void dispatch(loadTransferRequests())
+  }
+
+  const handleStockRequestRefresh = () => {
+    void dispatch(loadTransferRequests())
+  }
+
+  const handleViewStockRequest = (request: TransferRequest) => {
+    setSelectedRequest(request)
+    setShowRequestDetailModal(true)
+    void dispatch(loadTransferRequestDetail(request.id))
+  }
+
+  const handleCancelStockRequest = async (requestId: string, reason?: string) => {
+    await dispatch(cancelTransferRequest({ requestId, payload: reason ? { reason } : undefined })).unwrap()
+    void dispatch(loadTransferRequests())
+    setShowRequestDetailModal(false)
+    dispatch(clearTransferRequestMutation('cancel'))
+  }
+
+  const handleFulfillStockRequest = async (requestId: string) => {
+    await dispatch(fulfillTransferRequest({ requestId })).unwrap()
+    void dispatch(loadTransferRequests())
+    setShowRequestDetailModal(false)
+    dispatch(clearTransferRequestMutation('fulfill'))
+  }
+
+  const transferRequestTotalPages = Math.max(
+    1,
+    Math.ceil((transferRequestsPagination?.count || 0) / transferRequestsPageSize)
+  )
+
   return (
     <div className="space-y-6">
       <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className="text-2xl font-semibold text-slate-900">Manage stock items</h2>
+            <h2 className="text-2xl font-semibold text-slate-900">Manage stocks</h2>
             <p className="text-slate-600">
-              Review landed costs, supplier details, and batch history in one place. Apply filters or record new stock to
-              keep quantities accurate across warehouses.
+              Manage stock products and stock requests for your warehouses and storefronts.
             </p>
           </div>
-          <Button variant="primary" className="rounded-pill px-4" onClick={handleOpenIntakeModal}>
-            Record stock intake
-          </Button>
-        </div>
-        <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
-          <div>
-            Total stock items: <span className="font-semibold text-slate-900">{totalItems.toLocaleString()}</span>
-          </div>
-          <div>
-            Page {Math.min(stockProductsPage, totalPages)} of {totalPages}
-          </div>
-          {activeFiltersCount > 0 ? (
-            <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
-              {activeFiltersCount} filter{activeFiltersCount > 1 ? 's' : ''} applied
-            </div>
-          ) : null}
         </div>
       </section>
+
+      {/* Tab Navigation */}
+      <Nav variant="tabs" className="mb-4">
+        <Nav.Item>
+          <Nav.Link active={activeTab === 'stock-products'} onClick={() => setActiveTab('stock-products')}>
+            Stock products
+          </Nav.Link>
+        </Nav.Item>
+        <Nav.Item>
+          <Nav.Link active={activeTab === 'stock-requests'} onClick={() => setActiveTab('stock-requests')}>
+            Stock requests
+          </Nav.Link>
+        </Nav.Item>
+      </Nav>
+
+      {/* Stock Products Tab */}
+      {activeTab === 'stock-products' && (
+            <div className="space-y-6">
+              <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <h3 className="text-xl font-semibold text-slate-900">Stock products</h3>
+                    <p className="text-slate-600">
+                      Review landed costs, supplier details, and batch history in one place.
+                    </p>
+                  </div>
+                  <Button variant="primary" className="rounded-pill px-4" onClick={handleOpenIntakeModal}>
+                    Record stock intake
+                  </Button>
+                </div>
+                <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
+                  <div>
+                    Total stock items: <span className="font-semibold text-slate-900">{totalItems.toLocaleString()}</span>
+                  </div>
+                  <div>
+                    Page {Math.min(stockProductsPage, totalPages)} of {totalPages}
+                  </div>
+                  {activeFiltersCount > 0 ? (
+                    <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                      {activeFiltersCount} filter{activeFiltersCount > 1 ? 's' : ''} applied
+                    </div>
+                  ) : null}
+                </div>
+              </section>
 
       <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -663,7 +817,66 @@ const ManageStocksPage = () => {
           </div>
         </div>
       </section>
+        </div>
+      )}
 
+      {/* Stock Requests Tab */}
+      {activeTab === 'stock-requests' && (
+            <div className="space-y-6">
+              <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <h3 className="text-xl font-semibold text-slate-900">Stock requests</h3>
+                    <p className="text-slate-600">
+                      Create and manage stock requests from storefronts to warehouses.
+                    </p>
+                  </div>
+                  <Button
+                    variant="primary"
+                    className="rounded-pill px-4"
+                    onClick={() => setShowCreateRequestForm(!showCreateRequestForm)}
+                  >
+                    {showCreateRequestForm ? 'Cancel' : 'Create stock request'}
+                  </Button>
+                </div>
+              </section>
+
+              {showCreateRequestForm && (
+                <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <h4 className="text-lg font-semibold text-slate-900">New stock request</h4>
+                  <StockRequestForm
+                    storefronts={storefronts}
+                    products={productLookup}
+                    isSubmitting={transferRequestMutationStatus.create === 'loading'}
+                    error={transferRequestMutationErrors.create}
+                    onSubmit={handleCreateStockRequest}
+                    onCancel={() => setShowCreateRequestForm(false)}
+                  />
+                </section>
+              )}
+
+              <StockRequestList
+                requests={transferRequests}
+                storefronts={storefronts}
+                isLoading={transferRequestsStatus === 'loading'}
+                error={transferRequestsError}
+                pagination={{
+                  count: transferRequestsPagination?.count || 0,
+                  page: transferRequestsPage,
+                  pageSize: transferRequestsPageSize,
+                  totalPages: transferRequestTotalPages,
+                }}
+                filters={transferRequestFilters}
+                onFilterChange={handleStockRequestFilterChange}
+                onPageChange={handleStockRequestPageChange}
+                onPageSizeChange={handleStockRequestPageSizeChange}
+                onRefresh={handleStockRequestRefresh}
+                onViewDetail={handleViewStockRequest}
+              />
+            </div>
+      )}
+
+      {/* Modals */}
       <StockIntakeModal
         show={showIntakeModal}
         onClose={handleCloseIntakeModal}
@@ -699,6 +912,22 @@ const ManageStocksPage = () => {
         deleteError={deleteStockProductError}
         onUpdate={handleSubmitStockProductUpdate}
         onDelete={handleConfirmDeleteStockProduct}
+      />
+
+      <StockRequestDetailModal
+        show={showRequestDetailModal}
+        request={transferRequestDetail || selectedRequest}
+        onClose={() => {
+          setShowRequestDetailModal(false)
+          setSelectedRequest(null)
+          dispatch(clearTransferRequestDetail())
+        }}
+        onCancel={handleCancelStockRequest}
+        onFulfill={handleFulfillStockRequest}
+        isCancelling={transferRequestMutationStatus.cancel === 'loading'}
+        isFulfilling={transferRequestMutationStatus.fulfill === 'loading'}
+        cancelError={transferRequestMutationErrors.cancel}
+        fulfillError={transferRequestMutationErrors.fulfill}
       />
     </div>
   )
