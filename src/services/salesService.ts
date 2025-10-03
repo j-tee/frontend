@@ -17,6 +17,7 @@ import type { UUID } from '../types/common.js'
 
 /**
  * Create a new sale (start cart)
+ * POST /sales/api/sales/
  */
 export async function createSale(payload: {
   storefront: UUID
@@ -24,48 +25,53 @@ export async function createSale(payload: {
   customer?: UUID
   notes?: string
 }): Promise<Sale> {
-  const response = await httpClient.post<Sale>('/api/sales/', payload)
+  const response = await httpClient.post<Sale>('/sales/api/sales/', payload)
   return response.data
 }
 
 /**
  * Get sale by ID
+ * GET /sales/api/sales/{id}/
  */
 export async function getSale(saleId: UUID): Promise<Sale> {
-  const response = await httpClient.get<Sale>(`/api/sales/${saleId}/`)
+  const response = await httpClient.get<Sale>(`/sales/api/sales/${saleId}/`)
   return response.data
 }
 
 /**
  * List sales with filters and pagination
+ * GET /sales/api/sales/
  */
 export async function listSales(params?: Record<string, unknown>): Promise<PaginatedResponse<Sale>> {
-  const response = await httpClient.get<PaginatedResponse<Sale>>('/api/sales/', { params })
+  const response = await httpClient.get<PaginatedResponse<Sale>>('/sales/api/sales/', { params })
   return response.data
 }
 
 /**
  * Update sale
+ * PATCH /sales/api/sales/{id}/
  */
 export async function updateSale(
   saleId: UUID,
   updates: Partial<Pick<Sale, 'notes' | 'discount_amount'>>
 ): Promise<Sale> {
-  const response = await httpClient.patch<Sale>(`/api/sales/${saleId}/`, updates)
+  const response = await httpClient.patch<Sale>(`/sales/api/sales/${saleId}/`, updates)
   return response.data
 }
 
 /**
  * Delete sale (only DRAFT)
+ * DELETE /sales/api/sales/{id}/
  */
 export async function deleteSale(saleId: UUID): Promise<void> {
-  await httpClient.delete(`/api/sales/${saleId}/`)
+  await httpClient.delete(`/sales/api/sales/${saleId}/`)
 }
 
 // ============= Sale Items API =============
 
 /**
  * Add item to cart
+ * POST /sales/api/sales/{id}/add_item/
  */
 export async function addItem(
   saleId: UUID,
@@ -78,12 +84,13 @@ export async function addItem(
     notes?: string
   }
 ): Promise<SaleItem> {
-  const response = await httpClient.post<SaleItem>(`/api/sales/${saleId}/items/`, itemData)
+  const response = await httpClient.post<SaleItem>(`/sales/api/sales/${saleId}/add_item/`, itemData)
   return response.data
 }
 
 /**
  * Update cart item
+ * PATCH /sales/api/sales/{id}/items/{item_id}/
  */
 export async function updateItem(
   saleId: UUID,
@@ -95,7 +102,7 @@ export async function updateItem(
   }
 ): Promise<SaleItem> {
   const response = await httpClient.patch<SaleItem>(
-    `/api/sales/${saleId}/items/${itemId}/`,
+    `/sales/api/sales/${saleId}/items/${itemId}/`,
     updates
   )
   return response.data
@@ -103,15 +110,17 @@ export async function updateItem(
 
 /**
  * Remove cart item
+ * DELETE /sales/api/sales/{id}/items/{item_id}/
  */
 export async function removeItem(saleId: UUID, itemId: UUID): Promise<void> {
-  await httpClient.delete(`/api/sales/${saleId}/items/${itemId}/`)
+  await httpClient.delete(`/sales/api/sales/${saleId}/items/${itemId}/`)
 }
 
 // ============= Checkout API =============
 
 /**
  * Complete sale (checkout)
+ * POST /sales/api/sales/{id}/complete/
  */
 export async function completeSale(
   saleId: UUID,
@@ -127,7 +136,7 @@ export async function completeSale(
     notes?: string
   }
 ): Promise<Sale> {
-  const response = await httpClient.post<Sale>(`/api/sales/${saleId}/complete/`, checkoutData)
+  const response = await httpClient.post<Sale>(`/sales/api/sales/${saleId}/complete/`, checkoutData)
   return response.data
 }
 
@@ -158,6 +167,7 @@ export async function checkStockAvailability(
 
 /**
  * Create customer
+ * POST /sales/api/customers/
  */
 export async function createCustomer(customerData: {
   name: string
@@ -170,23 +180,25 @@ export async function createCustomer(customerData: {
   credit_terms_days?: number
   notes?: string
 }): Promise<Customer> {
-  const response = await httpClient.post<Customer>('/api/customers/', customerData)
+  const response = await httpClient.post<Customer>('/sales/api/customers/', customerData)
   return response.data
 }
 
 /**
  * Get customer by ID
+ * GET /sales/api/customers/{id}/
  */
 export async function getCustomer(customerId: UUID): Promise<Customer> {
-  const response = await httpClient.get<Customer>(`/api/customers/${customerId}/`)
+  const response = await httpClient.get<Customer>(`/sales/api/customers/${customerId}/`)
   return response.data
 }
 
 /**
  * List customers
+ * GET /sales/api/customers/
  */
 export async function listCustomers(params?: Record<string, unknown>): Promise<PaginatedResponse<Customer>> {
-  const response = await httpClient.get<PaginatedResponse<Customer>>('/api/customers/', { params })
+  const response = await httpClient.get<PaginatedResponse<Customer>>('/sales/api/customers/', { params })
   return response.data
 }
 
