@@ -240,6 +240,7 @@ export interface TransferRequestLineItem {
   requested_quantity: number
   approved_quantity?: number | null
   fulfilled_quantity?: number | null
+  status?: TransferRequestStatus | null
   unit_of_measure: string
   notes?: string | null
 }

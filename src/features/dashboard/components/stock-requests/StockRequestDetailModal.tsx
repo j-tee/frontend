@@ -226,16 +226,15 @@ const StockRequestDetailModal = ({
               <tr>
                 <th>Product</th>
                 <th className="text-end">Requested</th>
-                <th className="text-end">Approved</th>
-                <th className="text-end">Fulfilled</th>
-                <th>Unit</th>
+                <th>Status</th>
+                <th>Units</th>
                 <th>Notes</th>
               </tr>
             </thead>
             <tbody>
               {request.line_items?.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center text-muted py-3">
+                  <td colSpan={5} className="text-center text-muted py-3">
                     No line items found.
                   </td>
                 </tr>
@@ -244,8 +243,7 @@ const StockRequestDetailModal = ({
                   <tr key={item.id}>
                     <td className="fw-semibold">{item.product_name}</td>
                     <td className="text-end">{item.requested_quantity}</td>
-                    <td className="text-end">{item.approved_quantity ?? '—'}</td>
-                    <td className="text-end">{item.fulfilled_quantity ?? '—'}</td>
+                    <td>{item.status ? getStatusBadge(item.status) : getStatusBadge(request.status)}</td>
                     <td>{item.unit_of_measure}</td>
                     <td className="text-muted small">{item.notes || '—'}</td>
                   </tr>
