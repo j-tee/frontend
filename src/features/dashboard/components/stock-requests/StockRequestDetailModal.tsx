@@ -8,6 +8,7 @@ import Spinner from 'react-bootstrap/Spinner'
 import Table from 'react-bootstrap/Table'
 import type { TransferRequest } from '../../../../types/inventory.js'
 import usePermissions from '../../../../hooks/usePermissions.js'
+import { useCanEditFulfilled } from '../../../../hooks/index.js'
 
 interface StockRequestDetailModalProps {
   show: boolean
@@ -16,6 +17,7 @@ interface StockRequestDetailModalProps {
   onCancel?: (requestId: string, reason?: string) => Promise<void>
   onFulfill?: (requestId: string) => Promise<void>
   onUpdateStatus?: (requestId: string, status: string, force?: boolean) => Promise<void>
+  onEditFulfilled?: (requestId: string) => void
   isCancelling?: boolean
   isFulfilling?: boolean
   isUpdatingStatus?: boolean
@@ -71,6 +73,7 @@ const StockRequestDetailModal = ({
   onCancel,
   onFulfill,
   onUpdateStatus,
+  onEditFulfilled,
   isCancelling = false,
   isFulfilling = false,
   isUpdatingStatus = false,
@@ -81,6 +84,7 @@ const StockRequestDetailModal = ({
   const [showStatusConfirm, setShowStatusConfirm] = useState(false)
   const [targetStatus, setTargetStatus] = useState<string>('')
   const permissions = usePermissions()
+  const canEditFulfilled = useCanEditFulfilled()
 
   if (!request) return null
 
@@ -90,6 +94,9 @@ const StockRequestDetailModal = ({
   // Privileged users (Manager, Admin, Owner) can manually override status
   // Check using capability instead of direct role comparison for more robust permissions
   const canManageStatus = onUpdateStatus && permissions.can('inventory.requests.manage')
+  
+  // Only managers/admins/owners can edit fulfilled requests
+  const canEdit = request.status === 'FULFILLED' && canEditFulfilled && onEditFulfilled
 
   const handleCancel = async () => {
     if (!onCancel) return
@@ -267,6 +274,14 @@ const StockRequestDetailModal = ({
         <Button variant="outline-secondary" onClick={onClose}>
           Close
         </Button>
+        {canEdit && (
+          <Button
+            variant="primary"
+            onClick={() => onEditFulfilled?.(request.id)}
+          >
+            Edit Quantities
+          </Button>
+        )}
         {canCancel && (
           <Button
             variant="outline-danger"

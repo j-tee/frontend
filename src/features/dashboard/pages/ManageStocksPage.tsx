@@ -11,6 +11,7 @@ import StockProductDetailModal from '../components/StockProductDetailModal'
 import StockRequestForm from '../components/stock-requests/StockRequestForm'
 import StockRequestList from '../components/stock-requests/StockRequestList'
 import StockRequestDetailModal from '../components/stock-requests/StockRequestDetailModal'
+import EditFulfilledRequestModal from '../components/stock-requests/EditFulfilledRequestModal'
 import { ReturnRequestForm } from '../components/returns/index.js'
 import { fetchProducts, fetchStorefronts } from '../../../services/inventoryService.js'
 import {
@@ -76,6 +77,7 @@ import {
   setTransferRequestPage,
   setTransferRequestPageSize,
   updateTransferRequestStatus,
+  updateTransferRequest,
 } from '../../../store/slices/transferRequestSlice.js'
 import type { Product, StockProduct, StockProductPayload, Storefront, SupplierPayload, TransferRequest, TransferRequestCreatePayload } from '../../../types/inventory.js'
 
@@ -177,6 +179,8 @@ const ManageStocksPage = () => {
   const [showCreateRequestForm, setShowCreateRequestForm] = useState(false)
   const [showRequestDetailModal, setShowRequestDetailModal] = useState(false)
   const [selectedRequest, setSelectedRequest] = useState<TransferRequest | null>(null)
+  const [showEditFulfilledModal, setShowEditFulfilledModal] = useState(false)
+  const [editingRequest, setEditingRequest] = useState<TransferRequest | null>(null)
 
   useEffect(() => {
     if (stockProductsStatus === 'idle') {
@@ -534,6 +538,51 @@ const ManageStocksPage = () => {
     void dispatch(loadTransferRequests())
     void dispatch(loadTransferRequestDetail(requestId))
     dispatch(clearTransferRequestMutation('updateStatus'))
+  }
+
+  const handleEditFulfilled = (requestId: string) => {
+    const request = transferRequests.find(r => r.id === requestId)
+    if (request) {
+      setEditingRequest(request)
+      setShowEditFulfilledModal(true)
+      setShowRequestDetailModal(false)
+    }
+  }
+
+  const handleSaveEditFulfilled = async (updates: { lineItems: Array<{ id: string; quantity: number; notes: string }> }) => {
+    if (!editingRequest) return
+    
+    try {
+      // Build the payload with updated line items
+      const payload = {
+        line_items: updates.lineItems.map(item => ({
+          id: item.id,
+          product: editingRequest.line_items.find(li => li.id === item.id)?.product || '',
+          requested_quantity: item.quantity,
+          unit_of_measure: editingRequest.line_items.find(li => li.id === item.id)?.unit_of_measure || 'units',
+          notes: item.notes
+        }))
+      }
+      
+      await dispatch(updateTransferRequest({ 
+        requestId: editingRequest.id, 
+        payload 
+      })).unwrap()
+      
+      // Reload the list and close modal
+      void dispatch(loadTransferRequests())
+      setShowEditFulfilledModal(false)
+      setEditingRequest(null)
+      dispatch(clearTransferRequestMutation('update'))
+    } catch (error) {
+      // Error handling is managed by the modal through Redux state
+      console.error('Failed to update fulfilled request:', error)
+    }
+  }
+
+  const handleCancelEditFulfilled = () => {
+    setShowEditFulfilledModal(false)
+    setEditingRequest(null)
   }
 
   return (
@@ -994,12 +1043,21 @@ const ManageStocksPage = () => {
         onCancel={handleCancelStockRequest}
         onFulfill={handleFulfillStockRequest}
         onUpdateStatus={handleUpdateStockRequestStatus}
+        onEditFulfilled={handleEditFulfilled}
         isCancelling={transferRequestMutationStatus.cancel === 'loading'}
         isFulfilling={transferRequestMutationStatus.fulfill === 'loading'}
         isUpdatingStatus={transferRequestMutationStatus.updateStatus === 'loading'}
         cancelError={transferRequestMutationErrors.cancel}
         fulfillError={transferRequestMutationErrors.fulfill}
         updateStatusError={transferRequestMutationErrors.updateStatus}
+      />
+
+      <EditFulfilledRequestModal
+        show={showEditFulfilledModal}
+        request={editingRequest}
+        onHide={handleCancelEditFulfilled}
+        onSubmit={handleSaveEditFulfilled}
+        isSubmitting={transferRequestMutationStatus.update === 'loading'}
       />
     </div>
   )
