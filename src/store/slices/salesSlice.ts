@@ -2,7 +2,7 @@ import { createSlice, createAsyncThunk, type PayloadAction } from '@reduxjs/tool
 import type { RootState } from '../index.js'
 import type { Sale } from '../../types/sales.js'
 import type { UUID } from '../../types/common.js'
-import * as salesService from '../../services/salesService.js'
+import * as salesService from '../../services/salesService'
 
 // Types
 interface SalesFilters {
@@ -124,7 +124,14 @@ export const addItemToCart = createAsyncThunk(
     discountPercentage?: number
     notes?: string
   }) => {
-    const { saleId, ...itemData } = payload
+    const { saleId, stockProduct, unitPrice, discountPercentage, ...rest } = payload
+    // Convert camelCase to snake_case for backend
+    const itemData = {
+      ...rest,
+      stock_product: stockProduct,
+      unit_price: unitPrice,
+      discount_percentage: discountPercentage,
+    }
     const response = await salesService.addItem(saleId, itemData)
     return response
   }
@@ -170,7 +177,18 @@ export const completeSale = createAsyncThunk(
     discountAmount?: number
     notes?: string
   }) => {
-    const { saleId, ...checkoutData } = payload
+    const { saleId, paymentType, payments, discountAmount, notes } = payload
+    // Convert camelCase to snake_case for backend
+    const checkoutData = {
+      payment_type: paymentType,
+      payments: payments.map(p => ({
+        payment_method: p.paymentMethod,
+        amount_paid: p.amountPaid,
+        transaction_reference: p.transactionReference,
+      })),
+      discount_amount: discountAmount,
+      notes,
+    }
     const response = await salesService.completeSale(saleId, checkoutData)
     return response
   }

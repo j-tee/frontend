@@ -131,18 +131,17 @@ const SalesPage = () => {
                     )}
 
                     {/* Product Search */}
-                    <ProductSearchPanel
-                      storefrontId={currentLocation.id}
-                      saleId={currentCart?.id}
-                      disabled={!currentCart}
-                    />
-
-                    {/* Shopping Cart */}
+              <ProductSearchPanel
+                storefrontId={currentLocation?.id || ''}
+                saleId={currentCart?.id}
+                saleType={saleType}
+                disabled={!currentCart || mutations.createSale === 'loading'}
+              />                    {/* Shopping Cart */}
                     <div className="mt-4">
                       <SaleCart
                         cart={currentCart}
                         onCheckout={handleCheckout}
-                        loading={mutations.checkout === 'loading'}
+                        disabled={mutations.checkout === 'loading'}
                       />
                     </div>
                   </Card.Body>
