@@ -79,7 +79,7 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
       const response = await httpClient.get('/inventory/api/products/', {
         params: {
           search: query,
-          is_active: true,
+          // Note: is_active filter removed - not available in backend
         },
       })
 
@@ -111,7 +111,7 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
         
         // Provide more specific error messages
         if (error.response.status === 500) {
-          setError('Server error - Please check if the inventory API is properly configured')
+          setError('Server error - Please check backend logs for details')
         } else if (error.response.status === 404) {
           setError('Products endpoint not found - Check backend URL configuration')
         } else if (error.response.status === 401) {
@@ -146,24 +146,66 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
       setLoading(true)
       setError(null)
 
-      const response = await httpClient.get(`/inventory/api/products/by-barcode/${barcode}/`)
-      const product = response.data
+      console.log('[ProductSearch] Barcode scan:', barcode)
+      
+      // Try barcode endpoint first (if product has barcode field)
+      try {
+        const response = await httpClient.get(`/inventory/api/products/by-barcode/${barcode}/`)
+        const product = response.data
 
-      if (product) {
-        // Auto-add to cart if saleId exists
-        if (saleId) {
-          await handleAddToCart(product.id, 1)
+        if (product) {
+          console.log('[ProductSearch] Product found by barcode:', product)
+          // Auto-add to cart if saleId exists
+          if (saleId) {
+            await handleAddToCart(product.id, 1)
+          } else {
+            setProducts([product])
+            await fetchStockLevels([product.id])
+          }
+          setBarcodeInput('')
+          return
+        }
+      } catch (barcodeErr) {
+        const barcodeError = barcodeErr as { response?: { status: number } }
+        
+        // If 404, try SKU lookup as fallback (barcode might be the SKU)
+        if (barcodeError.response?.status === 404) {
+          console.log('[ProductSearch] Barcode not found, trying SKU lookup...')
+          
+          try {
+            const response = await httpClient.get(`/inventory/api/products/by-sku/${barcode}/`)
+            const product = response.data
+
+            if (product) {
+              console.log('[ProductSearch] Product found by SKU:', product)
+              // Auto-add to cart if saleId exists
+              if (saleId) {
+                await handleAddToCart(product.id, 1)
+              } else {
+                setProducts([product])
+                await fetchStockLevels([product.id])
+              }
+              setBarcodeInput('')
+              return
+            }
+          } catch {
+            // Both failed, show error
+            throw new Error('not_found')
+          }
         } else {
-          setProducts([product])
-          await fetchStockLevels([product.id])
+          // Other error, rethrow
+          throw barcodeErr
         }
       }
 
       setBarcodeInput('')
     } catch (err) {
-      const error = err as { response?: { status: number } }
-      if (error.response?.status === 404) {
-        setError(`No product found with barcode: ${barcode}`)
+      const error = err as { response?: { status: number }; message?: string }
+      
+      if (error.message === 'not_found') {
+        setError(`No product found with barcode/SKU: ${barcode}`)
+      } else if (error.response?.status === 404) {
+        setError(`No product found with barcode/SKU: ${barcode}`)
       } else {
         setError('Failed to scan barcode')
       }
