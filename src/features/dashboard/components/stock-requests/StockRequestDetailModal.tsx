@@ -158,7 +158,7 @@ const StockRequestDetailModal = ({
             <div className="col-md-6">
               <label className="form-label text-muted small">Transfer type</label>
               <div>
-                {request.direction === 'FORWARD' ? (
+                {(request.direction || 'FORWARD') === 'FORWARD' ? (
                   <Badge bg="primary">Stock Request (Warehouse → Storefront)</Badge>
                 ) : (
                   <Badge bg="warning">Return (Storefront → Warehouse)</Badge>

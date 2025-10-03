@@ -869,15 +869,15 @@ const ManageStocksPage = () => {
               )}
 
               <StockRequestList
-                requests={transferRequests.filter(req => req.direction === 'FORWARD')}
+                requests={transferRequests.filter(req => (req.direction || 'FORWARD') === 'FORWARD')}
                 storefronts={storefronts}
                 isLoading={transferRequestsStatus === 'loading'}
                 error={transferRequestsError}
                 pagination={{
-                  count: transferRequests.filter(req => req.direction === 'FORWARD').length,
+                  count: transferRequests.filter(req => (req.direction || 'FORWARD') === 'FORWARD').length,
                   page: transferRequestsPage,
                   pageSize: transferRequestsPageSize,
-                  totalPages: Math.max(1, Math.ceil(transferRequests.filter(req => req.direction === 'FORWARD').length / transferRequestsPageSize)),
+                  totalPages: Math.max(1, Math.ceil(transferRequests.filter(req => (req.direction || 'FORWARD') === 'FORWARD').length / transferRequestsPageSize)),
                 }}
                 filters={transferRequestFilters}
                 onFilterChange={handleStockRequestFilterChange}

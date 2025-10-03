@@ -215,7 +215,7 @@ const StockRequestList = ({
                   <tr key={request.id}>
                     <td className="font-medium">{request.storefront_name}</td>
                     <td>
-                      {request.direction === 'FORWARD' ? (
+                      {(request.direction || 'FORWARD') === 'FORWARD' ? (
                         <Badge bg="primary" className="text-xs">Request</Badge>
                       ) : (
                         <Badge bg="warning" className="text-xs">Return</Badge>
