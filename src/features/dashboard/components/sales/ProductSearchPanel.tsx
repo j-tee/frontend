@@ -72,6 +72,10 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
       setLoading(true)
       setError(null)
 
+      console.log('[ProductSearch] Searching for:', query)
+      console.log('[ProductSearch] API URL:', '/inventory/api/products/')
+      console.log('[ProductSearch] Base URL:', httpClient.defaults.baseURL)
+      
       const response = await httpClient.get('/inventory/api/products/', {
         params: {
           search: query,
@@ -79,7 +83,17 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
         },
       })
 
+      console.log('[ProductSearch] Response status:', response.status)
+      console.log('[ProductSearch] Response data:', response.data)
+
       const productList = response.data.results || response.data
+      
+      if (!Array.isArray(productList)) {
+        console.warn('[ProductSearch] Unexpected response format:', productList)
+        setError('Unexpected response format from server')
+        return
+      }
+      
       setProducts(productList)
 
       // Fetch stock for each product
@@ -87,8 +101,27 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
         await fetchStockLevels(productList.map((p: Product) => p.id))
       }
     } catch (err) {
-      setError('Failed to search products')
-      console.error('Search error:', err)
+      console.error('[ProductSearch] Search error:', err)
+      const error = err as { response?: { data?: unknown; status?: number; statusText?: string }; message?: string }
+      
+      if (error.response) {
+        console.error('[ProductSearch] Error status:', error.response.status)
+        console.error('[ProductSearch] Error statusText:', error.response.statusText)
+        console.error('[ProductSearch] Error data:', error.response.data)
+        
+        // Provide more specific error messages
+        if (error.response.status === 500) {
+          setError('Server error - Please check if the inventory API is properly configured')
+        } else if (error.response.status === 404) {
+          setError('Products endpoint not found - Check backend URL configuration')
+        } else if (error.response.status === 401) {
+          setError('Authentication failed - Please log in again')
+        } else {
+          setError(`Failed to search products: ${error.response.status} ${error.response.statusText}`)
+        }
+      } else {
+        setError(error.message || 'Failed to search products - Network error')
+      }
     } finally {
       setLoading(false)
     }
