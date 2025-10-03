@@ -10,7 +10,9 @@ export type PaymentType = (typeof PAYMENT_TYPES)[number]
 
 export const SALE_STATUSES = [
   'COMPLETED',
-  'PENDING',
+  'DRAFT',
+  'REQUESTED',
+  'APPROVED',
   'REFUNDED',
   'PARTIAL',
   'CANCELLED',
@@ -35,7 +37,9 @@ export type PaymentMethod = (typeof PAYMENT_METHODS)[number]
 
 export const PAYMENT_STATUSES = [
   'SUCCESSFUL',
-  'PENDING',
+  'DRAFT',
+  'REQUESTED',
+  'APPROVED',
   'FAILED',
   'CANCELLED',
 ] as const
@@ -47,7 +51,9 @@ export const REFUND_TYPES = ['FULL', 'PARTIAL', 'EXCHANGE'] as const
 export type RefundType = (typeof REFUND_TYPES)[number]
 
 export const REFUND_STATUSES = [
-  'PENDING',
+  'DRAFT',
+  'REQUESTED',
+  'APPROVED',
   'APPROVED',
   'PROCESSED',
   'REJECTED',
@@ -56,8 +62,11 @@ export const REFUND_STATUSES = [
 export type RefundStatus = (typeof REFUND_STATUSES)[number]
 
 export const TRANSFER_STATUSES = [
-  'PENDING',
+  'DRAFT',
+  'REQUESTED',
+  'APPROVED',
   'IN_TRANSIT',
+  'REJECTED',
   'COMPLETED',
   'CANCELLED',
 ] as const
@@ -84,3 +93,21 @@ export interface PaginatedResponse<T> {
   previous: string | null
   results: T[]
 }
+
+export const TRANSFER_REQUEST_STATUSES = [
+  'NEW',
+  'ASSIGNED',
+  'FULFILLED',
+  'CANCELLED',
+] as const
+
+export type TransferRequestStatus = (typeof TRANSFER_REQUEST_STATUSES)[number]
+
+export const TRANSFER_REQUEST_PRIORITIES = [
+  'LOW',
+  'MEDIUM',
+  'HIGH',
+  'URGENT',
+] as const
+
+export type TransferRequestPriority = (typeof TRANSFER_REQUEST_PRIORITIES)[number]

@@ -1,4 +1,4 @@
-import type { StockAlertType, TransferStatus, UUID } from './common'
+import type { StockAlertType, TransferStatus, TransferRequestStatus, TransferRequestPriority, UUID } from './common'
 
 export interface Category {
   id: UUID
@@ -229,4 +229,152 @@ export interface OwnerWorkspaceSnapshot {
   }
   storefronts: Storefront[]
   warehouses: Warehouse[]
+}
+
+// Transfer Request & Transfer types (Stock Request workflow)
+
+export interface TransferRequestLineItem {
+  id: UUID
+  product: UUID
+  product_name: string
+  requested_quantity: number
+  approved_quantity?: number | null
+  fulfilled_quantity?: number | null
+  unit_of_measure: string
+  notes?: string | null
+}
+
+export interface TransferRequest {
+  id: UUID
+  business: UUID
+  storefront: UUID
+  storefront_name: string
+  requested_by: UUID
+  requested_by_name: string
+  priority: TransferRequestPriority
+  status: TransferRequestStatus
+  notes?: string | null
+  linked_transfer_reference?: string | null
+  linked_transfer_id?: UUID | null
+  assigned_at?: string | null
+  fulfilled_at?: string | null
+  fulfilled_by?: UUID | null
+  cancelled_at?: string | null
+  line_items: TransferRequestLineItem[]
+  created_at: string
+  updated_at: string
+}
+
+export interface TransferRequestCreatePayload {
+  storefront: UUID
+  priority: TransferRequestPriority
+  notes?: string
+  line_items: Array<{
+    product: UUID
+    requested_quantity: number
+    unit_of_measure: string
+    notes?: string
+  }>
+}
+
+export interface TransferRequestUpdatePayload {
+  priority?: TransferRequestPriority
+  notes?: string
+  line_items?: Array<{
+    id?: UUID
+    product: UUID
+    requested_quantity: number
+    unit_of_measure: string
+    notes?: string
+  }>
+}
+
+export interface TransferRequestCancelPayload {
+  reason?: string
+}
+
+export interface TransferRequestFulfillPayload {
+  notes?: string
+}
+
+export interface TransferLineItem {
+  id: UUID
+  product: UUID
+  product_name: string
+  requested_quantity: number
+  approved_quantity?: number | null
+  fulfilled_quantity?: number | null
+  unit_of_measure: string
+  notes?: string | null
+}
+
+export interface TransferAuditEntry {
+  action: string
+  actor: UUID
+  actor_name: string
+  remarks?: string | null
+  created_at: string
+}
+
+export interface TransferCreatePayload {
+  source_warehouse: UUID
+  destination_storefront: UUID
+  request?: UUID | null
+  notes?: string
+  line_items: Array<{
+    product: UUID
+    requested_quantity: number
+    unit_of_measure: string
+    notes?: string
+  }>
+}
+
+export interface TransferUpdatePayload {
+  notes?: string
+  line_items?: Array<{
+    id?: UUID
+    product: UUID
+    requested_quantity: number
+    unit_of_measure: string
+    notes?: string
+  }>
+}
+
+export interface TransferApprovePayload {
+  line_items?: Array<{
+    id: UUID
+    approved_quantity: number
+  }>
+}
+
+export interface TransferRejectPayload {
+  reason: string
+}
+
+export interface TransferFulfillmentPayload {
+  line_items?: Array<{
+    id: UUID
+    fulfilled_quantity: number
+  }>
+}
+
+export interface TransferConfirmReceiptPayload {
+  notes?: string
+}
+
+export interface EmployeeWorkspaceResponse {
+  businesses: Array<{
+    id: UUID
+    name: string
+    role: string
+    transfer_requests: {
+      by_status: Record<TransferRequestStatus, number>
+    }
+    transfers: {
+      by_status: Record<TransferStatus, number>
+    }
+  }>
+  pending_approvals: Transfer[]
+  incoming_transfers: Transfer[]
+  my_transfer_requests: TransferRequest[]
 }
