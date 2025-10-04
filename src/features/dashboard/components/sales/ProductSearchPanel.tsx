@@ -18,13 +18,16 @@ interface Product {
 interface StockProduct {
   id: UUID
   product: UUID
-  product_name: string
-  product_sku: string
+  product_name?: string
+  product_sku?: string
   quantity: number
   available_quantity: number
-  purchase_price: number
+  reserved_quantity?: number
+  unit_cost?: number
   wholesale_price: number
   retail_price: number
+  batch_number?: string
+  expiry_date?: string | null
 }
 
 interface ProductSearchPanelProps {
@@ -47,18 +50,48 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
 
   const fetchStockLevels = useCallback(async (productIds: UUID[]) => {
     try {
-      const response = await httpClient.get('/inventory/api/stock-products/', {
-        params: {
-          storefront: storefrontId,
-          product__in: productIds.join(','),
-        },
+      // Fetch stock availability for each product
+      // This returns CALCULATED availability (not raw quantity)
+      // Accounts for: reservations, sales, spoilage, damage, theft, transfers
+      const stockPromises = productIds.map(async (productId) => {
+        try {
+          const response = await httpClient.get(
+            `/inventory/api/storefronts/${storefrontId}/stock-products/${productId}/availability/`
+          )
+          return {
+            productId,
+            data: response.data,
+          }
+        } catch (err) {
+          console.warn(`Failed to fetch availability for product ${productId}:`, err)
+          return null
+        }
       })
 
-      const stockList = response.data.results || response.data
+      const results = await Promise.all(stockPromises)
       const stockMap: Record<UUID, StockProduct> = {}
 
-      stockList.forEach((stock: StockProduct) => {
-        stockMap[stock.product] = stock
+      results.forEach((result) => {
+        if (result && result.data) {
+          const { productId, data } = result
+          
+          // Map availability response to StockProduct format
+          // Use unreserved_quantity as the available quantity
+          const firstBatch = data.batches?.[0]
+          
+          stockMap[productId] = {
+            id: firstBatch?.id || productId, // Use batch ID if available
+            product: productId,
+            quantity: data.total_available || 0, // Total stock (including reserved)
+            available_quantity: data.unreserved_quantity || 0, // CRITICAL: Available for new sales
+            reserved_quantity: data.reserved_quantity || 0,
+            unit_cost: firstBatch?.unit_cost || 0,
+            retail_price: firstBatch?.retail_price || 0,
+            wholesale_price: firstBatch?.wholesale_price || 0,
+            batch_number: firstBatch?.batch_number || '',
+            expiry_date: firstBatch?.expiry_date || null,
+          }
+        }
       })
 
       setStockData(stockMap)
@@ -273,7 +306,8 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
     const stock = stockData[productId]
     if (!stock) return { color: 'secondary', text: 'N/A', available: 0 }
 
-    const qty = stock.available_quantity
+    // Backend returns 'quantity' not 'available_quantity'
+    const qty = stock.quantity
 
     if (qty === 0) {
       return { color: 'danger', text: 'Out of Stock', available: 0 }
