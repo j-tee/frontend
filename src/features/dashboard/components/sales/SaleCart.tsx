@@ -11,6 +11,13 @@ interface SaleCartProps {
   disabled?: boolean
 }
 
+// Helper function to safely format prices (handles both strings and numbers)
+const formatPrice = (price: number | string | undefined): string => {
+  if (price === undefined || price === null) return '0.00'
+  const numPrice = typeof price === 'string' ? parseFloat(price) : price
+  return isNaN(numPrice) ? '0.00' : numPrice.toFixed(2)
+}
+
 export function SaleCart({ cart, onCheckout, disabled }: SaleCartProps) {
   const saleId = cart?.id
   const dispatch = useAppDispatch()
@@ -158,7 +165,7 @@ export function SaleCart({ cart, onCheckout, disabled }: SaleCartProps) {
                             </Button>
                           )}
                         </td>
-                        <td>GH₵ {item.unit_price.toFixed(2)}</td>
+                        <td>GH₵ {formatPrice(item.unit_price)}</td>
                         <td>
                           <InputGroup size="sm">
                             <Form.Control
@@ -174,12 +181,12 @@ export function SaleCart({ cart, onCheckout, disabled }: SaleCartProps) {
                           </InputGroup>
                         </td>
                         <td className="text-end">
-                          <strong>GH₵ {item.total_price.toFixed(2)}</strong>
+                          <strong>GH₵ {formatPrice(item.total_price)}</strong>
                           {item.discount_amount > 0 && (
                             <>
                               <br />
                               <small className="text-success">
-                                -GH₵ {item.discount_amount.toFixed(2)}
+                                -GH₵ {formatPrice(item.discount_amount)}
                               </small>
                             </>
                           )}
@@ -205,23 +212,23 @@ export function SaleCart({ cart, onCheckout, disabled }: SaleCartProps) {
             <div className="border-top p-3 bg-light">
               <div className="d-flex justify-content-between mb-2">
                 <span>Subtotal:</span>
-                <strong>GH₵ {cart.subtotal.toFixed(2)}</strong>
+                <strong>GH₵ {formatPrice(cart.subtotal)}</strong>
               </div>
               {cart.discount_amount > 0 && (
                 <div className="d-flex justify-content-between mb-2 text-success">
                   <span>Discount:</span>
-                  <strong>-GH₵ {cart.discount_amount.toFixed(2)}</strong>
+                  <strong>-GH₵ {formatPrice(cart.discount_amount)}</strong>
                 </div>
               )}
               {cart.tax_amount > 0 && (
                 <div className="d-flex justify-content-between mb-2">
                   <span>Tax:</span>
-                  <strong>GH₵ {cart.tax_amount.toFixed(2)}</strong>
+                  <strong>GH₵ {formatPrice(cart.tax_amount)}</strong>
                 </div>
               )}
               <div className="d-flex justify-content-between border-top pt-2 fs-5">
                 <strong>Total:</strong>
-                <strong>GH₵ {cart.total_amount.toFixed(2)}</strong>
+                <strong>GH₵ {formatPrice(cart.total_amount)}</strong>
               </div>
             </div>
 
