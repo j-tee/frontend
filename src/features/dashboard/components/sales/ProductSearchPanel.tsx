@@ -47,10 +47,11 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [addingItemId, setAddingItemId] = useState<UUID | null>(null)
+  const [quantities, setQuantities] = useState<Record<UUID, number>>({})
 
   const fetchStockLevels = useCallback(async (productIds: UUID[]) => {
     try {
-      // Fetch stock availability for each product
+      // Try to fetch from availability endpoint first (preferred - dynamic calculation)
       // This returns CALCULATED availability (not raw quantity)
       // Accounts for: reservations, sales, spoilage, damage, theft, transfers
       const stockPromises = productIds.map(async (productId) => {
@@ -61,9 +62,31 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
           return {
             productId,
             data: response.data,
+            source: 'availability',
           }
         } catch (err) {
-          console.warn(`Failed to fetch availability for product ${productId}:`, err)
+          console.warn(`Availability endpoint not available for product ${productId}, falling back to stock-products`, err)
+          // Fallback to basic stock-products endpoint if availability not implemented
+          try {
+            const fallbackResponse = await httpClient.get('/inventory/api/stock-products/', {
+              params: {
+                storefront: storefrontId,
+                product: productId,
+              },
+            })
+            const stockList = fallbackResponse.data.results || fallbackResponse.data
+            const stock = Array.isArray(stockList) ? stockList[0] : stockList
+            
+            if (stock) {
+              return {
+                productId,
+                data: stock,
+                source: 'fallback',
+              }
+            }
+          } catch (fallbackErr) {
+            console.warn(`Fallback also failed for product ${productId}:`, fallbackErr)
+          }
           return null
         }
       })
@@ -73,23 +96,40 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
 
       results.forEach((result) => {
         if (result && result.data) {
-          const { productId, data } = result
+          const { productId, data, source } = result
           
-          // Map availability response to StockProduct format
-          // Use unreserved_quantity as the available quantity
-          const firstBatch = data.batches?.[0]
-          
-          stockMap[productId] = {
-            id: firstBatch?.id || productId, // Use batch ID if available
-            product: productId,
-            quantity: data.total_available || 0, // Total stock (including reserved)
-            available_quantity: data.unreserved_quantity || 0, // CRITICAL: Available for new sales
-            reserved_quantity: data.reserved_quantity || 0,
-            unit_cost: firstBatch?.unit_cost || 0,
-            retail_price: firstBatch?.retail_price || 0,
-            wholesale_price: firstBatch?.wholesale_price || 0,
-            batch_number: firstBatch?.batch_number || '',
-            expiry_date: firstBatch?.expiry_date || null,
+          if (source === 'availability') {
+            // Map availability response to StockProduct format
+            // Use unreserved_quantity as the available quantity
+            const firstBatch = data.batches?.[0]
+            
+            stockMap[productId] = {
+              id: firstBatch?.id || productId,
+              product: productId,
+              quantity: data.total_available || 0,
+              available_quantity: data.unreserved_quantity || 0, // CRITICAL: Available for new sales
+              reserved_quantity: data.reserved_quantity || 0,
+              unit_cost: firstBatch?.unit_cost || 0,
+              retail_price: firstBatch?.retail_price || 0,
+              wholesale_price: firstBatch?.wholesale_price || 0,
+              batch_number: firstBatch?.batch_number || '',
+              expiry_date: firstBatch?.expiry_date || null,
+            }
+          } else {
+            // Fallback: Use basic stock data (temporary until availability endpoint is ready)
+            console.log('[ProductSearch] Using fallback stock data for product:', productId)
+            stockMap[productId] = {
+              id: data.id,
+              product: productId,
+              quantity: parseInt(data.quantity) || 0,
+              available_quantity: parseInt(data.quantity) || 0, // Using raw quantity as fallback
+              reserved_quantity: 0,
+              unit_cost: parseFloat(data.unit_cost) || 0,
+              retail_price: parseFloat(data.retail_price) || 0,
+              wholesale_price: parseFloat(data.wholesale_price) || 0,
+              batch_number: data.batch_number || '',
+              expiry_date: data.expiry_date || null,
+            }
           }
         }
       })
@@ -129,6 +169,17 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
       
       setProducts(productList)
 
+      // Initialize quantities for new products (default to 1)
+      const newQuantities: Record<UUID, number> = {}
+      productList.forEach((p: Product) => {
+        if (!quantities[p.id]) {
+          newQuantities[p.id] = 1
+        }
+      })
+      if (Object.keys(newQuantities).length > 0) {
+        setQuantities(prev => ({ ...prev, ...newQuantities }))
+      }
+
       // Fetch stock for each product
       if (productList.length > 0) {
         await fetchStockLevels(productList.map((p: Product) => p.id))
@@ -158,7 +209,7 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
     } finally {
       setLoading(false)
     }
-  }, [fetchStockLevels])
+  }, [fetchStockLevels, quantities])
 
   // Debounced search
   useEffect(() => {
@@ -326,6 +377,14 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
     return typeof price === 'string' ? parseFloat(price) : price
   }
 
+  const getQuantity = (productId: UUID) => {
+    return quantities[productId] || 1
+  }
+
+  const setQuantity = (productId: UUID, quantity: number) => {
+    setQuantities(prev => ({ ...prev, [productId]: quantity }))
+  }
+
   return (
     <div>
       {/* Search Bar */}
@@ -416,7 +475,7 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
                           </div>
                         )}
                       </Col>
-                      <Col xs={6}>
+                      <Col xs={5}>
                         <div>
                           <strong>{product.name}</strong>
                           <br />
@@ -431,12 +490,51 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
                         <div className="fs-5 fw-bold">GH₵ {price.toFixed(2)}</div>
                         <small className="text-muted">per {product.unit}</small>
                       </Col>
-                      <Col xs={2}>
+                      <Col xs={3}>
+                        <InputGroup size="sm" className="mb-2">
+                          <Button
+                            variant="outline-secondary"
+                            onClick={() => {
+                              const currentQty = getQuantity(product.id)
+                              if (currentQty > 1) setQuantity(product.id, currentQty - 1)
+                            }}
+                            disabled={disabled || getQuantity(product.id) <= 1}
+                          >
+                            -
+                          </Button>
+                          <Form.Control
+                            type="number"
+                            min="1"
+                            max={stockStatus.available}
+                            value={getQuantity(product.id)}
+                            onChange={(e) => {
+                              const newQty = parseInt(e.target.value) || 1
+                              if (newQty >= 1 && newQty <= stockStatus.available) {
+                                setQuantity(product.id, newQty)
+                              }
+                            }}
+                            className="text-center"
+                            disabled={disabled}
+                            style={{ maxWidth: '60px' }}
+                          />
+                          <Button
+                            variant="outline-secondary"
+                            onClick={() => {
+                              const currentQty = getQuantity(product.id)
+                              if (currentQty < stockStatus.available) {
+                                setQuantity(product.id, currentQty + 1)
+                              }
+                            }}
+                            disabled={disabled || getQuantity(product.id) >= stockStatus.available}
+                          >
+                            +
+                          </Button>
+                        </InputGroup>
                         <Button
                           variant="primary"
                           size="sm"
                           className="w-100"
-                          onClick={() => handleAddToCart(product.id)}
+                          onClick={() => handleAddToCart(product.id, getQuantity(product.id))}
                           disabled={stockStatus.available === 0 || !saleId || isAdding || disabled}
                         >
                           {isAdding ? (
