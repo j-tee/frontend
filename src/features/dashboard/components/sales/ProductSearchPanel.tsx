@@ -287,7 +287,9 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
   const getPrice = (productId: UUID) => {
     const stock = stockData[productId]
     if (!stock) return 0
-    return saleType === 'WHOLESALE' ? stock.wholesale_price : stock.retail_price
+    const price = saleType === 'WHOLESALE' ? stock.wholesale_price : stock.retail_price
+    // Convert to number in case API returns string
+    return typeof price === 'string' ? parseFloat(price) : price
   }
 
   return (
