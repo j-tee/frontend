@@ -25,6 +25,43 @@ export function SaleCart({ cart, onCheckout, disabled }: SaleCartProps) {
   const [updatingItem, setUpdatingItem] = useState<UUID | null>(null)
   const [removingItem, setRemovingItem] = useState<UUID | null>(null)
 
+  // Calculate totals from line items if backend doesn't provide them
+  const calculateTotals = () => {
+    if (!cart?.line_items || cart.line_items.length === 0) {
+      return {
+        subtotal: 0,
+        discount_amount: 0,
+        tax_amount: 0,
+        total_amount: 0,
+      }
+    }
+
+    const subtotal = cart.line_items.reduce((sum, item) => {
+      const itemTotal = typeof item.total_price === 'string' 
+        ? parseFloat(item.total_price) 
+        : item.total_price || 0
+      return sum + itemTotal
+    }, 0)
+
+    const discount_amount = cart.line_items.reduce((sum, item) => {
+      const itemDiscount = typeof item.discount_amount === 'string'
+        ? parseFloat(item.discount_amount)
+        : item.discount_amount || 0
+      return sum + itemDiscount
+    }, 0)
+
+    // Use backend values if available, otherwise use calculated values
+    return {
+      subtotal: cart.subtotal && cart.subtotal > 0 ? cart.subtotal : subtotal,
+      discount_amount: cart.discount_amount && cart.discount_amount > 0 ? cart.discount_amount : discount_amount,
+      tax_amount: cart.tax_amount || 0,
+      total_amount: cart.total_amount && cart.total_amount > 0 ? cart.total_amount : subtotal,
+    }
+  }
+
+  const totals = calculateTotals()
+
+
   const handleQuantityChange = async (itemId: UUID, newQuantity: number) => {
     if (newQuantity < 1) return
 
@@ -212,23 +249,23 @@ export function SaleCart({ cart, onCheckout, disabled }: SaleCartProps) {
             <div className="border-top p-3 bg-light">
               <div className="d-flex justify-content-between mb-2">
                 <span>Subtotal:</span>
-                <strong>GH₵ {formatPrice(cart.subtotal)}</strong>
+                <strong>GH₵ {formatPrice(totals.subtotal)}</strong>
               </div>
-              {cart.discount_amount > 0 && (
+              {totals.discount_amount > 0 && (
                 <div className="d-flex justify-content-between mb-2 text-success">
                   <span>Discount:</span>
-                  <strong>-GH₵ {formatPrice(cart.discount_amount)}</strong>
+                  <strong>-GH₵ {formatPrice(totals.discount_amount)}</strong>
                 </div>
               )}
-              {cart.tax_amount > 0 && (
+              {totals.tax_amount > 0 && (
                 <div className="d-flex justify-content-between mb-2">
                   <span>Tax:</span>
-                  <strong>GH₵ {formatPrice(cart.tax_amount)}</strong>
+                  <strong>GH₵ {formatPrice(totals.tax_amount)}</strong>
                 </div>
               )}
               <div className="d-flex justify-content-between border-top pt-2 fs-5">
                 <strong>Total:</strong>
-                <strong>GH₵ {formatPrice(cart.total_amount)}</strong>
+                <strong>GH₵ {formatPrice(totals.total_amount)}</strong>
               </div>
             </div>
 
