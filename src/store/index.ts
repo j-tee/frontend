@@ -7,6 +7,7 @@ import staffReducer from './slices/staffSlice.js'
 import transferReducer from './slices/transferSlice.js'
 import transferRequestReducer from './slices/transferRequestSlice.js'
 import salesReducer from './slices/salesSlice.js'
+import stockAdjustmentReducer from './slices/stockAdjustmentSlice.js'
 import { setupHttpInterceptors } from '../services/httpClient.js'
 
 export const store = configureStore({
@@ -19,6 +20,7 @@ export const store = configureStore({
     transfers: transferReducer,
     transferRequests: transferRequestReducer,
     sales: salesReducer,
+    stockAdjustment: stockAdjustmentReducer,
   },
 })
 
