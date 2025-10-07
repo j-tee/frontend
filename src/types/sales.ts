@@ -54,15 +54,15 @@ export interface SaleItem {
   updated_at: string
 }
 
-// Payment
+// Payment (Credit Payment Tracking)
 export interface Payment {
   id: UUID
   sale: UUID
   customer: UUID | null
   payment_method: PaymentMethod
-  amount_paid: number
+  amount_paid: number // Renamed from amount in backend, or use 'amount'
   status: PaymentStatus
-  transaction_reference: string | null
+  transaction_reference: string | null // Backend uses reference_number
   phone_number: string | null
   card_last_4: string | null
   card_brand: string | null
@@ -71,6 +71,15 @@ export interface Payment {
   processed_at: string | null
   failed_at: string | null
   error_message: string | null
+  
+  // Backend fields (credit payment tracking)
+  amount?: number // Backend uses 'amount' for payment amount
+  reference_number?: string // Backend field name
+  payment_date?: string // Backend field
+  created_by?: {
+    id: UUID
+    email: string
+  }
 }
 
 // Sale
@@ -100,6 +109,8 @@ export interface Sale {
   // Payment
   payment_type: PaymentType
   payments: Payment[]
+  payment_status: 'unpaid' | 'partial' | 'paid' // NEW: Computed payment status
+  payment_completion_percentage: number // NEW: 0-100 payment completion
   
   // Metadata
   notes: string | null

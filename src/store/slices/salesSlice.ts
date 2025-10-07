@@ -77,7 +77,9 @@ const initialState: SalesState = {
     pageSize: 20,
     totalPages: 1,
   },
-  salesFilters: {},
+  salesFilters: {
+    status: 'COMPLETED' // Default to COMPLETED sales only (hide DRAFT empty carts)
+  },
   
   saleDetail: null,
   saleDetailStatus: 'idle',
@@ -251,7 +253,35 @@ const salesSlice = createSlice({
     
     // Set filters
     setSalesFilters: (state, action: PayloadAction<Partial<SalesFilters>>) => {
-      state.salesFilters = { ...state.salesFilters, ...action.payload }
+      const mergedFilters = { ...state.salesFilters, ...action.payload }
+
+      if (mergedFilters.payment_type === 'MOMO') {
+        mergedFilters.payment_type = 'MOBILE'
+      }
+
+      const cleanedFilters = {} as SalesFilters
+      const cleanedFiltersRecord = cleanedFilters as Record<keyof SalesFilters, unknown>
+
+      ;(Object.keys(mergedFilters) as Array<keyof SalesFilters>).forEach((key) => {
+        const value = mergedFilters[key]
+
+        if (value === undefined || value === null) {
+          return
+        }
+
+        if (typeof value === 'string') {
+          const normalized = value.trim()
+          if (normalized === '') {
+            return
+          }
+          cleanedFiltersRecord[key] = normalized
+          return
+        }
+
+        cleanedFiltersRecord[key] = value
+      })
+
+      state.salesFilters = cleanedFilters
     },
     
     // Reset filters

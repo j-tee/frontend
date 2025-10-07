@@ -1,5 +1,6 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 import Alert from 'react-bootstrap/Alert'
+import Badge from 'react-bootstrap/Badge'
 import Button from 'react-bootstrap/Button'
 import Form from 'react-bootstrap/Form'
 import Nav from 'react-bootstrap/Nav'
@@ -12,6 +13,8 @@ import StockRequestForm from '../components/stock-requests/StockRequestForm'
 import StockRequestList from '../components/stock-requests/StockRequestList'
 import StockRequestDetailModal from '../components/stock-requests/StockRequestDetailModal'
 import EditFulfilledRequestModal from '../components/stock-requests/EditFulfilledRequestModal'
+import CreateAdjustmentModal from '../components/CreateAdjustmentModal'
+import AdjustmentDetailModal from '../components/AdjustmentDetailModal'
 import { fetchProducts, fetchStorefronts } from '../../../services/inventoryService.js'
 import {
   addStockBatch,
@@ -78,7 +81,25 @@ import {
   updateTransferRequestStatus,
   updateTransferRequest,
 } from '../../../store/slices/transferRequestSlice.js'
+import {
+  loadStockAdjustments,
+  selectStockAdjustments,
+  selectAdjustmentsStatus,
+  selectAdjustmentsError,
+  selectAdjustmentsPagination,
+  selectAdjustmentsPage,
+  setAdjustmentsPage,
+  addStockAdjustment,
+  selectCreateAdjustmentStatus,
+  selectCreateAdjustmentError,
+  approveAdjustment,
+  rejectAdjustment,
+  selectApproveAdjustmentStatus,
+  selectRejectAdjustmentStatus,
+} from '../../../store/slices/stockAdjustmentSlice.js'
+import { getAdjustmentIcon, getAdjustmentColor, formatAdjustmentType } from '../../../utils/stockAdjustmentHelpers.js'
 import type { Product, StockProduct, StockProductPayload, Storefront, SupplierPayload, TransferRequest, TransferRequestCreatePayload } from '../../../types/inventory.js'
+import type { StockAdjustmentCreatePayload, StockAdjustment } from '../../../types/stockAdjustments.js'
 
 const formatDecimal = (value?: string | null) => {
   if (!value) return '—'
@@ -161,6 +182,17 @@ const ManageStocksPage = () => {
   const transferRequestMutationErrors = useAppSelector(selectTransferRequestMutationErrors)
   const transferRequestDetail = useAppSelector(selectTransferRequestDetail)
 
+  // Stock Adjustment selectors
+  const adjustments = useAppSelector(selectStockAdjustments)
+  const adjustmentsStatus = useAppSelector(selectAdjustmentsStatus)
+  const adjustmentsError = useAppSelector(selectAdjustmentsError)
+  const adjustmentsPagination = useAppSelector(selectAdjustmentsPagination)
+  const adjustmentsPage = useAppSelector(selectAdjustmentsPage)
+  const createAdjustmentStatus = useAppSelector(selectCreateAdjustmentStatus)
+  const createAdjustmentError = useAppSelector(selectCreateAdjustmentError)
+  const approveAdjustmentStatus = useAppSelector(selectApproveAdjustmentStatus)
+  const rejectAdjustmentStatus = useAppSelector(selectRejectAdjustmentStatus)
+
   // Local state
   const [activeTab, setActiveTab] = useState('stock-products')
   const [searchTerm, setSearchTerm] = useState(stockProductsFilters.search)
@@ -180,6 +212,9 @@ const ManageStocksPage = () => {
   const [selectedRequest, setSelectedRequest] = useState<TransferRequest | null>(null)
   const [showEditFulfilledModal, setShowEditFulfilledModal] = useState(false)
   const [editingRequest, setEditingRequest] = useState<TransferRequest | null>(null)
+  const [showCreateAdjustmentModal, setShowCreateAdjustmentModal] = useState(false)
+  const [showAdjustmentDetailModal, setShowAdjustmentDetailModal] = useState(false)
+  const [selectedAdjustment, setSelectedAdjustment] = useState<StockAdjustment | null>(null)
 
   useEffect(() => {
     if (stockProductsStatus === 'idle') {
@@ -290,6 +325,15 @@ const ManageStocksPage = () => {
       void dispatch(loadTransferRequests())
     }
   }, [activeTab, dispatch, transferRequestsStatus])
+
+  // Load stock adjustments when on that tab
+  useEffect(() => {
+    if (activeTab === 'stock-adjustments') {
+      // Always reload when switching to this tab to ensure fresh data
+      void dispatch(loadStockAdjustments({ page: adjustmentsPage }))
+      console.log('📊 Loading stock adjustments, page:', adjustmentsPage)
+    }
+  }, [activeTab, dispatch, adjustmentsPage])
 
   const isLoading = stockProductsStatus === 'loading'
   const totalItems = stockProductsPagination.count ?? 0
@@ -584,6 +628,37 @@ const ManageStocksPage = () => {
     setEditingRequest(null)
   }
 
+  const handleCreateAdjustment = async (payload: StockAdjustmentCreatePayload) => {
+    await dispatch(addStockAdjustment(payload)).unwrap()
+    // Reset to page 1 and reload adjustments list
+    dispatch(setAdjustmentsPage(1))
+    void dispatch(loadStockAdjustments({ page: 1 }))
+    console.log('✅ Created adjustment, reloading list from page 1')
+  }
+
+  const handleViewAdjustment = (adjustment: StockAdjustment) => {
+    setSelectedAdjustment(adjustment)
+    setShowAdjustmentDetailModal(true)
+  }
+
+  const handleApproveAdjustment = async (id: string) => {
+    await dispatch(approveAdjustment(id)).unwrap()
+    // Reload adjustments list
+    void dispatch(loadStockAdjustments({ page: adjustmentsPage }))
+    setShowAdjustmentDetailModal(false)
+    setSelectedAdjustment(null)
+    console.log('✅ Approved adjustment, reloading list')
+  }
+
+  const handleRejectAdjustment = async (id: string) => {
+    await dispatch(rejectAdjustment(id)).unwrap()
+    // Reload adjustments list
+    void dispatch(loadStockAdjustments({ page: adjustmentsPage }))
+    setShowAdjustmentDetailModal(false)
+    setSelectedAdjustment(null)
+    console.log('❌ Rejected adjustment, reloading list')
+  }
+
   return (
     <div className="space-y-6">
       <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -607,6 +682,11 @@ const ManageStocksPage = () => {
         <Nav.Item>
           <Nav.Link active={activeTab === 'stock-requests'} onClick={() => setActiveTab('stock-requests')}>
             Stock requests
+          </Nav.Link>
+        </Nav.Item>
+        <Nav.Item>
+          <Nav.Link active={activeTab === 'stock-adjustments'} onClick={() => setActiveTab('stock-adjustments')}>
+            Stock Adjustments
           </Nav.Link>
         </Nav.Item>
       </Nav>
@@ -932,6 +1012,198 @@ const ManageStocksPage = () => {
             </div>
       )}
 
+      {/* Stock Adjustments Tab */}
+      {activeTab === 'stock-adjustments' && (
+        <div className="space-y-6">
+          <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h3 className="text-xl font-semibold text-slate-900">Stock Adjustments</h3>
+                <p className="text-slate-600">
+                  Track and manage inventory adjustments for various reasons (damage, theft, expiry, etc.)
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline-primary"
+                  className="rounded-pill px-4"
+                  onClick={() => {
+                    // Filter to show only pending adjustments
+                    void dispatch(loadStockAdjustments({ page: 1, status: 'PENDING' }))
+                    dispatch(setAdjustmentsPage(1))
+                  }}
+                >
+                  View Pending
+                </Button>
+                <Button
+                  variant="primary"
+                  className="rounded-pill px-4"
+                  onClick={() => setShowCreateAdjustmentModal(true)}
+                >
+                  Create Adjustment
+                </Button>
+              </div>
+            </div>
+          </section>
+
+          {/* Adjustments Table */}
+          <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            {adjustmentsStatus === 'loading' && (
+              <div className="text-center py-8">
+                <Spinner animation="border" variant="primary" />
+                <p className="mt-2 text-slate-600">Loading adjustments...</p>
+              </div>
+            )}
+
+            {adjustmentsStatus === 'failed' && adjustmentsError && (
+              <Alert variant="danger">
+                <Alert.Heading>Error loading adjustments</Alert.Heading>
+                <p>{adjustmentsError}</p>
+              </Alert>
+            )}
+
+            {adjustmentsStatus === 'succeeded' && (
+              <>
+                {adjustments.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-slate-600">No stock adjustments found.</p>
+                    <p className="text-sm text-slate-500 mt-2">
+                      Create your first adjustment to track inventory changes.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <Table responsive hover>
+                      <thead>
+                        <tr>
+                          <th>Type</th>
+                          <th>Stock Product</th>
+                          <th>Quantity</th>
+                          <th>Reason</th>
+                          <th>Status</th>
+                          <th>Created By</th>
+                          <th>Date</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {adjustments.map((adjustment) => (
+                          <tr key={adjustment.id}>
+                            <td>
+                              <span style={{ marginRight: '0.5rem' }}>
+                                {getAdjustmentIcon(adjustment.adjustment_type)}
+                              </span>
+                              <Badge bg={getAdjustmentColor(adjustment.adjustment_type)}>
+                                {formatAdjustmentType(adjustment.adjustment_type)}
+                              </Badge>
+                            </td>
+                            <td>
+                              {adjustment.stock_product_details?.product_name || `Stock #${adjustment.stock_product}`}
+                            </td>
+                            <td>
+                              <span className={adjustment.is_increase ? 'text-success' : 'text-danger'}>
+                                {adjustment.is_increase ? '+' : '-'}
+                                {adjustment.quantity}
+                              </span>
+                            </td>
+                            <td>{adjustment.reason || '-'}</td>
+                            <td>
+                              <Badge 
+                                bg={
+                                  adjustment.status === 'COMPLETED' ? 'success' :
+                                  adjustment.status === 'APPROVED' ? 'info' :
+                                  adjustment.status === 'REJECTED' ? 'danger' :
+                                  'warning'
+                                }
+                              >
+                                {adjustment.status}
+                              </Badge>
+                            </td>
+                            <td>{adjustment.created_by_name || 'System'}</td>
+                            <td>{new Date(adjustment.created_at).toLocaleDateString()}</td>
+                            <td>
+                              <div className="d-flex gap-1">
+                                <Button
+                                  variant="link"
+                                  size="sm"
+                                  onClick={() => handleViewAdjustment(adjustment)}
+                                >
+                                  View
+                                </Button>
+                                {adjustment.status === 'PENDING' && adjustment.requires_approval && (
+                                  <>
+                                    <Button
+                                      variant="success"
+                                      size="sm"
+                                      onClick={() => handleApproveAdjustment(adjustment.id)}
+                                      disabled={approveAdjustmentStatus === 'loading'}
+                                    >
+                                      Approve
+                                    </Button>
+                                    <Button
+                                      variant="danger"
+                                      size="sm"
+                                      onClick={() => handleRejectAdjustment(adjustment.id)}
+                                      disabled={rejectAdjustmentStatus === 'loading'}
+                                    >
+                                      Reject
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </Table>
+
+                    {/* Pagination */}
+                    {adjustmentsPagination && adjustmentsPagination.count > 0 && (
+                      <div className="d-flex justify-content-between align-items-center mt-4">
+                        <div className="text-slate-600">
+                          Showing {((adjustmentsPage - 1) * 20) + 1} to{' '}
+                          {Math.min(adjustmentsPage * 20, adjustmentsPagination.count)} of{' '}
+                          {adjustmentsPagination.count} adjustments
+                        </div>
+                        <div className="d-flex gap-2">
+                          <Button
+                            variant="outline-secondary"
+                            size="sm"
+                            disabled={!adjustmentsPagination.previous}
+                            onClick={() => {
+                              if (adjustmentsPage > 1) {
+                                dispatch(setAdjustmentsPage(adjustmentsPage - 1))
+                                void dispatch(loadStockAdjustments({ page: adjustmentsPage - 1 }))
+                              }
+                            }}
+                          >
+                            Previous
+                          </Button>
+                          <span className="d-flex align-items-center px-3">
+                            Page {adjustmentsPage} of {Math.ceil(adjustmentsPagination.count / 20)}
+                          </span>
+                          <Button
+                            variant="outline-secondary"
+                            size="sm"
+                            disabled={!adjustmentsPagination.next}
+                            onClick={() => {
+                              dispatch(setAdjustmentsPage(adjustmentsPage + 1))
+                              void dispatch(loadStockAdjustments({ page: adjustmentsPage + 1 }))
+                            }}
+                          >
+                            Next
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+          </section>
+        </div>
+      )}
+
       {/* Modals */}
       <StockIntakeModal
         show={showIntakeModal}
@@ -996,6 +1268,28 @@ const ManageStocksPage = () => {
         onHide={handleCancelEditFulfilled}
         onSubmit={handleSaveEditFulfilled}
         isSubmitting={transferRequestMutationStatus.update === 'loading'}
+      />
+
+      <CreateAdjustmentModal
+        show={showCreateAdjustmentModal}
+        onClose={() => setShowCreateAdjustmentModal(false)}
+        stockProducts={stockProducts}
+        onSubmit={handleCreateAdjustment}
+        isSubmitting={createAdjustmentStatus === 'loading'}
+        error={createAdjustmentError}
+      />
+
+      <AdjustmentDetailModal
+        show={showAdjustmentDetailModal}
+        onClose={() => {
+          setShowAdjustmentDetailModal(false)
+          setSelectedAdjustment(null)
+        }}
+        adjustment={selectedAdjustment}
+        onApprove={handleApproveAdjustment}
+        onReject={handleRejectAdjustment}
+        isApproving={approveAdjustmentStatus === 'loading'}
+        isRejecting={rejectAdjustmentStatus === 'loading'}
       />
     </div>
   )

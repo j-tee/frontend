@@ -3,6 +3,7 @@ import { isAxiosError, type AxiosError } from 'axios'
 import {
   changePassword as changePasswordRequest,
   fetchCurrentUser as fetchCurrentUserRequest,
+  fetchUserStorefronts,
   login as loginRequest,
   logout as logoutRequest,
   registerAccount as registerAccountRequest,
@@ -23,6 +24,7 @@ import type {
   VerifyEmailPayload,
   VerifyEmailResponse,
 } from '../../types/auth.js'
+import type { Storefront } from '../../services/authService.js'
 import type { Business } from '../../types/business.js'
 import type { UUID } from '../../types/common.js'
 import type { RootState } from '../index.js'
@@ -122,6 +124,10 @@ interface AuthState {
   verificationStatus: 'idle' | 'loading' | 'succeeded' | 'failed'
   verificationError: string | null
   verificationSuccessMessage: string | null
+  // Storefront filtering
+  accessibleStorefronts: Storefront[]
+  storefrontsLoading: boolean
+  storefrontsError: string | null
 }
 
 const persistedEmployment = readEmploymentFromStorage()
@@ -142,6 +148,9 @@ const initialState: AuthState = {
   verificationStatus: 'idle',
   verificationError: null,
   verificationSuccessMessage: null,
+  accessibleStorefronts: [],
+  storefrontsLoading: false,
+  storefrontsError: null,
 }
 
 const handleAuthFulfilled = (state: AuthState, payload: AuthResponse) => {
@@ -328,6 +337,21 @@ export const hydrateBusinessContext = createAsyncThunk<
   }
 })
 
+export const loadUserStorefronts = createAsyncThunk<
+  { storefronts: Array<{ id: string; name: string; location: string; is_active: boolean }>; count: number },
+  void,
+  { rejectValue: RejectValue }
+>('auth/loadUserStorefronts', async (_, thunkAPI) => {
+  try {
+    const response = await fetchUserStorefronts()
+    console.log('✅ Loaded user storefronts:', response)
+    return response
+  } catch (error: unknown) {
+    console.error('❌ Failed to load user storefronts:', error)
+    return thunkAPI.rejectWithValue(extractErrorPayload(error) as RejectValue)
+  }
+})
+
 const authSlice = createSlice({
   name: 'auth',
   initialState,
@@ -350,6 +374,9 @@ const authSlice = createSlice({
       state.verificationStatus = 'idle'
       state.verificationError = null
       state.verificationSuccessMessage = null
+      state.accessibleStorefronts = []
+      state.storefrontsLoading = false
+      state.storefrontsError = null
       writeTokenToStorage(null)
       writeEmploymentToStorage(null)
       writeBusinessToStorage(null)
@@ -588,6 +615,26 @@ const authSlice = createSlice({
           state.verificationError = normalizeErrorMessage(action.payload)
         },
       )
+      // Load user storefronts
+      .addCase(loadUserStorefronts.pending, (state: AuthState) => {
+        state.storefrontsLoading = true
+        state.storefrontsError = null
+      })
+      .addCase(
+        loadUserStorefronts.fulfilled,
+        (state: AuthState, action) => {
+          state.storefrontsLoading = false
+          state.accessibleStorefronts = action.payload.storefronts
+          console.log('📍 Storefronts loaded into state:', action.payload.storefronts.length)
+        },
+      )
+      .addCase(
+        loadUserStorefronts.rejected,
+        (state: AuthState, action) => {
+          state.storefrontsLoading = false
+          state.storefrontsError = normalizeErrorMessage(action.payload)
+        },
+      )
   },
 })
 
@@ -604,5 +651,10 @@ export const selectVerificationFeedback = (state: RootState) => ({
   error: state.auth.verificationError,
   message: state.auth.verificationSuccessMessage,
 })
+
+// Storefront selectors
+export const selectUserStorefronts = (state: RootState) => state.auth.accessibleStorefronts
+export const selectStorefrontsLoading = (state: RootState) => state.auth.storefrontsLoading
+export const selectStorefrontsError = (state: RootState) => state.auth.storefrontsError
 
 export default authSlice.reducer

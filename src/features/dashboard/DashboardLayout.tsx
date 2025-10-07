@@ -7,7 +7,7 @@ import Offcanvas from 'react-bootstrap/Offcanvas'
 import Spinner from 'react-bootstrap/Spinner'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAppDispatch, useAppSelector, usePermissions } from '../../hooks/index.js'
-import { fetchCurrentUser, logout, selectAuthState } from '../../store/slices/authSlice.js'
+import { fetchCurrentUser, loadUserStorefronts, logout, selectAuthState } from '../../store/slices/authSlice.js'
 import { selectActiveSubscription } from '../../store/slices/subscriptionSlice.js'
 import {
   addStorefront,
@@ -236,6 +236,13 @@ const DashboardLayout = () => {
   useEffect(() => {
     if (!user) {
       void dispatch(fetchCurrentUser())
+    }
+  }, [dispatch, user])
+
+  // Load user's accessible storefronts for multi-storefront filtering
+  useEffect(() => {
+    if (user) {
+      void dispatch(loadUserStorefronts())
     }
   }, [dispatch, user])
 

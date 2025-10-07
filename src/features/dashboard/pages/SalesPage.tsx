@@ -16,6 +16,7 @@ import {
   CustomerSelectPanel,
   PaymentPanel,
   SalesHistory,
+  CreditManagement,
 } from '../components/sales'
 import type { UUID } from '../../../types/common'
 
@@ -26,7 +27,7 @@ const SalesPage = () => {
   const mutations = useAppSelector(selectMutations)
   const errors = useAppSelector(selectErrors)
   
-  const [activeTab, setActiveTab] = useState<'new-sale' | 'history'>('new-sale')
+  const [activeTab, setActiveTab] = useState<'new-sale' | 'history' | 'credit'>('new-sale')
   const [saleType, setSaleType] = useState<'RETAIL' | 'WHOLESALE'>('RETAIL')
   const [selectedCustomer, setSelectedCustomer] = useState<UUID | null>(null)
   const [showPayment, setShowPayment] = useState(false)
@@ -77,7 +78,7 @@ const SalesPage = () => {
 
       <Tabs
         activeKey={activeTab}
-        onSelect={(k) => setActiveTab(k as 'new-sale' | 'history')}
+        onSelect={(k) => setActiveTab(k as 'new-sale' | 'history' | 'credit')}
         className="mb-3"
       >
         <Tab eventKey="new-sale" title="New Sale">
@@ -201,6 +202,10 @@ const SalesPage = () => {
 
         <Tab eventKey="history" title="Sales History">
           <SalesHistory />
+        </Tab>
+
+        <Tab eventKey="credit" title="Credit Management">
+          <CreditManagement />
         </Tab>
       </Tabs>
     </Container>

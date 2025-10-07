@@ -1,21 +1,18 @@
 export const PAYMENT_TYPES = [
   'CASH',
   'CARD',
-  'MOBILE',
   'CREDIT',
-  'MIXED',
+  'MOBILE',
+  'SPLIT',
 ] as const
 
 export type PaymentType = (typeof PAYMENT_TYPES)[number]
 
 export const SALE_STATUSES = [
-  'COMPLETED',
   'DRAFT',
-  'REQUESTED',
-  'APPROVED',
-  'REFUNDED',
-  'PARTIAL',
+  'COMPLETED',
   'CANCELLED',
+  'REFUNDED',
 ] as const
 
 export type SaleStatus = (typeof SALE_STATUSES)[number]
@@ -26,22 +23,18 @@ export type SaleType = (typeof SALE_TYPES)[number]
 
 export const PAYMENT_METHODS = [
   'CASH',
-  'MOMO',
   'CARD',
-  'PAYSTACK',
-  'STRIPE',
+  'MOBILE',
+  'CREDIT',
   'BANK_TRANSFER',
 ] as const
 
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number]
 
 export const PAYMENT_STATUSES = [
-  'SUCCESSFUL',
-  'DRAFT',
-  'REQUESTED',
-  'APPROVED',
+  'PENDING',
+  'COMPLETED',
   'FAILED',
-  'CANCELLED',
 ] as const
 
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number]

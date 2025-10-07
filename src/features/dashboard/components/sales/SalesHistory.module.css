@@ -1,0 +1,69 @@
+/* Sales History Expandable Rows Styles */
+
+/* Slide down animation for expanded rows */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Hover effect for clickable rows */
+tr[style*="cursor: pointer"]:hover {
+  background-color: #e9ecef;
+  transition: background-color 0.2s ease;
+}
+
+/* Active (expanded) row highlighting */
+.table-active {
+  background-color: #e7f1ff !important;
+}
+
+/* Sale details row styling */
+.sale-details-row {
+  background-color: #f8f9fa !important;
+}
+
+/* Product details table inside expanded row */
+.sale-products-table {
+  margin-bottom: 0;
+}
+
+/* Expand/collapse icon animation */
+.expand-icon {
+  display: inline-block;
+  transition: transform 0.3s ease;
+}
+
+.expand-icon.expanded {
+  transform: rotate(90deg);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  /* Stack table cells on mobile */
+  .sale-details-row td {
+    padding: 0.5rem !important;
+  }
+  
+  .sale-products-table {
+    font-size: 0.875rem;
+  }
+}
+
+/* Print styles */
+@media print {
+  /* Hide expand/collapse icons when printing */
+  .expand-icon {
+    display: none;
+  }
+  
+  /* Always show all product details when printing */
+  tr[style*="cursor: pointer"] {
+    cursor: default !important;
+  }
+}

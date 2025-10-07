@@ -14,7 +14,7 @@ export function PaymentPanel({ cart, onComplete, onCancel }: PaymentPanelProps) 
   const dispatch = useAppDispatch()
   const errors = useAppSelector(selectErrors)
   
-  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'MOMO' | 'CREDIT'>('CASH')
+  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'MOBILE' | 'CREDIT'>('CASH')
   const [amountReceived, setAmountReceived] = useState(cart.total_amount.toString())
   const [processing, setProcessing] = useState(false)
 
@@ -87,10 +87,10 @@ export function PaymentPanel({ cart, onComplete, onCancel }: PaymentPanelProps) 
                 Card
               </Button>
               <Button
-                variant={paymentMethod === 'MOMO' ? 'primary' : 'outline-primary'}
-                onClick={() => setPaymentMethod('MOMO')}
+                variant={paymentMethod === 'MOBILE' ? 'primary' : 'outline-primary'}
+                onClick={() => setPaymentMethod('MOBILE')}
               >
-                MoMo
+                Mobile Money
               </Button>
               <Button
                 variant={paymentMethod === 'CREDIT' ? 'primary' : 'outline-primary'}

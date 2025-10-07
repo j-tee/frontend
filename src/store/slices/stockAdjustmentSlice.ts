@@ -664,6 +664,19 @@ const stockAdjustmentSlice = createSlice({
           next: action.payload.next,
           previous: action.payload.previous,
         }
+        // Debug logging
+        console.log('📊 Stock Adjustments API Response:', {
+          total_count: action.payload.count,
+          returned_count: action.payload.results.length,
+          has_next: !!action.payload.next,
+          has_previous: !!action.payload.previous,
+          adjustments: action.payload.results.map(adj => ({
+            id: adj.id.slice(0, 8),
+            type: adj.adjustment_type,
+            status: adj.status,
+            created: new Date(adj.created_at).toLocaleString(),
+          }))
+        })
       })
       .addCase(loadStockAdjustments.rejected, (state, action) => {
         state.adjustmentsStatus = 'failed'
@@ -1182,6 +1195,8 @@ export const selectCreateAdjustmentError = (state: RootState) =>
   state.stockAdjustment.createAdjustmentError
 export const selectApproveAdjustmentStatus = (state: RootState) =>
   state.stockAdjustment.approveAdjustmentStatus
+export const selectRejectAdjustmentStatus = (state: RootState) =>
+  state.stockAdjustment.rejectAdjustmentStatus
 export const selectBulkApproveResult = (state: RootState) =>
   state.stockAdjustment.bulkApproveResult
 export const selectCreateCountStatus = (state: RootState) =>

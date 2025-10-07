@@ -138,3 +138,22 @@ export const acceptInvitation = async (token: string, payload: AcceptInvitationP
   }
   throw lastError ?? new Error('Unable to accept invitation.')
 }
+
+// Storefront types
+export interface Storefront {
+  id: string
+  name: string
+  location: string
+  is_active: boolean
+}
+
+export interface UserStorefrontsResponse {
+  storefronts: Storefront[]
+  count: number
+}
+
+// Get user's accessible storefronts
+export const fetchUserStorefronts = async () => {
+  const { data } = await httpClient.get<UserStorefrontsResponse>('/accounts/api/users/storefronts/')
+  return data
+}

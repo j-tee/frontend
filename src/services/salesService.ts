@@ -25,7 +25,19 @@ export async function createSale(payload: {
   customer?: UUID
   notes?: string
 }): Promise<Sale> {
-  const response = await httpClient.post<Sale>('/sales/api/sales/', payload)
+  // Backend requires all financial fields even for DRAFT sales
+  // Start with zero values - they'll be calculated as items are added
+  const completePayload = {
+    ...payload,
+    subtotal: 0,
+    discount_amount: 0,
+    tax_amount: 0,
+    total_amount: 0,
+    amount_paid: 0,
+    amount_due: 0,
+  }
+  
+  const response = await httpClient.post<Sale>('/sales/api/sales/', completePayload)
   return response.data
 }
 
@@ -43,8 +55,109 @@ export async function getSale(saleId: UUID): Promise<Sale> {
  * GET /sales/api/sales/
  */
 export async function listSales(params?: Record<string, unknown>): Promise<PaginatedResponse<Sale>> {
+  console.log('📡 ===================== API REQUEST ====================')
+  console.log('📡 salesService.listSales called with params:', params)
+  console.log('📡 typeof params:', typeof params)
+  console.log('📡 params keys:', params ? Object.keys(params) : 'undefined')
+  console.log('📡 params.status:', params?.status)
+  console.log('📡 params.page:', params?.page)
+  console.log('📡 params.page_size:', params?.page_size)
+  
+  // Build query string for logging
+  const queryString = params ? new URLSearchParams(params as Record<string, string>).toString() : ''
+  console.log('📡 🌐 FULL URL: http://localhost:8000/sales/api/sales/?' + queryString)
+  console.log('📡 ======================================================')
+  
   const response = await httpClient.get<PaginatedResponse<Sale>>('/sales/api/sales/', { params })
+  
+  console.log('📡 ==================== API RESPONSE ====================')
+  console.log('📡 Response HTTP status:', response.status)
+  console.log('📡 Response data count:', response.data.count)
+  console.log('📡 Response results length:', response.data.results?.length)
+  console.log('📡 First 5 result statuses:', response.data.results?.slice(0, 5).map(s => s.status))
+  console.log('📡 Unique statuses in response:', [...new Set(response.data.results?.map(s => s.status))])
+  console.log('📡 Actual request URL:', response.config?.url)
+  console.log('📡 Actual request params:', response.config?.params)
+  console.log('📡 ======================================================')
+  
+  // CRITICAL CHECK: If status filter was sent but response has mixed statuses, backend is broken
+  if (params?.status && response.data.results) {
+    const requestedStatus = params.status as string
+    const uniqueStatuses = [...new Set(response.data.results.map(s => s.status))]
+    const statusesArray = uniqueStatuses as string[]
+    if (uniqueStatuses.length > 1 || !statusesArray.includes(requestedStatus)) {
+      console.error('🚨 ==================== FILTER FAILURE ====================')
+      console.error('🚨 Backend filter is NOT working!')
+      console.error('🚨 Requested status:', requestedStatus)
+      console.error('🚨 Received statuses:', uniqueStatuses)
+      console.error('🚨 This is a BACKEND ISSUE - filter is being ignored!')
+      console.error('🚨 Frontend is sending the filter correctly.')
+      console.error('🚨 Share docs/BACKEND-FILTER-NOT-WORKING.md with backend team')
+      console.error('🚨 ======================================================')
+    } else {
+      console.log('✅ Filter working correctly - all results match requested status:', requestedStatus)
+    }
+  }
+  
   return response.data
+}
+
+/**
+ * Get sales summary/analytics
+ * GET /sales/api/sales/summary/
+ */
+export async function getSalesSummary(params?: Record<string, unknown>): Promise<{
+  summary: {
+    total_sales: number
+    total_refunds: number
+    net_sales: number
+    total_transactions: number
+    completed_transactions: number
+    avg_transaction: number
+    cash_sales: number
+    card_sales: number
+    credit_sales: number
+    mobile_sales: number
+  }
+  status_breakdown: Array<{
+    status: string
+    count: number
+    total: number
+  }>
+  daily_trend: Array<{
+    date: string
+    sales: number
+    transactions: number
+  }>
+  top_customers: Array<{
+    customer__id: string
+    customer__name: string
+    total_spent: number
+    transaction_count: number
+  }>
+  payment_breakdown: Array<{
+    payment_type: string
+    count: number
+    total: number
+  }>
+  type_breakdown: Array<{
+    type: string
+    count: number
+    total: number
+  }>
+}> {
+  const response = await httpClient.get('/sales/api/sales/summary/', { params })
+  return response.data
+}
+
+/**
+ * Export sales to CSV
+ * GET /sales/api/sales/export/
+ */
+export function exportSalesToCSV(params?: Record<string, unknown>): void {
+  const queryString = new URLSearchParams(params as Record<string, string>).toString()
+  const url = `/sales/api/sales/export/${queryString ? `?${queryString}` : ''}`
+  window.location.href = url
 }
 
 /**

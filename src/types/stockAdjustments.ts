@@ -68,7 +68,8 @@ export interface StockProductDetails {
   id: UUID
   product_name: string
   product_code: string
-  current_quantity: number
+  quantity_at_creation?: number | null  // Historical snapshot when adjustment was created
+  current_quantity: number              // Real-time current quantity
   warehouse?: string
   supplier?: string
   unit_cost: string
@@ -116,7 +117,7 @@ export interface StockAdjustmentCreatePayload {
   quantity: number
   reason: string
   reference_number?: string
-  unit_cost?: string
+  unit_cost: string // Required by backend API
 }
 
 // Update Stock Adjustment Payload

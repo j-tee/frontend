@@ -235,7 +235,18 @@ export const getAdjustmentIcon = (type: AdjustmentType): string => {
 }
 
 export const getAdjustmentColor = (type: AdjustmentType): string => {
-  return getAdjustmentTypeMetadata(type).color
+  const color = getAdjustmentTypeMetadata(type).color
+  // Map custom colors to Bootstrap variants for better visibility
+  const colorMap: Record<string, string> = {
+    'red': 'danger',
+    'orange': 'warning',
+    'yellow': 'warning',
+    'purple': 'primary',
+    'blue': 'info',
+    'green': 'success',
+    'gray': 'secondary',
+  }
+  return colorMap[color] || color
 }
 
 export const getStatusColor = (status: AdjustmentStatus): string => {
