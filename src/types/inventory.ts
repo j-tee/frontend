@@ -135,6 +135,9 @@ export interface StockProduct {
   supplier?: UUID | null
   supplier_name?: string | null
   quantity: number
+  available_quantity?: number
+  reserved_quantity?: number
+  sold_quantity?: number
   unit_cost: string
   unit_tax_rate?: string | null
   unit_tax_amount?: string | null
@@ -168,6 +171,26 @@ export interface StockProductPayload {
   wholesale_price?: string | null
   expiry_date?: string | null
   description?: string | null
+}
+
+export interface SaleCatalogItem {
+  product_id: UUID
+  product_name: string
+  sku: string
+  barcode?: string | null
+  category_name?: string | null
+  unit?: string | null
+  product_image?: string | null
+  available_quantity: number
+  retail_price: string
+  wholesale_price?: string | null
+  stock_product_ids: UUID[]
+  last_stocked_at?: string | null
+}
+
+export interface SaleCatalogResponse {
+  storefront: UUID
+  products: SaleCatalogItem[]
 }
 
 export interface InventorySnapshot {

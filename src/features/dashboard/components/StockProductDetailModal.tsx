@@ -278,9 +278,27 @@ const StockProductDetailModal = ({
                           : '—'}
                   </div>
                   <div>
-                    <span className="font-medium text-slate-700">Quantity on hand:</span>{' '}
-                    <Badge bg="info" pill>
+                    <span className="font-medium text-slate-700">Quantity Stocked:</span>{' '}
+                    <Badge bg="primary" pill>
                       {stockProduct.quantity.toLocaleString()}
+                    </Badge>
+                  </div>
+                  <div>
+                    <span className="font-medium text-slate-700">Quantity Available:</span>{' '}
+                    <Badge bg="success" pill>
+                      {(stockProduct.available_quantity ?? stockProduct.quantity).toLocaleString()}
+                    </Badge>
+                  </div>
+                  <div>
+                    <span className="font-medium text-slate-700">Quantity Sold:</span>{' '}
+                    <Badge bg="info" pill>
+                      {(stockProduct.sold_quantity ?? 0).toLocaleString()}
+                    </Badge>
+                  </div>
+                  <div>
+                    <span className="font-medium text-slate-700">Quantity Reserved:</span>{' '}
+                    <Badge bg="warning" pill>
+                      {(stockProduct.reserved_quantity ?? 0).toLocaleString()}
                     </Badge>
                   </div>
                   <div>
