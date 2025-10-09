@@ -1,25 +1,29 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Form, InputGroup, Card, Row, Col, Button, Badge, Spinner, Alert } from 'react-bootstrap'
 import { useAppDispatch } from '../../../../hooks'
 import { addItemToCart } from '../../../../store/slices/salesSlice'
+import { fetchSaleCatalog } from '../../../../services/inventoryService'
 import httpClient from '../../../../services/httpClient'
 import type { UUID } from '../../../../types/common'
+import type { SaleCatalogItem } from '../../../../types/inventory'
 
 interface Product {
   id: UUID
   name: string
   sku: string
-  barcode: string
+  barcode: string | null
   category_name: string
   unit: string
   image: string | null
+  stock_product_ids: UUID[]
+  retail_price: number
+  wholesale_price: number
+  available_quantity: number
 }
 
-interface StockProduct {
+interface StockRecord {
   id: UUID
   product: UUID
-  product_name?: string
-  product_sku?: string
   quantity: number
   available_quantity: number
   reserved_quantity?: number
@@ -35,39 +39,224 @@ interface ProductSearchPanelProps {
   saleId?: UUID
   saleType: 'RETAIL' | 'WHOLESALE'
   disabled?: boolean
+  ensureSaleSession?: () => Promise<UUID | null>
 }
 
-export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }: ProductSearchPanelProps) {
+export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, ensureSaleSession }: ProductSearchPanelProps) {
   const dispatch = useAppDispatch()
   
   const [searchQuery, setSearchQuery] = useState('')
   const [barcodeInput, setBarcodeInput] = useState('')
+  const [catalog, setCatalog] = useState<Product[]>([])
   const [products, setProducts] = useState<Product[]>([])
-  const [stockData, setStockData] = useState<Record<UUID, StockProduct>>({})
+  const [stockData, setStockData] = useState<Record<UUID, StockRecord>>({})
   const [loading, setLoading] = useState(false)
+  const [catalogLoading, setCatalogLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [addingItemId, setAddingItemId] = useState<UUID | null>(null)
   const [quantities, setQuantities] = useState<Record<UUID, number>>({})
 
+  const lastSearchTimestampRef = useRef(0)
+  const availabilitySupportedRef = useRef(true)
+  const stockDataRef = useRef<Record<UUID, StockRecord>>({})
+
+  const MIN_SEARCH_LENGTH = 2
+  const SEARCH_DEBOUNCE_MS = 400
+  const SEARCH_THROTTLE_MS = 600
+
+  const parsePrice = (value: string | number | null | undefined): number => {
+    if (typeof value === 'number') {
+      return Number.isFinite(value) ? value : 0
+    }
+    if (typeof value === 'string') {
+      const parsed = Number(value)
+      return Number.isFinite(parsed) ? parsed : 0
+    }
+    return 0
+  }
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadCatalog = async () => {
+      try {
+  setCatalogLoading(true)
+  setLoading(true)
+        setError(null)
+        availabilitySupportedRef.current = true
+        lastSearchTimestampRef.current = 0
+
+        const response = await fetchSaleCatalog(storefrontId)
+        const normalized = (response.products ?? [])
+          .filter((item: SaleCatalogItem) => Array.isArray(item.stock_product_ids) && item.stock_product_ids.length > 0)
+          .map((item: SaleCatalogItem): Product => {
+            const retail = parsePrice(item.retail_price)
+            const wholesale = parsePrice(item.wholesale_price ?? item.retail_price)
+            const available = typeof item.available_quantity === 'number'
+              ? item.available_quantity
+              : Number(item.available_quantity) || 0
+
+            return {
+              id: item.product_id,
+              name: item.product_name,
+              sku: item.sku,
+              barcode: item.barcode ?? null,
+              category_name: item.category_name ?? 'Uncategorized',
+              unit: item.unit ?? 'unit',
+              image: item.product_image ?? null,
+              stock_product_ids: item.stock_product_ids,
+              retail_price: retail,
+              wholesale_price: wholesale,
+              available_quantity: available,
+            }
+          })
+
+        if (!isMounted) {
+          return
+        }
+
+        setCatalog(normalized)
+        setProducts([])
+        setQuantities({})
+
+        const seededStock: Record<UUID, StockRecord> = {}
+        normalized.forEach((product) => {
+          if (product.stock_product_ids.length === 0) {
+            return
+          }
+
+          const primaryStockId = product.stock_product_ids[0]
+          seededStock[product.id] = {
+            id: primaryStockId,
+            product: product.id,
+            quantity: product.available_quantity,
+            available_quantity: product.available_quantity,
+            reserved_quantity: 0,
+            unit_cost: 0,
+            retail_price: product.retail_price,
+            wholesale_price: product.wholesale_price,
+            batch_number: undefined,
+            expiry_date: null,
+          }
+        })
+
+        setStockData(seededStock)
+        stockDataRef.current = seededStock
+      } catch (err) {
+        console.error('[ProductSearch] Failed to load sale catalog', err)
+        if (isMounted) {
+          setCatalog([])
+          setProducts([])
+          setStockData({})
+          stockDataRef.current = {}
+          setError('Unable to load catalog for this storefront. Please try again.')
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false)
+          setCatalogLoading(false)
+        }
+      }
+    }
+
+    loadCatalog()
+
+    return () => {
+      isMounted = false
+    }
+  }, [storefrontId])
+
+  useEffect(() => {
+    stockDataRef.current = stockData
+  }, [stockData])
+
   const fetchStockLevels = useCallback(async (productIds: UUID[]) => {
+    if (!productIds.length) {
+      return
+    }
+
     try {
-      // Try to fetch from availability endpoint first (preferred - dynamic calculation)
-      // This returns CALCULATED availability (not raw quantity)
-      // Accounts for: reservations, sales, spoilage, damage, theft, transfers
+      const shouldTryAvailability = availabilitySupportedRef.current
+
       const stockPromises = productIds.map(async (productId) => {
         try {
-          const response = await httpClient.get(
-            `/inventory/api/storefronts/${storefrontId}/stock-products/${productId}/availability/`
-          )
-          return {
-            productId,
-            data: response.data,
-            source: 'availability',
+          if (shouldTryAvailability) {
+            const response = await httpClient.get(
+              `/inventory/api/storefronts/${storefrontId}/stock-products/${productId}/availability/`
+            )
+            return {
+              productId,
+              data: response.data,
+              source: 'availability' as const,
+            }
           }
+          throw new Error('AVAILABILITY_DISABLED')
         } catch (err) {
-          console.warn(`Availability endpoint not available for product ${productId}, falling back to stock-products`, err)
-          // Fallback to basic stock-products endpoint if availability not implemented
+          const error = err as { response?: { status?: number }; message?: string }
+
+          if (error.message !== 'AVAILABILITY_DISABLED') {
+            console.warn(`Availability endpoint not available for product ${productId}, falling back to stock-products`, err)
+
+            if (shouldTryAvailability && error.response && [404, 405, 500].includes(error.response.status ?? 0)) {
+              availabilitySupportedRef.current = false
+            }
+          }
+
           try {
+            // Attempt warehouse availability endpoint first (new fallback path)
+            try {
+              const warehouseAvailability = await httpClient.get('/inventory/api/stock/availability/', {
+                params: {
+                  warehouse: storefrontId,
+                  product: productId,
+                },
+              })
+
+              const availabilityPayload = warehouseAvailability.data as {
+                available_quantity?: number | string
+                requested_quantity?: number | string
+              }
+
+              const toNumber = (value: unknown): number => {
+                if (typeof value === 'number') {
+                  return Number.isFinite(value) ? value : 0
+                }
+                if (typeof value === 'string') {
+                  const parsed = Number(value)
+                  return Number.isFinite(parsed) ? parsed : 0
+                }
+                return 0
+              }
+
+              const availableQuantity = toNumber(
+                availabilityPayload.available_quantity ?? availabilityPayload.requested_quantity ?? 0,
+              )
+
+              const existingStock = stockDataRef.current[productId]
+
+              return {
+                productId,
+                data: {
+                  id: existingStock?.id ?? productId,
+                  product: productId,
+                  quantity: availableQuantity,
+                  available_quantity: availableQuantity,
+                  reserved_quantity: existingStock?.reserved_quantity ?? 0,
+                  unit_cost: existingStock?.unit_cost ?? 0,
+                  retail_price: existingStock?.retail_price ?? 0,
+                  wholesale_price: existingStock?.wholesale_price ?? existingStock?.retail_price ?? 0,
+                  batch_number: existingStock?.batch_number ?? '',
+                  expiry_date: existingStock?.expiry_date ?? null,
+                },
+                source: 'warehouse-availability' as const,
+              }
+            } catch (warehouseFallbackError) {
+              console.warn(
+                `[ProductSearch] Warehouse availability fallback failed for product ${productId}`,
+                warehouseFallbackError,
+              )
+            }
+
             const fallbackResponse = await httpClient.get('/inventory/api/stock-products/', {
               params: {
                 storefront: storefrontId,
@@ -76,12 +265,12 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
             })
             const stockList = fallbackResponse.data.results || fallbackResponse.data
             const stock = Array.isArray(stockList) ? stockList[0] : stockList
-            
+
             if (stock) {
               return {
                 productId,
                 data: stock,
-                source: 'fallback',
+                source: 'fallback' as const,
               }
             }
           } catch (fallbackErr) {
@@ -92,127 +281,151 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
       })
 
       const results = await Promise.all(stockPromises)
-      const stockMap: Record<UUID, StockProduct> = {}
+      const stockMap: Record<UUID, StockRecord> = {}
 
       results.forEach((result) => {
-        if (result && result.data) {
-          const { productId, data, source } = result
-          
-          if (source === 'availability') {
-            // Map availability response to StockProduct format
-            // Use unreserved_quantity as the available quantity
-            const firstBatch = data.batches?.[0]
-            
-            stockMap[productId] = {
-              id: firstBatch?.id || productId,
-              product: productId,
-              quantity: data.total_available || 0,
-              available_quantity: data.unreserved_quantity || 0, // CRITICAL: Available for new sales
-              reserved_quantity: data.reserved_quantity || 0,
-              unit_cost: firstBatch?.unit_cost || 0,
-              retail_price: firstBatch?.retail_price || 0,
-              wholesale_price: firstBatch?.wholesale_price || 0,
-              batch_number: firstBatch?.batch_number || '',
-              expiry_date: firstBatch?.expiry_date || null,
+        if (!result || !result.data) {
+          return
+        }
+
+        const { productId, data, source } = result
+        const existingStock = stockDataRef.current[productId]
+
+        if (source === 'availability') {
+          const firstBatch = data.batches?.[0]
+          const reserved = typeof data.reserved_quantity === 'number' ? data.reserved_quantity : 0
+          const stockId = firstBatch?.id || existingStock?.id || productId
+          const quantityTotal = typeof data.total_available === 'number'
+            ? data.total_available
+            : Number(data.total_available) || 0
+          const availableQuantity = typeof data.unreserved_quantity === 'number'
+            ? data.unreserved_quantity
+            : Number(data.unreserved_quantity) || 0
+          const unitCost = typeof firstBatch?.unit_cost === 'number'
+            ? firstBatch.unit_cost
+            : Number(firstBatch?.unit_cost ?? existingStock?.unit_cost ?? 0) || 0
+          const retailPrice = typeof firstBatch?.retail_price === 'number'
+            ? firstBatch.retail_price
+            : Number(firstBatch?.retail_price ?? existingStock?.retail_price ?? 0) || 0
+          const wholesalePrice = typeof firstBatch?.wholesale_price === 'number'
+            ? firstBatch.wholesale_price
+            : Number(firstBatch?.wholesale_price ?? existingStock?.wholesale_price ?? retailPrice) || 0
+
+          stockMap[productId] = {
+            id: stockId,
+            product: productId,
+            quantity: quantityTotal,
+            available_quantity: availableQuantity,
+            reserved_quantity: reserved,
+            unit_cost: unitCost,
+            retail_price: retailPrice,
+            wholesale_price: wholesalePrice,
+            batch_number: firstBatch?.batch_number || undefined,
+            expiry_date: firstBatch?.expiry_date ?? null,
+          }
+        } else {
+          const toNumber = (value: unknown): number => {
+            if (typeof value === 'number') {
+              return Number.isFinite(value) ? value : 0
             }
-          } else {
-            // Fallback: Use basic stock data (temporary until availability endpoint is ready)
-            console.log('[ProductSearch] Using fallback stock data for product:', productId)
-            stockMap[productId] = {
-              id: data.id,
-              product: productId,
-              quantity: parseInt(data.quantity) || 0,
-              available_quantity: parseInt(data.quantity) || 0, // Using raw quantity as fallback
-              reserved_quantity: 0,
-              unit_cost: parseFloat(data.unit_cost) || 0,
-              retail_price: parseFloat(data.retail_price) || 0,
-              wholesale_price: parseFloat(data.wholesale_price) || 0,
-              batch_number: data.batch_number || '',
-              expiry_date: data.expiry_date || null,
+            if (typeof value === 'string') {
+              const parsed = Number(value)
+              return Number.isFinite(parsed) ? parsed : 0
             }
+            return 0
+          }
+
+          stockMap[productId] = {
+            id: data.id,
+            product: productId,
+            quantity: toNumber(data.quantity),
+            available_quantity: toNumber(data.available_quantity ?? data.quantity),
+            reserved_quantity: toNumber(data.reserved_quantity),
+            unit_cost: toNumber(data.unit_cost ?? existingStock?.unit_cost),
+            retail_price: toNumber(data.retail_price ?? existingStock?.retail_price),
+            wholesale_price: toNumber(data.wholesale_price ?? existingStock?.wholesale_price ?? data.retail_price),
+            batch_number: data.batch_number ?? undefined,
+            expiry_date: data.expiry_date ?? null,
           }
         }
       })
 
-      setStockData(stockMap)
+      if (Object.keys(stockMap).length > 0) {
+        setStockData((prev) => {
+          const next = {
+            ...prev,
+            ...stockMap,
+          }
+          stockDataRef.current = next
+          return next
+        })
+      }
     } catch (err) {
       console.error('Failed to fetch stock levels:', err)
     }
   }, [storefrontId])
 
-  const searchProducts = useCallback(async (query: string) => {
+  const searchProducts = useCallback(async (rawQuery: string) => {
+    if (catalogLoading) {
+      return
+    }
+
+    const trimmedQuery = rawQuery.trim()
+
+    if (trimmedQuery.length < MIN_SEARCH_LENGTH) {
+      setProducts([])
+      setError(null)
+      return
+    }
+
     try {
       setLoading(true)
       setError(null)
 
-      console.log('[ProductSearch] Searching for:', query)
-      console.log('[ProductSearch] API URL:', '/inventory/api/products/')
-      console.log('[ProductSearch] Base URL:', httpClient.defaults.baseURL)
-      
-      const response = await httpClient.get('/inventory/api/products/', {
-        params: {
-          search: query,
-          // Note: is_active filter removed - not available in backend
-        },
-      })
-
-      console.log('[ProductSearch] Response status:', response.status)
-      console.log('[ProductSearch] Response data:', response.data)
-
-      const productList = response.data.results || response.data
-      
-      if (!Array.isArray(productList)) {
-        console.warn('[ProductSearch] Unexpected response format:', productList)
-        setError('Unexpected response format from server')
-        return
+      const now = Date.now()
+      const elapsedSinceLastSearch = now - lastSearchTimestampRef.current
+      if (elapsedSinceLastSearch < SEARCH_THROTTLE_MS) {
+        await new Promise((resolve) => setTimeout(resolve, SEARCH_THROTTLE_MS - elapsedSinceLastSearch))
       }
-      
-      setProducts(productList)
 
-      // Initialize quantities for new products (default to 1)
+      lastSearchTimestampRef.current = Date.now()
+
+      const lowerQuery = trimmedQuery.toLowerCase()
+      const matches = catalog.filter((item) =>
+        item.name.toLowerCase().includes(lowerQuery) ||
+        item.sku.toLowerCase().includes(lowerQuery) ||
+        (item.barcode ? item.barcode.toLowerCase().includes(lowerQuery) : false)
+      )
+
+      setProducts(matches)
+
       const newQuantities: Record<UUID, number> = {}
-      productList.forEach((p: Product) => {
-        if (!quantities[p.id]) {
-          newQuantities[p.id] = 1
+      matches.forEach((product) => {
+        if (!quantities[product.id]) {
+          newQuantities[product.id] = 1
         }
       })
       if (Object.keys(newQuantities).length > 0) {
-        setQuantities(prev => ({ ...prev, ...newQuantities }))
+        setQuantities((prev) => ({ ...prev, ...newQuantities }))
       }
 
-      // Fetch stock for each product
-      if (productList.length > 0) {
-        await fetchStockLevels(productList.map((p: Product) => p.id))
+      if (matches.length > 0) {
+        await fetchStockLevels(matches.map((product) => product.id))
       }
     } catch (err) {
       console.error('[ProductSearch] Search error:', err)
-      const error = err as { response?: { data?: unknown; status?: number; statusText?: string }; message?: string }
-      
-      if (error.response) {
-        console.error('[ProductSearch] Error status:', error.response.status)
-        console.error('[ProductSearch] Error statusText:', error.response.statusText)
-        console.error('[ProductSearch] Error data:', error.response.data)
-        
-        // Provide more specific error messages
-        if (error.response.status === 500) {
-          setError('Server error - Please check backend logs for details')
-        } else if (error.response.status === 404) {
-          setError('Products endpoint not found - Check backend URL configuration')
-        } else if (error.response.status === 401) {
-          setError('Authentication failed - Please log in again')
-        } else {
-          setError(`Failed to search products: ${error.response.status} ${error.response.statusText}`)
-        }
-      } else {
-        setError(error.message || 'Failed to search products - Network error')
-      }
+      setError('Failed to search products. Please try again.')
     } finally {
       setLoading(false)
     }
-  }, [fetchStockLevels, quantities])
+  }, [catalog, catalogLoading, fetchStockLevels, quantities])
 
   // Debounced search
   useEffect(() => {
+    if (catalogLoading) {
+      return
+    }
+
     if (!searchQuery.trim()) {
       setProducts([])
       return
@@ -220,92 +433,103 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
 
     const timeoutId = setTimeout(() => {
       searchProducts(searchQuery)
-    }, 300) // 300ms debounce
+    }, SEARCH_DEBOUNCE_MS)
 
     return () => clearTimeout(timeoutId)
-  }, [searchQuery, searchProducts])
+  }, [catalogLoading, searchQuery, searchProducts, SEARCH_DEBOUNCE_MS])
+
+  // Re-run search when catalog finishes loading
+  useEffect(() => {
+    if (!catalogLoading && catalog.length > 0 && searchQuery.trim().length >= MIN_SEARCH_LENGTH) {
+      void searchProducts(searchQuery)
+    }
+  }, [catalogLoading, catalog, searchProducts, searchQuery])
 
   const searchByBarcode = async (barcode: string) => {
+    const trimmed = barcode.trim()
+    if (!trimmed) {
+      return
+    }
+
     try {
       setLoading(true)
       setError(null)
 
-      console.log('[ProductSearch] Barcode scan:', barcode)
-      
-      // Try barcode endpoint first (if product has barcode field)
-      try {
-        const response = await httpClient.get(`/inventory/api/products/by-barcode/${barcode}/`)
-        const product = response.data
+      const normalized = trimmed.toLowerCase()
+      const match = catalog.find((item) =>
+        (item.barcode ? item.barcode.toLowerCase() === normalized : false) ||
+        item.sku.toLowerCase() === normalized
+      )
 
-        if (product) {
-          console.log('[ProductSearch] Product found by barcode:', product)
-          // Auto-add to cart if saleId exists
-          if (saleId) {
-            await handleAddToCart(product.id, 1)
-          } else {
-            setProducts([product])
-            await fetchStockLevels([product.id])
-          }
-          setBarcodeInput('')
-          return
-        }
-      } catch (barcodeErr) {
-        const barcodeError = barcodeErr as { response?: { status: number } }
-        
-        // If 404, try SKU lookup as fallback (barcode might be the SKU)
-        if (barcodeError.response?.status === 404) {
-          console.log('[ProductSearch] Barcode not found, trying SKU lookup...')
-          
-          try {
-            const response = await httpClient.get(`/inventory/api/products/by-sku/${barcode}/`)
-            const product = response.data
-
-            if (product) {
-              console.log('[ProductSearch] Product found by SKU:', product)
-              // Auto-add to cart if saleId exists
-              if (saleId) {
-                await handleAddToCart(product.id, 1)
-              } else {
-                setProducts([product])
-                await fetchStockLevels([product.id])
-              }
-              setBarcodeInput('')
-              return
-            }
-          } catch {
-            // Both failed, show error
-            throw new Error('not_found')
-          }
-        } else {
-          // Other error, rethrow
-          throw barcodeErr
-        }
+      if (!match) {
+        setError(`No product found with barcode/SKU: ${trimmed}`)
+        return
       }
+
+      await fetchStockLevels([match.id])
+
+      setQuantities((prev) => ({
+        ...prev,
+        [match.id]: prev[match.id] ?? 1,
+      }))
+
+      await handleAddToCart(match.id, 1)
 
       setBarcodeInput('')
     } catch (err) {
-      const error = err as { response?: { status: number }; message?: string }
-      
-      if (error.message === 'not_found') {
-        setError(`No product found with barcode/SKU: ${barcode}`)
-      } else if (error.response?.status === 404) {
-        setError(`No product found with barcode/SKU: ${barcode}`)
-      } else {
-        setError('Failed to scan barcode')
-      }
       console.error('Barcode scan error:', err)
+      setError('Failed to scan barcode')
     } finally {
       setLoading(false)
     }
   }
 
   const handleAddToCart = async (productId: UUID, quantity: number = 1) => {
-    if (!saleId) {
-      setError('Please create a sale first')
-      return
+    let activeSaleId = saleId
+
+    if (!activeSaleId) {
+      if (!ensureSaleSession) {
+        setError('Please create a sale first')
+        return
+      }
+
+      const ensuredSaleId = await ensureSaleSession()
+      if (!ensuredSaleId) {
+        if (saleType === 'WHOLESALE') {
+          setError('Select a customer before starting a wholesale sale.')
+        } else {
+          setError('Unable to start a new sale. Please try again.')
+        }
+        return
+      }
+      activeSaleId = ensuredSaleId
     }
 
-    const stock = stockData[productId]
+    let stock = stockData[productId]
+    if (!stock) {
+      const product = catalog.find((item) => item.id === productId)
+      if (product && product.stock_product_ids.length > 0) {
+        const fallbackStock: StockRecord = {
+          id: product.stock_product_ids[0],
+          product: product.id,
+          quantity: product.available_quantity,
+          available_quantity: product.available_quantity,
+          reserved_quantity: 0,
+          unit_cost: 0,
+          retail_price: product.retail_price,
+          wholesale_price: product.wholesale_price,
+          batch_number: undefined,
+          expiry_date: null,
+        }
+        stock = fallbackStock
+        setStockData((prev) => {
+          const next = { ...prev, [productId]: fallbackStock }
+          stockDataRef.current = next
+          return next
+        })
+      }
+    }
+
     if (!stock) {
       setError('Product not available at this location')
       return
@@ -324,7 +548,7 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
 
       await dispatch(
         addItemToCart({
-          saleId,
+          saleId: activeSaleId,
           product: productId,
           stockProduct: stock.id,
           quantity,
@@ -339,8 +563,14 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
       setSearchQuery('')
       setProducts([])
     } catch (err) {
-      const error = err as { message?: string }
-      setError(error.message || 'Failed to add item to cart')
+      if (typeof err === 'string') {
+        setError(err)
+      } else if (err && typeof err === 'object') {
+        const errorObject = err as { userMessage?: string; message?: string }
+        setError(errorObject.userMessage || errorObject.message || "We couldn't add that product right now. Please try again.")
+      } else {
+        setError("We couldn't add that product right now. Please try again.")
+      }
     } finally {
       setAddingItemId(null)
     }
@@ -353,28 +583,29 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
     }
   }
 
-  const getStockStatus = (productId: UUID) => {
-    const stock = stockData[productId]
-    if (!stock) return { color: 'secondary', text: 'N/A', available: 0 }
+  const getStockStatus = (product: Product) => {
+    const stock = stockData[product.id]
+    const availableSource = stock?.available_quantity ?? product.available_quantity ?? 0
+    const available = Number.isFinite(availableSource) ? Math.max(0, Math.floor(availableSource)) : 0
 
-    // Backend returns 'quantity' not 'available_quantity'
-    const qty = stock.quantity
-
-    if (qty === 0) {
+    if (available === 0) {
       return { color: 'danger', text: 'Out of Stock', available: 0 }
-    } else if (qty <= 5) {
-      return { color: 'warning', text: `Low: ${qty}`, available: qty }
-    } else {
-      return { color: 'success', text: `${qty} in stock`, available: qty }
     }
+
+    if (available <= 5) {
+      return { color: 'warning', text: `Low: ${available}`, available }
+    }
+
+    return { color: 'success', text: `${available} in stock`, available }
   }
 
-  const getPrice = (productId: UUID) => {
-    const stock = stockData[productId]
-    if (!stock) return 0
-    const price = saleType === 'WHOLESALE' ? stock.wholesale_price : stock.retail_price
-    // Convert to number in case API returns string
-    return typeof price === 'string' ? parseFloat(price) : price
+  const getPrice = (product: Product) => {
+    const stock = stockData[product.id]
+    const priceSource = saleType === 'WHOLESALE'
+      ? stock?.wholesale_price ?? product.wholesale_price
+      : stock?.retail_price ?? product.retail_price
+
+    return typeof priceSource === 'number' && Number.isFinite(priceSource) ? priceSource : 0
   }
 
   const getQuantity = (productId: UUID) => {
@@ -439,7 +670,7 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
       )}
 
       {/* Product Results */}
-      {products.length > 0 && (
+      {products.length > 0 && !catalogLoading && (
         <Card className="mt-3">
           <Card.Header>
             <strong>Search Results</strong> ({products.length} {products.length === 1 ? 'item' : 'items'})
@@ -447,8 +678,8 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
           <Card.Body className="p-0">
             <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
               {products.map((product) => {
-                const stockStatus = getStockStatus(product.id)
-                const price = getPrice(product.id)
+                const stockStatus = getStockStatus(product)
+                const price = getPrice(product)
                 const isAdding = addingItemId === product.id
 
                 return (
@@ -535,7 +766,12 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
                           size="sm"
                           className="w-100"
                           onClick={() => handleAddToCart(product.id, getQuantity(product.id))}
-                          disabled={stockStatus.available === 0 || !saleId || isAdding || disabled}
+                          disabled={
+                            stockStatus.available === 0 ||
+                            isAdding ||
+                            disabled ||
+                            (!saleId && !ensureSaleSession)
+                          }
                         >
                           {isAdding ? (
                             <Spinner animation="border" size="sm" />
@@ -554,9 +790,15 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled }:
       )}
 
       {/* No Results */}
-      {!loading && searchQuery && products.length === 0 && (
+      {!catalogLoading && !loading && searchQuery && products.length === 0 && (
         <Alert variant="info" className="mt-3">
           No products found matching "{searchQuery}"
+        </Alert>
+      )}
+
+      {catalogLoading && (
+        <Alert variant="secondary" className="mt-3">
+          Loading storefront catalog…
         </Alert>
       )}
     </div>
