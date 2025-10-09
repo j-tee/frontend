@@ -1,64 +1,35 @@
-# Backend Requirements: Stock Product Quantity Tracking
+# Backend Requirements: Stock Product Quantity Display Enhancement
 
 ## Overview
-The Stock Product Detail Modal now displays dynamic quantity metrics to provide better inventory visibility. The frontend has been updated to show:
-- **Quantity Stocked** (original `quantity` field)
-- **Quantity Available** (new field)
-- **Quantity Sold** (new field)
-- **Quantity Reserved** (new field)
+The Stock Product Detail Modal needs to display accurate, real-time quantity metrics. Currently it only shows `quantity`, but users need visibility into:
+- **Current Quantity** - What's physically in the warehouse right now
+- **Available to Sell** - Current quantity minus reserved units
+- **Reserved** - Units in active shopping carts (draft sales)
+- **Total Sold** - Historical total units sold from this specific stock batch
 
-## Backend Implementation Required
+## Current State Analysis
 
-### 1. Update StockProduct Model/Serializer
+### Existing Fields (from StockProduct model)
+- `quantity`: Current physical quantity in warehouse (updates as sales complete)
 
-The backend needs to add the following **read-only computed fields** to the `StockProduct` serializer or model:
-
-```python
-class StockProduct:
-    # Existing fields...
-    quantity: int  # Total quantity initially stocked
-    
-    # NEW COMPUTED FIELDS (read-only)
-    available_quantity: int  # quantity - sold_quantity - reserved_quantity
-    sold_quantity: int       # Total units sold from this stock item
-    reserved_quantity: int   # Units currently in active carts/pending orders
+### Existing Related Data (from StockAvailability endpoint)
+The system already has `/inventory/api/storefronts/{id}/stock-products/{productId}/availability/` which returns:
+```json
+{
+  "stock_product_id": "uuid",
+  "total_quantity": 100,
+  "committed_quantity": 5,
+  "reserved_quantity": 2,
+  "unreserved_quantity": 93,
+  "is_available": true
+}
 ```
 
-### 2. Computation Logic
+## Required Backend Changes
 
-#### `sold_quantity`
-Calculate total units sold across all completed sales:
+### Option 1: Extend StockProduct Detail Endpoint (RECOMMENDED)
 
-```python
-# Pseudo-code
-sold_quantity = SaleItem.objects.filter(
-    stock_product=self.id,
-    sale__status__in=['COMPLETED', 'PAID']
-).aggregate(total=Sum('quantity'))['total'] or 0
-```
-
-#### `reserved_quantity`
-Calculate units currently reserved in active carts or pending transactions:
-
-```python
-# Pseudo-code
-reserved_quantity = SaleItem.objects.filter(
-    stock_product=self.id,
-    sale__status='DRAFT'
-).aggregate(total=Sum('quantity'))['total'] or 0
-```
-
-#### `available_quantity`
-Calculate unreserved stock available for new sales:
-
-```python
-# Pseudo-code
-available_quantity = self.quantity - sold_quantity - reserved_quantity
-```
-
-### 3. API Response Structure
-
-Update the `GET /inventory/api/stock-products/{id}/` endpoint to include these fields:
+Update `GET /inventory/api/stock-products/{id}/` to include availability data inline:
 
 ```json
 {
@@ -66,108 +37,208 @@ Update the `GET /inventory/api/stock-products/{id}/` endpoint to include these f
   "product": "uuid",
   "product_name": "Back-Office Software License",
   "product_sku": "DL-SFT-010",
-  "quantity": 104,
-  "available_quantity": 98,
-  "sold_quantity": 5,
-  "reserved_quantity": 1,
+  "quantity": 104,                    // Current physical quantity
+  "available_quantity": 98,           // quantity - reserved_quantity
+  "reserved_quantity": 6,             // Units in draft/pending carts
+  "sold_quantity": 45,                // Historical: total sold from this stock batch
   "unit_cost": "445.18",
   "retail_price": "780.00",
-  "wholesale_price": "702.00",
-  "landed_unit_cost": "460.18",
   "warehouse_name": "DataLogique Central Warehouse",
   "created_at": "2025-10-07T15:29:00Z",
   "updated_at": "2025-10-07T20:10:00Z"
 }
 ```
 
-### 4. Performance Considerations
+### Field Definitions & Calculations
 
-**Option A: Computed on-the-fly (simple but may be slow)**
-- Calculate quantities using aggregations at serialization time
-- Good for low-volume endpoints or detail views
+#### `available_quantity` (Read-only computed)
+**Current quantity available for new sales**
+```python
+available_quantity = quantity - reserved_quantity
+```
 
-**Option B: Cached/Denormalized (faster but more complex)**
-- Store `sold_quantity` and `reserved_quantity` in database fields
-- Update via signals when sales status changes
-- Recommended for high-traffic list endpoints
+#### `reserved_quantity` (Read-only computed)
+**Units currently held in active shopping carts**
+```python
+# Get sum of quantities from this stock_product in DRAFT sales
+reserved_quantity = SaleItem.objects.filter(
+    stock_product=self.id,
+    sale__status='DRAFT'
+).aggregate(total=Sum('quantity'))['total'] or 0
+```
 
-**Recommendation:** Start with Option A for the detail modal (single item), then optimize to Option B if performance issues arise.
+**Important:** 
+- Only count `DRAFT` status sales
+- Exclude `COMPLETED`, `CANCELLED`, `ABANDONED` sales
+- Consider implementing cart expiration (auto-abandon drafts > 2 hours old)
 
-### 5. Endpoint Updates Required
+#### `sold_quantity` (Read-only computed)
+**Total historical units sold from this specific stock batch**
+```python
+# Get sum of quantities from completed sales only
+sold_quantity = SaleItem.objects.filter(
+    stock_product=self.id,
+    sale__status__in=['COMPLETED', 'PAID']
+).aggregate(total=Sum('quantity'))['total'] or 0
+```
 
-| Endpoint | Action | Priority |
-|----------|--------|----------|
-| `GET /inventory/api/stock-products/{id}/` | Add computed fields | **High** |
-| `GET /inventory/api/stock-products/` | Add computed fields to list | Medium |
-| `GET /inventory/api/storefronts/{id}/stock-products/` | Add computed fields | Medium |
+**Clarifications needed:**
+1. Should refunded items be subtracted from `sold_quantity`?
+2. Should cancelled sales be excluded? (Yes, recommended)
+3. Should we track adjustments separately? (e.g., damage, loss, expired)
 
-### 6. Migration Checklist
+### Why These Calculations Matter
 
-- [ ] Add serializer methods for computed fields
-- [ ] Update API documentation/schema
-- [ ] Add database indexes on `SaleItem.stock_product` if not present
-- [ ] Test calculation logic with edge cases:
-  - Stock with no sales
-  - Stock with cancelled/refunded sales
-  - Stock with expired cart reservations
-- [ ] Verify performance with large datasets
-- [ ] Consider adding these fields to storefront catalog endpoint for consistency
+**Example scenario:**
+- Initial stock intake: 150 units
+- After 45 sales: `quantity` = 104 (physical count)
+- 6 units in customer carts: `reserved_quantity` = 6
+- Available for new orders: `available_quantity` = 98
+- Historical sales total: `sold_quantity` = 45
 
-### 7. Frontend Behavior (Already Implemented)
+This helps staff:
+- ✅ Know exactly how much can be sold right now (`available_quantity`)
+- ✅ Understand demand/turnover (`sold_quantity`)
+- ✅ See if stock is being held by incomplete checkouts (`reserved_quantity`)
 
-The frontend now:
-- ✅ Displays "Quantity Stocked" (blue badge) for total initial inventory
-- ✅ Displays "Quantity Available" (green badge) with fallback to `quantity` if backend not updated
-- ✅ Displays "Quantity Sold" (info badge) defaulting to 0 if field missing
-- ✅ Displays "Quantity Reserved" (warning badge) defaulting to 0 if field missing
-- ✅ Renamed "Quantity on hand" → "Quantity Stocked" for clarity
+## Implementation Priority
 
-### 8. Testing Scenarios
+### High Priority (Required for immediate value)
+- [x] Frontend: Display `quantity` as "Current Quantity"
+- [x] Frontend: Display `available_quantity` (fallback to `quantity`)
+- [ ] Backend: Add `available_quantity` computed field
+- [ ] Backend: Add `reserved_quantity` computed field
 
-Once backend is deployed, verify:
-1. Stock item with recent sales shows correct `sold_quantity`
-2. Stock item in active cart shows `reserved_quantity > 0`
-3. `available_quantity` = `quantity - sold - reserved`
-4. Abandoned carts don't permanently reduce `available_quantity`
-5. Completed sales correctly increment `sold_quantity`
+### Medium Priority (Nice to have)
+- [ ] Backend: Add `sold_quantity` for historical tracking
+- [ ] Backend: Implement draft cart expiration job
+- [ ] Frontend: Only show Reserved/Sold badges when > 0
 
-### 9. Optional Enhancements
+### Low Priority (Future enhancement)
+- [ ] Add `adjusted_quantity` for stock adjustments
+- [ ] Add `damaged_quantity` for quality issues
+- [ ] Add initial intake quantity tracking
 
-Consider adding these fields in future iterations:
-- `adjusted_quantity` - units added/removed via stock adjustments
-- `returned_quantity` - units returned from completed sales
-- `damaged_quantity` - units marked as damaged/unsellable
-- `transfer_in_quantity` / `transfer_out_quantity` - units in transit
+## Performance Considerations
 
----
+### Concern: Database Queries
+Each stock product detail view would trigger aggregation queries for `reserved_quantity` and `sold_quantity`.
+
+### Solutions:
+
+**Option A: Real-time aggregation (Simple)**
+```python
+@property
+def available_quantity(self):
+    return self.quantity - self.reserved_quantity
+
+@property  
+def reserved_quantity(self):
+    return SaleItem.objects.filter(
+        stock_product=self.id,
+        sale__status='DRAFT'
+    ).aggregate(Sum('quantity'))['quantity__sum'] or 0
+```
+✅ Always accurate
+❌ Slower for bulk queries
+✅ Good for detail views (1 item at a time)
+
+**Option B: Cached fields with signals (Complex)**
+```python
+# Add database fields
+reserved_quantity = models.IntegerField(default=0)
+sold_quantity = models.IntegerField(default=0)
+
+# Update via post_save signals on SaleItem
+```
+✅ Fast queries
+❌ Can drift if signals fail
+❌ More complex to maintain
+
+**Recommendation:** Start with Option A (real-time) since this is a detail modal (not a list view). Monitor performance and optimize if needed.
+
+## Edge Cases to Handle
+
+1. **Expired carts**: Draft sales older than 2 hours should be auto-abandoned
+2. **Concurrent reservations**: Race conditions when multiple users add last unit
+3. **Refunds**: Should `sold_quantity` decrease when item refunded?
+4. **Stock adjustments**: Should these affect `sold_quantity`? (No, separate field)
+5. **Transfers**: What happens when stock moved between warehouses?
+
+## Testing Checklist
+
+Once backend implements these fields:
+
+- [ ] Stock with no sales: `sold_quantity` = 0, `available_quantity` = `quantity`
+- [ ] Stock with completed sales: `sold_quantity` > 0
+- [ ] Stock in active cart: `reserved_quantity` > 0, `available_quantity` < `quantity`
+- [ ] Stock with abandoned cart: `reserved_quantity` = 0 after abandonment
+- [ ] Multiple concurrent carts: `reserved_quantity` = sum of all draft sales
+- [ ] Refunded sale: verify impact on `sold_quantity` (define expected behavior)
+
+## API Documentation Updates Needed
+
+Update Swagger/OpenAPI schema for:
+- `GET /inventory/api/stock-products/{id}/`
+- Optionally: `GET /inventory/api/stock-products/` (list view)
 
 ## Questions for Backend Team
 
-1. **Do you already track `reserved_quantity` via StockAvailability?**  
-   If yes, we can reuse that logic instead of querying draft sales.
+### Critical
+1. **Does `quantity` in StockProduct already decrease when sales complete?**  
+   (Assumption: Yes, it's the live warehouse count)
 
-2. **Should `sold_quantity` include refunded items?**  
-   Recommendation: Exclude refunded quantities or add separate `refunded_quantity` field.
+2. **Do you have cart expiration logic for abandoned carts?**  
+   (If not, `reserved_quantity` will be inflated by old drafts)
 
-3. **How should we handle expired cart reservations?**  
-   Suggestion: Add TTL cleanup job for draft sales older than X hours.
+3. **How should refunds affect these numbers?**  
+   - Option A: `sold_quantity` stays same (measures throughput)
+   - Option B: Decrease `sold_quantity` (measures net sales)
+   - **Recommendation:** Option A, add separate `refunded_quantity` if needed
 
-4. **Performance target?**  
-   How many concurrent stock detail views do you expect? This affects caching strategy.
+### Important
+4. **Should we include pending/processing sales in `reserved_quantity`?**  
+   (Recommendation: Only DRAFT status, exclude in-progress checkouts)
 
----
+5. **Performance target for detail modal load time?**  
+   (Helps decide between real-time vs cached approach)
 
-## Frontend Files Modified
-
-- ✅ `src/types/inventory.ts` - Added fields to `StockProduct` interface
-- ✅ `src/features/dashboard/components/StockProductDetailModal.tsx` - Updated UI layout
-
-## Status
-
-- **Frontend:** ✅ Ready (gracefully handles missing backend fields)
-- **Backend:** ⏳ Awaiting implementation
-- **Testing:** ⏳ Blocked until backend deployed
+### Nice to have
+6. **Is there value in tracking initial intake quantity separately?**  
+   (Would enable "% sold" calculations)
 
 ---
 
-**Contact:** Frontend team ready to assist with API schema validation once endpoint is updated.
+## Frontend Changes (Already Implemented)
+
+### Updated Display
+- ✅ "Current Quantity" (blue) - shows `quantity`
+- ✅ "Available to Sell" (green) - shows `available_quantity` (fallback to `quantity`)
+- ✅ "Reserved (in carts)" (yellow) - shows `reserved_quantity` (only if > 0)
+- ✅ "Total Sold" (cyan) - shows `sold_quantity` (only if > 0)
+
+### Graceful Degradation
+- Fields are **optional** in TypeScript interface
+- UI only shows Reserved/Sold badges when data exists
+- Falls back gracefully if backend hasn't implemented yet
+
+### Files Modified
+- `src/types/inventory.ts` - Added optional fields
+- `src/features/dashboard/components/StockProductDetailModal.tsx` - Updated UI
+- Conditional rendering: only show badges when values are meaningful
+
+---
+
+## Summary
+
+**Immediate Action Required:**
+Backend team needs to add 3 computed read-only fields to StockProduct serializer:
+1. `available_quantity` = `quantity - reserved_quantity`
+2. `reserved_quantity` = sum(draft sale items for this stock product)
+3. `sold_quantity` = sum(completed sale items for this stock product)
+
+**Frontend Status:** ✅ Ready and backward compatible
+
+**Blocked Until:** Backend implements the computed fields
+
+**Contact:** Ready to assist with API integration testing once deployed.

@@ -278,29 +278,33 @@ const StockProductDetailModal = ({
                           : '—'}
                   </div>
                   <div>
-                    <span className="font-medium text-slate-700">Quantity Stocked:</span>{' '}
+                    <span className="font-medium text-slate-700">Current Quantity:</span>{' '}
                     <Badge bg="primary" pill>
                       {stockProduct.quantity.toLocaleString()}
                     </Badge>
                   </div>
                   <div>
-                    <span className="font-medium text-slate-700">Quantity Available:</span>{' '}
+                    <span className="font-medium text-slate-700">Available to Sell:</span>{' '}
                     <Badge bg="success" pill>
                       {(stockProduct.available_quantity ?? stockProduct.quantity).toLocaleString()}
                     </Badge>
                   </div>
-                  <div>
-                    <span className="font-medium text-slate-700">Quantity Sold:</span>{' '}
-                    <Badge bg="info" pill>
-                      {(stockProduct.sold_quantity ?? 0).toLocaleString()}
-                    </Badge>
-                  </div>
-                  <div>
-                    <span className="font-medium text-slate-700">Quantity Reserved:</span>{' '}
-                    <Badge bg="warning" pill>
-                      {(stockProduct.reserved_quantity ?? 0).toLocaleString()}
-                    </Badge>
-                  </div>
+                  {stockProduct.reserved_quantity !== undefined && stockProduct.reserved_quantity > 0 && (
+                    <div>
+                      <span className="font-medium text-slate-700">Reserved (in carts):</span>{' '}
+                      <Badge bg="warning" pill>
+                        {stockProduct.reserved_quantity.toLocaleString()}
+                      </Badge>
+                    </div>
+                  )}
+                  {stockProduct.sold_quantity !== undefined && stockProduct.sold_quantity > 0 && (
+                    <div>
+                      <span className="font-medium text-slate-700">Total Sold:</span>{' '}
+                      <Badge bg="info" pill>
+                        {stockProduct.sold_quantity.toLocaleString()}
+                      </Badge>
+                    </div>
+                  )}
                   <div>
                     <span className="font-medium text-slate-700">Landed unit cost:</span>{' '}
                     {formatDecimal(stockProduct.landed_unit_cost)}
