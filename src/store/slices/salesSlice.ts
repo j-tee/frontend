@@ -1,8 +1,10 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from '@reduxjs/toolkit'
+import { isAxiosError, type AxiosError } from 'axios'
 import type { RootState } from '../index.js'
 import type { Sale } from '../../types/sales.js'
 import type { UUID } from '../../types/common.js'
 import * as salesService from '../../services/salesService'
+import { ensureUserFacingError, toUserFacingError } from '../../utils/errorMessage'
 
 // Types
 interface SalesFilters {
@@ -48,7 +50,7 @@ interface SalesState {
     updateItem: 'idle' | 'loading' | 'succeeded' | 'failed'
     removeItem: 'idle' | 'loading' | 'succeeded' | 'failed'
     checkout: 'idle' | 'loading' | 'succeeded' | 'failed'
-    cancel: 'idle' | 'loading' | 'succeeded' | 'failed'
+    abandon: 'idle' | 'loading' | 'succeeded' | 'failed'
   }
   
   // Errors
@@ -58,7 +60,7 @@ interface SalesState {
     updateItem: string | null
     removeItem: string | null
     checkout: string | null
-    cancel: string | null
+    abandon: string | null
   }
 }
 
@@ -89,8 +91,8 @@ const initialState: SalesState = {
     addItem: 'idle',
     updateItem: 'idle',
     removeItem: 'idle',
-    checkout: 'idle',
-    cancel: 'idle',
+  checkout: 'idle',
+  abandon: 'idle',
   },
   
   errors: {
@@ -98,10 +100,17 @@ const initialState: SalesState = {
     addItem: null,
     updateItem: null,
     removeItem: null,
-    checkout: null,
-    cancel: null,
+  checkout: null,
+  abandon: null,
   },
 }
+
+const DEFAULT_CHECKOUT_ERROR = 'Unable to complete sale. Please review the details and try again.'
+const DEFAULT_ADD_ITEM_ERROR = 'We couldn’t add that product to the sale. Please try again.'
+const DEFAULT_ABANDON_ERROR = 'Could not discard the sale right now. Please try again.'
+
+const resolveErrorMessage = (source: unknown, fallback: string): string =>
+  ensureUserFacingError(source, fallback)
 
 // Async thunks
 
@@ -115,9 +124,9 @@ export const createSale = createAsyncThunk(
 )
 
 // Add item to cart
-export const addItemToCart = createAsyncThunk(
-  'sales/addItem',
-  async (payload: { 
+export const addItemToCart = createAsyncThunk<
+  Awaited<ReturnType<typeof salesService.addItem>>,
+  {
     saleId: UUID
     product: UUID
     stockProduct: UUID
@@ -125,17 +134,57 @@ export const addItemToCart = createAsyncThunk(
     unitPrice?: number
     discountPercentage?: number
     notes?: string
-  }) => {
+  },
+  { rejectValue: { userMessage: string } }
+>(
+  'sales/addItem',
+  async (payload, { rejectWithValue }) => {
     const { saleId, stockProduct, unitPrice, discountPercentage, ...rest } = payload
-    // Convert camelCase to snake_case for backend
     const itemData = {
       ...rest,
       stock_product: stockProduct,
       unit_price: unitPrice,
       discount_percentage: discountPercentage,
     }
-    const response = await salesService.addItem(saleId, itemData)
-    return response
+
+    try {
+      const response = await salesService.addItem(saleId, itemData)
+      return response
+    } catch (error) {
+      const friendlyMessage = toUserFacingError(error, { fallback: DEFAULT_ADD_ITEM_ERROR })
+
+      if (isAxiosError(error)) {
+        const responseData = error.response?.data as
+          | {
+              developer_message?: string
+              error?: string
+              code?: string
+              details?: unknown
+            }
+          | undefined
+
+        console.error('[sales/addItem] API rejected add-to-cart request', {
+          saleId,
+          product: rest.product,
+          quantity: rest.quantity,
+          stockProduct,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          code: responseData?.code,
+          error: responseData?.error,
+          developer_message: responseData?.developer_message,
+          details: responseData?.details,
+        })
+
+        if (responseData?.developer_message) {
+          console.info('[sales/addItem] Developer message:', responseData.developer_message)
+        }
+      } else {
+        console.error('[sales/addItem] Unexpected error while adding product to cart', error)
+      }
+
+      return rejectWithValue({ userMessage: friendlyMessage })
+    }
   }
 )
 
@@ -168,18 +217,22 @@ export const removeCartItem = createAsyncThunk(
 // Complete sale (checkout)
 export const completeSale = createAsyncThunk(
   'sales/checkout',
-  async (payload: {
-    saleId: UUID
-    paymentType: string
-    payments: Array<{
-      paymentMethod: string
-      amountPaid: number
-      transactionReference?: string
-    }>
-    discountAmount?: number
-    notes?: string
-  }) => {
-    const { saleId, paymentType, payments, discountAmount, notes } = payload
+  async (
+    payload: {
+      saleId: UUID
+      paymentType: string
+      payments: Array<{
+        paymentMethod: string
+        amountPaid: number
+        transactionReference?: string
+      }>
+      discountAmount?: number
+      notes?: string
+      customerId?: UUID | null
+    },
+    { rejectWithValue }
+  ) => {
+    const { saleId, paymentType, payments, discountAmount, notes, customerId } = payload
     // Convert camelCase to snake_case for backend
     const checkoutData = {
       payment_type: paymentType,
@@ -187,22 +240,65 @@ export const completeSale = createAsyncThunk(
         payment_method: p.paymentMethod,
         amount_paid: p.amountPaid,
         transaction_reference: p.transactionReference,
+        customer: customerId ?? null,
       })),
       discount_amount: discountAmount,
       notes,
+      customer: customerId ?? null,
     }
-    const response = await salesService.completeSale(saleId, checkoutData)
-    return response
+
+    try {
+      const response = await salesService.completeSale(saleId, checkoutData)
+      return response
+    } catch (error) {
+      const axiosError = error as AxiosError
+      const friendlyMessage = toUserFacingError(axiosError, { fallback: DEFAULT_CHECKOUT_ERROR })
+      return rejectWithValue(friendlyMessage)
+    }
   }
 )
 
 // Cancel sale
-export const cancelSale = createAsyncThunk(
-  'sales/cancel',
-  async (payload: { saleId: UUID; reason: string }) => {
-    const { saleId, reason } = payload
-    const response = await salesService.cancelSale(saleId, reason)
-    return response
+export const abandonSale = createAsyncThunk<
+  Awaited<ReturnType<typeof salesService.abandonSale>>,
+  { saleId: UUID },
+  { rejectValue: string }
+>(
+  'sales/abandon',
+  async ({ saleId }, { rejectWithValue }) => {
+    try {
+      const response = await salesService.abandonSale(saleId)
+      return response
+    } catch (error) {
+      const friendlyMessage = toUserFacingError(error, { fallback: DEFAULT_ABANDON_ERROR })
+
+      if (isAxiosError(error)) {
+        const responseData = error.response?.data as
+          | {
+              code?: string
+              error?: string
+              developer_message?: string
+            }
+          | undefined
+
+        console.error('[sales/abandon] Failed to abandon sale', {
+          saleId,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          code: responseData?.code,
+          error: responseData?.error,
+          developer_message: responseData?.developer_message,
+        })
+
+        if (responseData?.developer_message) {
+          console.info('[sales/abandon] Developer message:', responseData.developer_message)
+        }
+      } else {
+        console.error('[sales/abandon] Unexpected error while abandoning sale', error)
+      }
+
+      return rejectWithValue(friendlyMessage)
+    }
   }
 )
 
@@ -249,6 +345,19 @@ const salesSlice = createSlice({
     clearSaleDetail: (state) => {
       state.saleDetail = null
       state.saleDetailStatus = 'idle'
+    },
+
+    setCurrentCartCustomer: (state, action: PayloadAction<{ customerId: UUID | null; customerName?: string | null }>) => {
+      if (!state.currentCart) {
+        return
+      }
+
+      state.currentCart.customer = action.payload.customerId ?? null
+      if (action.payload.customerName !== undefined) {
+        state.currentCart.customer_name = action.payload.customerName
+      } else if (action.payload.customerId === null) {
+        state.currentCart.customer_name = null
+      }
     },
     
     // Set filters
@@ -320,7 +429,7 @@ const salesSlice = createSlice({
       })
       .addCase(createSale.rejected, (state, action) => {
         state.mutations.createSale = 'failed'
-        state.errors.createSale = action.error.message || 'Failed to create sale'
+  state.errors.createSale = resolveErrorMessage(action.error.message, 'Failed to create sale. Please try again.')
       })
     
     // Add item
@@ -349,7 +458,17 @@ const salesSlice = createSlice({
       })
       .addCase(addItemToCart.rejected, (state, action) => {
         state.mutations.addItem = 'failed'
-        state.errors.addItem = action.error.message || 'Failed to add item'
+        const payloadMessage =
+          typeof action.payload === 'string'
+            ? action.payload
+            : action.payload && typeof action.payload === 'object' && 'userMessage' in action.payload
+            ? (action.payload as { userMessage?: string }).userMessage
+            : undefined
+
+        state.errors.addItem = resolveErrorMessage(
+          payloadMessage ?? action.error.message,
+          DEFAULT_ADD_ITEM_ERROR,
+        )
       })
     
     // Update item
@@ -372,7 +491,7 @@ const salesSlice = createSlice({
       })
       .addCase(updateCartItem.rejected, (state, action) => {
         state.mutations.updateItem = 'failed'
-        state.errors.updateItem = action.error.message || 'Failed to update item'
+  state.errors.updateItem = resolveErrorMessage(action.error.message, 'Failed to update item. Please try again.')
       })
     
     // Remove item
@@ -392,7 +511,7 @@ const salesSlice = createSlice({
       })
       .addCase(removeCartItem.rejected, (state, action) => {
         state.mutations.removeItem = 'failed'
-        state.errors.removeItem = action.error.message || 'Failed to remove item'
+  state.errors.removeItem = resolveErrorMessage(action.error.message, 'Failed to remove item. Please try again.')
       })
     
     // Complete sale
@@ -407,22 +526,33 @@ const salesSlice = createSlice({
       })
       .addCase(completeSale.rejected, (state, action) => {
         state.mutations.checkout = 'failed'
-        state.errors.checkout = action.error.message || 'Failed to complete sale'
+        if (typeof action.payload === 'string' && action.payload) {
+          state.errors.checkout = resolveErrorMessage(action.payload, DEFAULT_CHECKOUT_ERROR)
+        } else {
+          state.errors.checkout = resolveErrorMessage(action.error.message, DEFAULT_CHECKOUT_ERROR)
+        }
       })
     
-    // Cancel sale
+    // Abandon sale
     builder
-      .addCase(cancelSale.pending, (state) => {
-        state.mutations.cancel = 'loading'
-        state.errors.cancel = null
+      .addCase(abandonSale.pending, (state) => {
+        state.mutations.abandon = 'loading'
+        state.errors.abandon = null
       })
-      .addCase(cancelSale.fulfilled, (state, action) => {
-        state.mutations.cancel = 'succeeded'
-        state.currentCart = action.payload
+      .addCase(abandonSale.fulfilled, (state) => {
+        state.mutations.abandon = 'succeeded'
+        state.errors.abandon = null
+        state.cartError = null
+        state.currentCart = null
       })
-      .addCase(cancelSale.rejected, (state, action) => {
-        state.mutations.cancel = 'failed'
-        state.errors.cancel = action.error.message || 'Failed to cancel sale'
+      .addCase(abandonSale.rejected, (state, action) => {
+        state.mutations.abandon = 'failed'
+        const message =
+          typeof action.payload === 'string' && action.payload
+            ? action.payload
+            : action.error.message
+        state.errors.abandon = resolveErrorMessage(message, DEFAULT_ABANDON_ERROR)
+        state.cartError = state.errors.abandon
       })
     
     // Load sale detail
@@ -436,7 +566,7 @@ const salesSlice = createSlice({
       })
       .addCase(loadSaleDetail.rejected, (state, action) => {
         state.saleDetailStatus = 'failed'
-        state.salesError = action.error.message || 'Failed to load sale'
+  state.salesError = resolveErrorMessage(action.error.message, 'Failed to load sale details. Please try again.')
       })
     
     // Load sales list
@@ -456,7 +586,7 @@ const salesSlice = createSlice({
       })
       .addCase(loadSales.rejected, (state, action) => {
         state.salesStatus = 'failed'
-        state.salesError = action.error.message || 'Failed to load sales'
+  state.salesError = resolveErrorMessage(action.error.message, 'Failed to load sales. Please try again later.')
       })
   },
 })
@@ -470,6 +600,7 @@ export const {
   setSalesPage,
   setSalesPageSize,
   clearMutationError,
+  setCurrentCartCustomer,
 } = salesSlice.actions
 
 // Selectors

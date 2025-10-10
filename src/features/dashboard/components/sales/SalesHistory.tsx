@@ -1,4 +1,4 @@
-import { useEffect, useState, Fragment } from 'react'
+import { useEffect, useState, Fragment, useCallback, useMemo, useRef } from 'react'
 import {
   Card,
   Table,
@@ -14,9 +14,10 @@ import {
   ButtonGroup,
 } from 'react-bootstrap'
 import './SalesHistory.module.css'
-import { useAppDispatch, useAppSelector } from '../../../../hooks'
+import { useAppDispatch, useAppSelector, useCurrency } from '../../../../hooks'
 import {
   loadSales,
+  abandonSale,
   selectSales,
   selectSalesStatus,
   selectSalesError,
@@ -28,7 +29,50 @@ import {
   resetSalesFilters,
 } from '../../../../store/slices/salesSlice'
 import { selectUserStorefronts, selectStorefrontsLoading } from '../../../../store/slices/authSlice'
-import { exportSalesToCSV } from '../../../../services/salesService'
+import { exportSalesToCSV, getSalesSummary, listSales } from '../../../../services/salesService'
+import type { UUID } from '../../../../types/common'
+
+type SalesSummaryMetrics = {
+  totalSales: number
+  totalCostOfGoods: number
+  totalTax: number
+  totalDiscount: number
+  totalExpenses: number
+  totalProfit: number
+  profitMargin: number
+  averageOrderValue: number
+  transactionCount: number
+  byPaymentMethod: {
+    CASH: number
+    CARD: number
+    CREDIT: number
+    MOBILE: number
+    SPLIT: number
+  }
+}
+
+const DEFAULT_SALES_SUMMARY: SalesSummaryMetrics = {
+  totalSales: 0,
+  totalCostOfGoods: 0,
+  totalTax: 0,
+  totalDiscount: 0,
+  totalExpenses: 0,
+  totalProfit: 0,
+  profitMargin: 0,
+  averageOrderValue: 0,
+  transactionCount: 0,
+  byPaymentMethod: {
+    CASH: 0,
+    CARD: 0,
+    CREDIT: 0,
+    MOBILE: 0,
+    SPLIT: 0,
+  },
+}
+
+type SalesSummaryApiResponse = Awaited<ReturnType<typeof getSalesSummary>>
+
+const ABANDON_ERROR_FALLBACK = "Couldn't discard the sale. Please try again."
 
 export function SalesHistory() {
   const dispatch = useAppDispatch()
@@ -39,6 +83,11 @@ export function SalesHistory() {
   const filters = useAppSelector(selectSalesFilters)
   const userStorefronts = useAppSelector(selectUserStorefronts)
   const storefrontsLoading = useAppSelector(selectStorefrontsLoading)
+  const { formatCurrency } = useCurrency()
+
+  const [salesSummary, setSalesSummary] = useState<SalesSummaryMetrics>({ ...DEFAULT_SALES_SUMMARY })
+  const [summaryLoading, setSummaryLoading] = useState(false)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
 
   // Local state for filter inputs
   const [searchTerm, setSearchTerm] = useState(filters.search || '')
@@ -49,6 +98,257 @@ export function SalesHistory() {
   const [customDateTo, setCustomDateTo] = useState<string>(filters.date_to || '')
   const [expandedSale, setExpandedSale] = useState<string | null>(null)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>(filters.payment_type || '')
+  const [selectedDraftIds, setSelectedDraftIds] = useState<Set<string>>(new Set())
+  const [abandoningIds, setAbandoningIds] = useState<Set<string>>(new Set())
+  const [bulkAbandoning, setBulkAbandoning] = useState(false)
+  const [bulkMode, setBulkMode] = useState<'selected' | 'all' | null>(null)
+  const [abandonFeedback, setAbandonFeedback] = useState<{
+    variant: 'success' | 'danger' | 'info'
+    message: string
+  } | null>(null)
+  const selectAllCheckboxRef = useRef<HTMLInputElement | null>(null)
+
+  const showDraftControls = selectedStatus === 'DRAFT'
+
+  const displayedDraftIds = useMemo(() => {
+    if (!showDraftControls) {
+      return [] as string[]
+    }
+    return sales.filter((sale) => sale.status === 'DRAFT').map((sale) => sale.id)
+  }, [sales, showDraftControls])
+
+  const selectedDraftCount = showDraftControls ? selectedDraftIds.size : 0
+  const allDraftsSelected =
+    showDraftControls &&
+    displayedDraftIds.length > 0 &&
+    displayedDraftIds.every((id) => selectedDraftIds.has(id))
+
+  useEffect(() => {
+    if (!showDraftControls) {
+      setSelectedDraftIds(new Set())
+      return
+    }
+
+    setSelectedDraftIds((prev) => {
+      const next = new Set<string>()
+      displayedDraftIds.forEach((id) => {
+        if (prev.has(id)) {
+          next.add(id)
+        }
+      })
+      return next
+    })
+  }, [displayedDraftIds, showDraftControls])
+
+  useEffect(() => {
+    if (!showDraftControls) {
+      if (selectAllCheckboxRef.current) {
+        selectAllCheckboxRef.current.indeterminate = false
+        selectAllCheckboxRef.current.checked = false
+      }
+      return
+    }
+
+    if (selectAllCheckboxRef.current) {
+      selectAllCheckboxRef.current.indeterminate = selectedDraftCount > 0 && !allDraftsSelected
+    }
+  }, [selectedDraftCount, allDraftsSelected, showDraftControls])
+
+  const toggleDraftSelection = useCallback((saleId: string, checked: boolean) => {
+    if (!showDraftControls) {
+      return
+    }
+    setSelectedDraftIds((prev) => {
+      const next = new Set(prev)
+      if (checked) {
+        next.add(saleId)
+      } else {
+        next.delete(saleId)
+      }
+      return next
+    })
+  }, [showDraftControls])
+
+  const toggleAllDrafts = useCallback(() => {
+    if (!showDraftControls) {
+      return
+    }
+    setSelectedDraftIds((prev) => {
+      const next = new Set(prev)
+      if (allDraftsSelected) {
+        displayedDraftIds.forEach((id) => next.delete(id))
+      } else {
+        displayedDraftIds.forEach((id) => next.add(id))
+      }
+      return next
+    })
+  }, [allDraftsSelected, displayedDraftIds, showDraftControls])
+
+  const fetchAllDraftSaleIds = useCallback(async (): Promise<string[]> => {
+    if (!showDraftControls) {
+      return []
+    }
+    const ids: string[] = []
+    const pageSize = 100
+    let page = 1
+    let hasMore = true
+
+    while (hasMore) {
+      const response = await listSales({
+        ...filters,
+        status: 'DRAFT',
+        page,
+        page_size: pageSize,
+      })
+
+      const results = Array.isArray(response.results) ? response.results : []
+      results.forEach((sale) => {
+        if (sale?.status === 'DRAFT' && sale?.id) {
+          ids.push(sale.id)
+        }
+      })
+
+      const total = typeof response.count === 'number' ? response.count : ids.length
+      if (ids.length >= total || results.length < pageSize) {
+        hasMore = false
+      } else {
+        page += 1
+      }
+    }
+
+    return ids
+  }, [filters, showDraftControls])
+
+  const abandonDrafts = useCallback(
+    async (saleIds: string[]) => {
+      if (!showDraftControls) {
+        return { succeeded: 0, failed: 0 }
+      }
+
+      if (saleIds.length === 0) {
+        return { succeeded: 0, failed: 0 }
+      }
+
+      setAbandonFeedback(null)
+
+      setAbandoningIds((prev) => {
+        const next = new Set(prev)
+        saleIds.forEach((id) => next.add(id))
+        return next
+      })
+
+      const failures: Array<{ id: string; message: string }> = []
+      const succeeded: string[] = []
+
+      for (const saleId of saleIds) {
+        try {
+          await dispatch(abandonSale({ saleId: saleId as UUID })).unwrap()
+          succeeded.push(saleId)
+        } catch (err) {
+          const message = typeof err === 'string' && err ? err : ABANDON_ERROR_FALLBACK
+          failures.push({ id: saleId, message })
+        }
+      }
+
+      setAbandoningIds((prev) => {
+        const next = new Set(prev)
+        saleIds.forEach((id) => next.delete(id))
+        return next
+      })
+
+      if (succeeded.length > 0) {
+        setSelectedDraftIds((prev) => {
+          const next = new Set(prev)
+          succeeded.forEach((id) => next.delete(id))
+          return next
+        })
+
+        void dispatch(loadSales())
+      }
+
+      if (failures.length === 0) {
+        setAbandonFeedback({
+          variant: 'success',
+          message:
+            succeeded.length === 1
+              ? 'Draft sale removed and stock released.'
+              : `${succeeded.length} draft sales removed and stock released.`,
+        })
+      } else {
+        const uniqueMessages = Array.from(new Set(failures.map((failure) => failure.message)))
+        setAbandonFeedback({
+          variant: 'danger',
+          message:
+            succeeded.length === 0
+              ? `Couldn't remove draft sales: ${uniqueMessages.join(' ')}`
+              : `${succeeded.length} draft${succeeded.length === 1 ? '' : 's'} removed, ${failures.length} failed: ${uniqueMessages.join(' ')}`,
+        })
+      }
+
+      return { succeeded: succeeded.length, failed: failures.length }
+    },
+    [dispatch, showDraftControls]
+  )
+
+  const handleAbandonSelected = useCallback(async () => {
+    if (!showDraftControls) {
+      return
+    }
+
+    if (selectedDraftIds.size === 0) {
+      setAbandonFeedback({
+        variant: 'info',
+        message: 'Select at least one draft sale to remove.',
+      })
+      return
+    }
+
+    setBulkMode('selected')
+    setBulkAbandoning(true)
+    try {
+      await abandonDrafts(Array.from(selectedDraftIds))
+    } finally {
+      setBulkAbandoning(false)
+      setBulkMode(null)
+    }
+  }, [abandonDrafts, selectedDraftIds, showDraftControls])
+
+  const handleAbandonAllDrafts = useCallback(async () => {
+    if (!showDraftControls) {
+      return
+    }
+
+    const confirmed = window.confirm(
+      'This will discard every draft sale that matches your current filters and release their reserved stock. Continue?'
+    )
+    if (!confirmed) {
+      return
+    }
+
+    setBulkMode('all')
+    setBulkAbandoning(true)
+    try {
+      const allDraftIds = await fetchAllDraftSaleIds()
+      if (allDraftIds.length === 0) {
+        setAbandonFeedback({
+          variant: 'success',
+          message: 'No draft sales found for the current filters.',
+        })
+        return
+      }
+
+      await abandonDrafts(allDraftIds)
+    } catch (err) {
+      console.error('Failed to abandon all draft sales', err)
+      setAbandonFeedback({
+        variant: 'danger',
+        message: 'Failed to load draft sales. Please try again.',
+      })
+    } finally {
+      setBulkAbandoning(false)
+      setBulkMode(null)
+    }
+  }, [abandonDrafts, fetchAllDraftSaleIds, showDraftControls])
 
   // Sync local state with Redux filters when they change externally
   useEffect(() => {
@@ -86,6 +386,153 @@ export function SalesHistory() {
 
   const isLoading = status === 'loading'
   const hasSales = sales.length > 0
+
+  const buildSummaryParams = useCallback(() => {
+    const params: Record<string, string> = {}
+
+    if (filters.search) params.search = filters.search
+    if (filters.status) params.status = filters.status
+    if (filters.storefront) params.storefront = filters.storefront
+    if (filters.date_from) params.date_from = filters.date_from
+    if (filters.date_to) params.date_to = filters.date_to
+    if (filters.payment_type) params.payment_type = filters.payment_type === 'MOMO' ? 'MOBILE' : filters.payment_type
+
+    return params
+  }, [filters])
+
+  const transformSummaryResponse = useCallback((data?: SalesSummaryApiResponse): SalesSummaryMetrics => {
+    if (!data || typeof data !== 'object') {
+      return { ...DEFAULT_SALES_SUMMARY }
+    }
+
+    const summaryBlock = (data.summary ?? {}) as Record<string, unknown>
+
+    const hasOwn = (key: string) => Object.prototype.hasOwnProperty.call(summaryBlock, key)
+
+    const parseNumber = (value: unknown): number => {
+      if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : 0
+      }
+
+      if (typeof value === 'string') {
+        const parsed = Number(value)
+        return Number.isFinite(parsed) ? parsed : 0
+      }
+
+      return 0
+    }
+
+    const pick = (...keys: string[]): number => {
+      for (const key of keys) {
+        if (hasOwn(key)) {
+          return parseNumber(summaryBlock[key])
+        }
+      }
+      return 0
+    }
+
+    const totalSales = pick('total_sales', 'total_sales_volume', 'total_revenue', 'sales')
+    const totalCostOfGoods = pick('total_cost_of_goods', 'cost_of_goods', 'total_cogs', 'cogs')
+    const totalTax = pick('total_tax', 'tax_collected', 'taxes', 'total_taxes')
+    const totalDiscount = pick('total_discounts', 'discount_amount', 'discounts', 'total_discount')
+
+    const profitKeys = ['total_profit', 'net_profit', 'net_sales', 'profit']
+    const hasProfitField = profitKeys.some(key => hasOwn(key))
+    const profitFromSummary = pick(...profitKeys)
+
+    const transactionCount = pick('total_transactions', 'completed_transactions', 'transaction_count')
+
+    const averageFromSummary = pick('avg_transaction', 'average_transaction', 'avg_order_value')
+    const averageOrderValue = averageFromSummary || (transactionCount > 0 ? totalSales / transactionCount : 0)
+
+    const totalExpenses = totalCostOfGoods + totalTax + totalDiscount
+    const totalProfit = hasProfitField ? profitFromSummary : totalSales - totalExpenses
+    const marginKeys = ['profit_margin', 'margin_percentage']
+    const hasMarginField = marginKeys.some(key => hasOwn(key))
+    const marginFromSummary = pick(...marginKeys)
+    const profitMargin = hasMarginField ? marginFromSummary : (totalSales > 0 ? (totalProfit / totalSales) * 100 : 0)
+
+    const paymentTotals: SalesSummaryMetrics['byPaymentMethod'] = {
+      CASH: pick('cash_sales', 'total_cash'),
+      CARD: pick('card_sales', 'total_card'),
+      CREDIT: pick('credit_sales', 'total_credit'),
+      MOBILE: pick('mobile_sales', 'momo_sales', 'total_mobile'),
+      SPLIT: pick('split_sales', 'total_split'),
+    }
+
+    if (Array.isArray(data.payment_breakdown)) {
+      data.payment_breakdown.forEach(item => {
+        const type = typeof item.payment_type === 'string' ? item.payment_type.toUpperCase() : ''
+        const total = parseNumber((item as Record<string, unknown>).total ?? (item as Record<string, unknown>).amount)
+
+        switch (type) {
+          case 'CASH':
+            paymentTotals.CASH += total
+            break
+          case 'CARD':
+            paymentTotals.CARD += total
+            break
+          case 'CREDIT':
+            paymentTotals.CREDIT += total
+            break
+          case 'MOBILE':
+          case 'MOMO':
+            paymentTotals.MOBILE += total
+            break
+          case 'SPLIT':
+            paymentTotals.SPLIT += total
+            break
+          default:
+            break
+        }
+      })
+    }
+
+    return {
+      totalSales,
+      totalCostOfGoods,
+      totalTax,
+      totalDiscount,
+      totalExpenses,
+      totalProfit,
+      profitMargin,
+      averageOrderValue,
+      transactionCount,
+      byPaymentMethod: paymentTotals,
+    }
+  }, [])
+
+  useEffect(() => {
+    let isActive = true
+
+    const loadSummary = async () => {
+      setSummaryLoading(true)
+      setSummaryError(null)
+
+      try {
+        const params = buildSummaryParams()
+        const response = await getSalesSummary(params)
+        if (isActive) {
+          setSalesSummary(transformSummaryResponse(response))
+        }
+      } catch (err) {
+        console.error('Failed to load sales summary', err)
+        if (isActive) {
+          setSummaryError('Unable to load sales summary. Showing latest known values.')
+        }
+      } finally {
+        if (isActive) {
+          setSummaryLoading(false)
+        }
+      }
+    }
+
+    void loadSummary()
+
+    return () => {
+      isActive = false
+    }
+  }, [buildSummaryParams, transformSummaryResponse])
 
   // Toggle sale details expansion
   const toggleSaleDetails = (saleId: string) => {
@@ -222,56 +669,6 @@ export function SalesHistory() {
     dispatch(setSalesPageSize(newSize))
   }
 
-  // Calculate comprehensive sales summary
-  const calculateSalesSummary = () => {
-    const summary = {
-      totalSales: 0,
-      totalRevenue: 0,
-      totalCost: 0,
-      totalProfit: 0,
-      totalTax: 0,
-      totalDiscount: 0,
-      salesCount: sales.length,
-      itemsCount: 0,
-      averageOrderValue: 0,
-      profitMargin: 0,
-      byPaymentMethod: {
-        CASH: 0,
-        CARD: 0,
-        CREDIT: 0,
-        MOBILE: 0,
-        SPLIT: 0,
-      },
-    }
-
-    sales.forEach(sale => {
-      summary.totalRevenue += sale.total_amount
-      summary.totalTax += sale.tax_amount || 0
-      summary.totalDiscount += sale.discount_amount || 0
-      summary.itemsCount += sale.line_items?.length || 0
-
-      // Aggregate by payment method
-      const paymentKey = sale.payment_type === 'MOMO' ? 'MOBILE' : sale.payment_type
-      if (paymentKey && paymentKey in summary.byPaymentMethod) {
-        summary.byPaymentMethod[paymentKey as keyof typeof summary.byPaymentMethod] += sale.total_amount
-      }
-
-      // Calculate cost and profit from line items
-      sale.line_items?.forEach(item => {
-        const itemCost = (item.cost_price || 0) * item.quantity
-        summary.totalCost += itemCost
-      })
-    })
-
-    summary.totalProfit = summary.totalRevenue - summary.totalCost - summary.totalDiscount
-    summary.averageOrderValue = summary.salesCount > 0 ? summary.totalRevenue / summary.salesCount : 0
-    summary.profitMargin = summary.totalRevenue > 0 ? (summary.totalProfit / summary.totalRevenue) * 100 : 0
-
-    return summary
-  }
-
-  const salesSummary = calculateSalesSummary()
-
   const getStatusBadge = (saleStatus: string) => {
     switch (saleStatus) {
       case 'COMPLETED':
@@ -315,13 +712,6 @@ export function SalesHistory() {
       hour: '2-digit',
       minute: '2-digit',
     })
-  }
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount)
   }
 
   const hasActiveFilters = Boolean(
@@ -521,50 +911,79 @@ export function SalesHistory() {
           </Alert>
         )}
 
+        {abandonFeedback && (
+          <Alert
+            variant={abandonFeedback.variant}
+            className="mb-3"
+            dismissible
+            onClose={() => setAbandonFeedback(null)}
+          >
+            {abandonFeedback.message}
+          </Alert>
+        )}
+
         {/* Sales Summary Card - Only show when we have sales */}
         {!isLoading && hasSales && (
           <Card className="mb-3 border-0 shadow-sm">
             <Card.Body className="pb-2">
-              <h6 className="mb-3 text-muted">📊 Sales Summary</h6>
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <h6 className="mb-0 text-muted">📊 Sales Summary</h6>
+                {summaryLoading && (
+                  <div className="d-flex align-items-center gap-2 text-muted small">
+                    <Spinner animation="border" size="sm" role="status" />
+                    <span>Refreshing…</span>
+                  </div>
+                )}
+              </div>
+              {summaryError && (
+                <Alert variant="warning" className="py-2">
+                  <small>{summaryError}</small>
+                </Alert>
+              )}
               <Row className="g-3">
                 <Col md={3}>
                   <div className="text-center">
-                    <div className="text-muted small mb-1">Total Sales Volume</div>
+                    <div className="text-muted small mb-1">Total Revenue</div>
                     <div className="h5 mb-0 text-primary fw-bold">
-                      {formatCurrency(salesSummary.totalRevenue)}
+                      {formatCurrency(salesSummary.totalSales)}
                     </div>
-                    <div className="text-muted small">{salesSummary.salesCount} transactions</div>
+                    <div className="text-muted small">
+                      {salesSummary.transactionCount} transactions
+                    </div>
                   </div>
                 </Col>
                 <Col md={3}>
                   <div className="text-center">
-                    <div className="text-muted small mb-1">Total Profit</div>
+                    <div className="text-muted small mb-1">Total Expenses</div>
+                    <div className="h5 mb-0 text-danger fw-bold">
+                      {formatCurrency(salesSummary.totalExpenses)}
+                    </div>
+                    <div className="text-muted small">
+                      COGS {formatCurrency(salesSummary.totalCostOfGoods)}
+                    </div>
+                    <div className="text-muted small">
+                      Tax {formatCurrency(salesSummary.totalTax)} • Discounts {formatCurrency(salesSummary.totalDiscount)}
+                    </div>
+                  </div>
+                </Col>
+                <Col md={3}>
+                  <div className="text-center">
+                    <div className="text-muted small mb-1">Net Profit</div>
                     <div className="h5 mb-0 text-success fw-bold">
                       {formatCurrency(salesSummary.totalProfit)}
                     </div>
                     <div className="text-muted small">
-                      Margin: {salesSummary.profitMargin.toFixed(1)}%
+                      Avg order {formatCurrency(salesSummary.averageOrderValue)}
                     </div>
                   </div>
                 </Col>
                 <Col md={3}>
                   <div className="text-center">
-                    <div className="text-muted small mb-1">Total Tax</div>
+                    <div className="text-muted small mb-1">Profit Margin</div>
                     <div className="h5 mb-0 text-info fw-bold">
-                      {formatCurrency(salesSummary.totalTax)}
+                      {salesSummary.profitMargin.toFixed(1)}%
                     </div>
-                    <div className="text-muted small">{salesSummary.itemsCount} items</div>
-                  </div>
-                </Col>
-                <Col md={3}>
-                  <div className="text-center">
-                    <div className="text-muted small mb-1">Total Discounts</div>
-                    <div className="h5 mb-0 text-warning fw-bold">
-                      {formatCurrency(salesSummary.totalDiscount)}
-                    </div>
-                    <div className="text-muted small">
-                      Avg: {formatCurrency(salesSummary.averageOrderValue)}
-                    </div>
+                    <div className="text-muted small">Backend financials</div>
                   </div>
                 </Col>
               </Row>
@@ -611,9 +1030,75 @@ export function SalesHistory() {
           </div>
         ) : (
           <div className="table-responsive">
+            {showDraftControls && displayedDraftIds.length > 0 && (
+              <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 mb-3">
+                <div className="text-muted small">
+                  {displayedDraftIds.length} draft {displayedDraftIds.length === 1 ? 'sale' : 'sales'} on this page.
+                  {selectedDraftCount > 0 && ` ${selectedDraftCount} selected.`}
+                </div>
+                <div className="d-flex flex-wrap gap-2">
+                  <Button
+                    variant="outline-secondary"
+                    size="sm"
+                    onClick={toggleAllDrafts}
+                    disabled={bulkAbandoning}
+                  >
+                    {allDraftsSelected ? 'Clear selection' : 'Select all drafts on page'}
+                  </Button>
+                  <Button
+                    variant="outline-danger"
+                    size="sm"
+                    onClick={() => void handleAbandonSelected()}
+                    disabled={selectedDraftCount === 0 || bulkAbandoning}
+                  >
+                    {bulkAbandoning && bulkMode === 'selected' ? (
+                      <span className="d-inline-flex align-items-center gap-2">
+                        <Spinner animation="border" size="sm" role="status" />
+                        <span>Removing…</span>
+                      </span>
+                    ) : (
+                      `Abandon selected (${selectedDraftCount})`
+                    )}
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => void handleAbandonAllDrafts()}
+                    disabled={bulkAbandoning}
+                  >
+                    {bulkAbandoning && bulkMode === 'all' ? (
+                      <span className="d-inline-flex align-items-center gap-2">
+                        <Spinner animation="border" size="sm" role="status" />
+                        <span>Abandoning all…</span>
+                      </span>
+                    ) : (
+                      'Abandon all drafts'
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
             <Table hover size="sm">
               <thead>
                 <tr>
+                  {showDraftControls && (
+                    <th style={{ minWidth: '200px' }}>
+                      <div className="d-flex align-items-center gap-2">
+                        <span>Draft controls</span>
+                        {displayedDraftIds.length > 0 && (
+                          <Form.Check
+                            type="checkbox"
+                            ref={selectAllCheckboxRef}
+                            checked={allDraftsSelected}
+                            onChange={() => toggleAllDrafts()}
+                            onClick={(e) => e.stopPropagation()}
+                            disabled={bulkAbandoning}
+                            aria-label="Select all draft sales on this page"
+                          />
+                        )}
+                      </div>
+                    </th>
+                  )}
                   <th>Receipt #</th>
                   <th>Date</th>
                   <th>Customer</th>
@@ -626,6 +1111,10 @@ export function SalesHistory() {
               <tbody>
                 {sales.map((sale) => {
                   const canExpand = (sale.line_items?.length ?? 0) > 0
+                  const isDraft = sale.status === 'DRAFT'
+                  const isSelectedDraft = selectedDraftIds.has(sale.id)
+                  const isAbandoningDraft = abandoningIds.has(sale.id)
+                  const disableDraftAction = bulkAbandoning || isAbandoningDraft
 
                   return (
                     <Fragment key={sale.id}>
@@ -635,6 +1124,41 @@ export function SalesHistory() {
                       style={{ cursor: canExpand ? 'pointer' : 'default' }}
                       className={expandedSale === sale.id ? 'table-active' : ''}
                     >
+                      {showDraftControls && (
+                        <td onClick={(event) => event.stopPropagation()}>
+                          {isDraft ? (
+                            <div className="d-flex align-items-center gap-2">
+                              <Form.Check
+                                type="checkbox"
+                                checked={isSelectedDraft}
+                                onChange={(e) => toggleDraftSelection(sale.id, e.target.checked)}
+                                disabled={disableDraftAction}
+                                aria-label="Select draft sale"
+                              />
+                              <Button
+                                variant="outline-danger"
+                                size="sm"
+                                disabled={disableDraftAction}
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  void abandonDrafts([sale.id])
+                                }}
+                              >
+                                {isAbandoningDraft ? (
+                                  <span className="d-inline-flex align-items-center gap-2">
+                                    <Spinner animation="border" size="sm" role="status" />
+                                    <span>Removing…</span>
+                                  </span>
+                                ) : (
+                                  'Remove draft'
+                                )}
+                              </Button>
+                            </div>
+                          ) : (
+                            <span className="text-muted small">—</span>
+                          )}
+                        </td>
+                      )}
                       <td>
                         <strong className="text-primary">{sale.receipt_number || 'N/A'}</strong>
                       </td>
@@ -669,7 +1193,7 @@ export function SalesHistory() {
                     {/* Expanded row - shows product details */}
                     {expandedSale === sale.id && canExpand && (
                       <tr className="border-0">
-                        <td colSpan={7} style={{ backgroundColor: '#f8f9fa', padding: '1rem' }}>
+                        <td colSpan={showDraftControls ? 8 : 7} style={{ backgroundColor: '#f8f9fa', padding: '1rem' }}>
                           <div style={{ animation: 'slideDown 0.3s ease-out' }}>
                             <h6 className="mb-3">📦 Products Sold</h6>
                             <Table size="sm" bordered hover>

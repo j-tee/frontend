@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router-dom'
+import { ToastContainer } from 'react-toastify'
 import LandingPage from './pages/LandingPage.tsx'
 import LoginPage from './features/authentication/LoginPage.tsx'
 import RegisterAccountPage from './features/authentication/RegisterAccountPage.tsx'
@@ -24,7 +25,8 @@ import { CAPABILITIES } from './utils/permissions.ts'
 
 const App = () => {
   return (
-    <Routes>
+    <>
+      <Routes>
       <Route index element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterAccountPage />} />
@@ -127,6 +129,8 @@ const App = () => {
       </Route>
       <Route path="*" element={<LandingPage />} />
     </Routes>
+      <ToastContainer position="top-right" autoClose={4000} newestOnTop pauseOnHover closeOnClick theme="light" />
+    </>
   )
 }
 

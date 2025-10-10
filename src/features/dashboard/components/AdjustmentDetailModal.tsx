@@ -19,8 +19,11 @@ interface AdjustmentDetailModalProps {
   error?: string | null
   onApprove?: (id: string) => void
   onReject?: (id: string) => void
+  onEdit?: (adjustment: StockAdjustment) => void
+  onDelete?: (adjustment: StockAdjustment) => void
   isApproving?: boolean
   isRejecting?: boolean
+  isDeleting?: boolean
 }
 
 export default function AdjustmentDetailModal({
@@ -31,8 +34,11 @@ export default function AdjustmentDetailModal({
   error = null,
   onApprove,
   onReject,
+  onEdit,
+  onDelete,
   isApproving = false,
   isRejecting = false,
+  isDeleting = false,
 }: AdjustmentDetailModalProps) {
   if (!show) return null
 
@@ -46,6 +52,9 @@ export default function AdjustmentDetailModal({
 
   const canApprove = adjustment?.status === 'PENDING' && adjustment?.requires_approval
   const canReject = adjustment?.status === 'PENDING'
+  // Edit and Delete available for all statuses
+  const canEdit = !!adjustment
+  const canDelete = !!adjustment
 
   const handleApprove = () => {
     if (adjustment && onApprove) {
@@ -56,6 +65,18 @@ export default function AdjustmentDetailModal({
   const handleReject = () => {
     if (adjustment && onReject) {
       onReject(adjustment.id)
+    }
+  }
+
+  const handleEdit = () => {
+    if (adjustment && onEdit) {
+      onEdit(adjustment)
+    }
+  }
+
+  const handleDelete = () => {
+    if (adjustment && onDelete) {
+      onDelete(adjustment)
     }
   }
 
@@ -325,6 +346,38 @@ export default function AdjustmentDetailModal({
             )}
           </div>
           <div className="d-flex gap-2">
+            {canEdit && onEdit && (
+              <Button
+                variant="outline-primary"
+                onClick={handleEdit}
+                disabled={isApproving || isRejecting || isDeleting}
+              >
+                Edit
+              </Button>
+            )}
+            {canDelete && onDelete && (
+              <Button
+                variant="outline-danger"
+                onClick={handleDelete}
+                disabled={isApproving || isRejecting || isDeleting}
+              >
+                {isDeleting ? (
+                  <>
+                    <Spinner
+                      as="span"
+                      animation="border"
+                      size="sm"
+                      role="status"
+                      aria-hidden="true"
+                      className="me-2"
+                    />
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete'
+                )}
+              </Button>
+            )}
             {canApprove && (
               <Button
                 variant="success"

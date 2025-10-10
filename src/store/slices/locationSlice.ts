@@ -1,5 +1,5 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/toolkit'
-import { isAxiosError } from 'axios'
+import { toUserFacingError } from '../../utils/errorMessage'
 import {
   createStorefront,
   createWarehouse,
@@ -63,23 +63,10 @@ const initialState: LocationState = {
   createWarehouseError: null,
 }
 
-const extractError = (error: unknown): string => {
-  if (isAxiosError(error)) {
-    if (error.response?.data) {
-      if (typeof error.response.data === 'string') {
-        return error.response.data
-      }
-      try {
-        return JSON.stringify(error.response.data)
-      } catch {
-        return error.message
-      }
-    }
-    return error.message
-  }
-  if (error instanceof Error) return error.message
-  return 'Failed to load locations.'
-}
+const extractError = (
+  error: unknown,
+  fallback = "We couldn't load locations right now. Please try again.",
+): string => toUserFacingError(error, { fallback })
 
 interface LoadLocationsArgs {
   storefrontPage?: number

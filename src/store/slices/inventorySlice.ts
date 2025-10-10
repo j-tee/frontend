@@ -1,5 +1,5 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/toolkit'
-import { isAxiosError } from 'axios'
+import { toUserFacingError } from '../../utils/errorMessage'
 import {
   createCategory,
   createProduct,
@@ -29,23 +29,10 @@ import type {
 import type { PaginatedResponse } from '../../types/common.js'
 import type { RootState } from '../index.js'
 
-const extractErrorMessage = (error: unknown): string => {
-  if (isAxiosError(error)) {
-    if (error.response?.data) {
-      if (typeof error.response.data === 'string') {
-        return error.response.data
-      }
-      try {
-        return JSON.stringify(error.response.data)
-      } catch {
-        return error.message
-      }
-    }
-    return error.message
-  }
-  if (error instanceof Error) return error.message
-  return 'Request failed. Please try again.'
-}
+const DEFAULT_ERROR_MESSAGE = "We couldn't complete that request. Please try again."
+
+const extractErrorMessage = (error: unknown, fallback = DEFAULT_ERROR_MESSAGE): string =>
+  toUserFacingError(error, { fallback })
 
 type ProductQueryParams = Record<string, unknown> & {
   page?: number
@@ -179,7 +166,9 @@ export const loadCategories = createAsyncThunk<Category[]>(
     try {
       return await fetchCategories()
     } catch (error) {
-      return thunkAPI.rejectWithValue(extractErrorMessage(error))
+      return thunkAPI.rejectWithValue(
+        extractErrorMessage(error, 'Unable to load categories right now. Please try again in a moment.'),
+      )
     }
   },
 )
@@ -190,7 +179,9 @@ export const loadProducts = createAsyncThunk<PaginatedResponse<Product>, LoadPar
     try {
       return await fetchProducts(params)
     } catch (error) {
-      return thunkAPI.rejectWithValue(extractErrorMessage(error))
+      return thunkAPI.rejectWithValue(
+        extractErrorMessage(error, 'Unable to load products right now. Please try again in a moment.'),
+      )
     }
   },
 )
@@ -201,7 +192,9 @@ export const addCategory = createAsyncThunk<Category, CategoryPayload>(
     try {
       return await createCategory(payload)
     } catch (error) {
-      return thunkAPI.rejectWithValue(extractErrorMessage(error))
+      return thunkAPI.rejectWithValue(
+        extractErrorMessage(error, 'Unable to add this category. Please check the details and try again.'),
+      )
     }
   },
 )
@@ -212,7 +205,9 @@ export const addProduct = createAsyncThunk<Product, ProductPayload>(
     try {
       return await createProduct(payload)
     } catch (error) {
-      return thunkAPI.rejectWithValue(extractErrorMessage(error))
+      return thunkAPI.rejectWithValue(
+        extractErrorMessage(error, 'Unable to create this product. Please review the form and try again.'),
+      )
     }
   },
 )
@@ -223,7 +218,9 @@ export const loadStockProducts = createAsyncThunk<PaginatedResponse<StockProduct
     try {
       return await fetchStockProducts(params)
     } catch (error) {
-      return thunkAPI.rejectWithValue(extractErrorMessage(error))
+      return thunkAPI.rejectWithValue(
+        extractErrorMessage(error, 'Unable to create this stock batch right now. Please try again.'),
+      )
     }
   },
 )
@@ -234,7 +231,9 @@ export const loadStockBatches = createAsyncThunk<PaginatedResponse<StockBatch>, 
     try {
       return await fetchStockBatches(params)
     } catch (error) {
-      return thunkAPI.rejectWithValue(extractErrorMessage(error))
+      return thunkAPI.rejectWithValue(
+        extractErrorMessage(error, 'Unable to add this stock product right now. Please try again.'),
+      )
     }
   },
 )
@@ -245,7 +244,9 @@ export const loadSuppliers = createAsyncThunk<PaginatedResponse<Supplier>, Recor
     try {
       return await fetchSuppliers(params)
     } catch (error) {
-      return thunkAPI.rejectWithValue(extractErrorMessage(error))
+      return thunkAPI.rejectWithValue(
+        extractErrorMessage(error, 'Unable to create this supplier. Please review the details and try again.'),
+      )
     }
   },
 )
@@ -256,7 +257,9 @@ export const addStockBatch = createAsyncThunk<StockBatch, StockBatchPayload>(
     try {
       return await createStockBatch(payload)
     } catch (error) {
-      return thunkAPI.rejectWithValue(extractErrorMessage(error))
+      return thunkAPI.rejectWithValue(
+        extractErrorMessage(error, "We couldn't load stock products right now. Please try again."),
+      )
     }
   },
 )
@@ -267,7 +270,9 @@ export const addStockProduct = createAsyncThunk<StockProduct, StockProductPayloa
     try {
       return await createStockProduct(payload)
     } catch (error) {
-      return thunkAPI.rejectWithValue(extractErrorMessage(error))
+      return thunkAPI.rejectWithValue(
+        extractErrorMessage(error, 'Unable to update this stock product. Please review the details and try again.'),
+      )
     }
   },
 )
@@ -278,7 +283,9 @@ export const editStockProduct = createAsyncThunk<StockProduct, { id: string; pay
     try {
       return await updateStockProductRequest(id, payload)
     } catch (error) {
-      return thunkAPI.rejectWithValue(extractErrorMessage(error))
+      return thunkAPI.rejectWithValue(
+        extractErrorMessage(error, 'Unable to delete this stock product. Please try again.'),
+      )
     }
   },
 )
@@ -290,7 +297,9 @@ export const removeStockProduct = createAsyncThunk<{ id: string }, { id: string 
       await deleteStockProductRequest(id)
       return { id }
     } catch (error) {
-      return thunkAPI.rejectWithValue(extractErrorMessage(error))
+      return thunkAPI.rejectWithValue(
+        extractErrorMessage(error, 'Unable to load stock batches at the moment. Please try again.'),
+      )
     }
   },
 )
@@ -301,7 +310,9 @@ export const addSupplier = createAsyncThunk<Supplier, SupplierPayload>(
     try {
       return await createSupplier(payload)
     } catch (error) {
-      return thunkAPI.rejectWithValue(extractErrorMessage(error))
+      return thunkAPI.rejectWithValue(
+        extractErrorMessage(error, 'Unable to load suppliers right now. Please try again.'),
+      )
     }
   },
 )

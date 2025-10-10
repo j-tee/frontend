@@ -135,9 +135,10 @@ export interface StockProduct {
   supplier?: UUID | null
   supplier_name?: string | null
   quantity: number
-  available_quantity?: number
-  reserved_quantity?: number
-  sold_quantity?: number
+  quantity_stocked?: number | null
+  quantity_available?: number | null
+  quantity_sold?: number | null
+  reserved_quantity?: number | null
   unit_cost: string
   unit_tax_rate?: string | null
   unit_tax_amount?: string | null
@@ -173,6 +174,46 @@ export interface StockProductPayload {
   description?: string | null
 }
 
+export interface WarehouseAvailabilityResponse {
+  warehouse?: UUID | null
+  product?: UUID | null
+  stock_product?: UUID | null
+  available_quantity?: number | string | null
+  requested_quantity?: number | string | null
+  reserved_quantity?: number | string | null
+  unreserved_quantity?: number | string | null
+  total_available?: number | string | null
+  batches?: Array<{
+    id?: UUID
+    quantity?: number | string | null
+    available_quantity?: number | string | null
+    reserved_quantity?: number | string | null
+    retail_price?: number | string | null
+    wholesale_price?: number | string | null
+  }>
+}
+
+export interface StorefrontAvailabilityResponse {
+  storefront?: UUID | null
+  product?: UUID | null
+  total_available?: number | string | null
+  unreserved_quantity?: number | string | null
+  reserved_quantity?: number | string | null
+  batches?: Array<{
+    id?: UUID
+    stock_product?: UUID | null
+    quantity?: number | string | null
+    available_quantity?: number | string | null
+    reserved_quantity?: number | string | null
+  }>
+  reservations?: Array<{
+    sale?: UUID | null
+    sale_reference?: string | null
+    quantity?: number | string | null
+    expires_at?: string | null
+  }>
+}
+
 export interface SaleCatalogItem {
   product_id: UUID
   product_name: string
@@ -202,6 +243,75 @@ export interface InventorySnapshot {
   landed_unit_cost?: number
   stock_arrival_date?: string | null
   stock_supplier?: string | null
+}
+
+export interface StockReconciliationWarehouseEntry {
+  warehouse?: UUID | null
+  warehouse_name?: string | null
+  recorded_quantity?: number | string | null
+  inventory_on_hand?: number | string | null
+}
+
+export interface StockReconciliationStorefrontEntry {
+  storefront?: UUID | null
+  storefront_name?: string | null
+  on_hand?: number | string | null
+  linked_reservations?: number | string | null
+  orphaned_reservations?: number | string | null
+}
+
+export interface StockReconciliationReservationDetail {
+  sale?: UUID | null
+  sale_reference?: string | null
+  cart_session_id?: UUID | null
+  quantity?: number | string | null
+  status?: string | null
+  expires_at?: string | null
+  storefront?: UUID | null
+  storefront_name?: string | null
+}
+
+export interface StockReconciliationFormula {
+  warehouse_inventory_on_hand?: number | string | null
+  warehouse_unreserved_units?: number | string | null
+  storefront_on_hand?: number | string | null
+  storefront_sellable_units?: number | string | null
+  completed_sales_units?: number | string | null
+  shrinkage_units?: number | string | null
+  correction_units?: number | string | null
+  active_reservations_units?: number | string | null
+  calculated_baseline?: number | string | null
+  recorded_batch_quantity?: number | string | null
+  baseline_vs_recorded_delta?: number | string | null
+  net_adjustment_units?: number | string | null
+}
+
+export interface StockReconciliationResponse {
+  product?: UUID | null
+  generated_at?: string | null
+  warehouse?: {
+    recorded_quantity?: number | string | null
+    inventory_on_hand?: number | string | null
+    inventory_breakdown?: StockReconciliationWarehouseEntry[]
+  }
+  storefront?: {
+    total_on_hand?: number | string | null
+    entries?: StockReconciliationStorefrontEntry[]
+  }
+  sales?: {
+    completed_units?: number | string | null
+    completed_value?: number | string | null
+  }
+  adjustments?: {
+    shrinkage_units?: number | string | null
+    correction_units?: number | string | null
+  }
+  reservations?: {
+    linked_units?: number | string | null
+    orphaned_units?: number | string | null
+    details?: StockReconciliationReservationDetail[]
+  }
+  formula?: StockReconciliationFormula
 }
 
 export interface Transfer {

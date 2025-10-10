@@ -1,5 +1,5 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/toolkit'
-import { isAxiosError } from 'axios'
+import { toUserFacingError } from '../../utils/errorMessage'
 import type { RootState } from '../index.js'
 import {
   cancelTransferRequest as cancelTransferRequestApi,
@@ -98,63 +98,10 @@ const initialState: TransferRequestState = {
   mutationErrors: buildInitialMutationErrors(),
 }
 
-const GENERIC_ERROR_MESSAGE = 'We ran into a problem talking to the server. Please try again.'
-
-const sanitizeErrorMessage = (value: string): string => {
-  const trimmed = value.trim()
-  if (!trimmed) return GENERIC_ERROR_MESSAGE
-  if (trimmed.length > 260) {
-    return `${trimmed.slice(0, 257)}…`
-  }
-  return trimmed
-}
-
-const extractFirstMessage = (input: unknown, depth = 0): string | null => {
-  if (depth > 4 || input == null) return null
-  if (typeof input === 'string') return sanitizeErrorMessage(input)
-  if (Array.isArray(input)) {
-    for (const item of input) {
-      const message = extractFirstMessage(item, depth + 1)
-      if (message) return message
-    }
-    return null
-  }
-  if (typeof input === 'object') {
-    const record = input as Record<string, unknown>
-    if (Object.prototype.hasOwnProperty.call(record, 'detail')) {
-      const detailMessage = extractFirstMessage(record.detail, depth + 1)
-      if (detailMessage) return detailMessage
-    }
-    for (const value of Object.values(record)) {
-      const message = extractFirstMessage(value, depth + 1)
-      if (message) return message
-    }
-  }
-  return null
-}
-
-const extractErrorMessage = (error: unknown): string => {
-  if (isAxiosError(error)) {
-    if (error.response?.status === 401) {
-      return 'Your session has expired. Please log in again.'
-    }
-    if (error.response?.status === 403) {
-      return 'You do not have permission to perform this action.'
-    }
-    if (error.response?.data) {
-      const message = extractFirstMessage(error.response.data)
-      if (message) return message
-    }
-    if (error.message) {
-      return sanitizeErrorMessage(error.message)
-    }
-    return GENERIC_ERROR_MESSAGE
-  }
-  if (error instanceof Error) return sanitizeErrorMessage(error.message)
-  if (typeof error === 'string') return sanitizeErrorMessage(error)
-  return GENERIC_ERROR_MESSAGE
-}
-
+const extractErrorMessage = (
+  error: unknown,
+  fallback = "We couldn't complete that request. Please try again.",
+): string => toUserFacingError(error, { fallback })
 const ensureUniqueById = <T extends { id: string }>(items: T[]): T[] => {
   const map = new Map<string, T>()
   for (const item of items) {

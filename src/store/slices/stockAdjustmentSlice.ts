@@ -1,5 +1,5 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/toolkit'
-import { isAxiosError } from 'axios'
+import { toUserFacingError } from '../../utils/errorMessage'
 import {
   fetchStockAdjustments,
   fetchStockAdjustmentDetail,
@@ -52,23 +52,8 @@ import type {
 import type { PaginatedResponse } from '../../types/common.js'
 import type { RootState } from '../index.js'
 
-const extractErrorMessage = (error: unknown): string => {
-  if (isAxiosError(error)) {
-    if (error.response?.data) {
-      if (typeof error.response.data === 'string') {
-        return error.response.data
-      }
-      try {
-        return JSON.stringify(error.response.data)
-      } catch {
-        return error.message
-      }
-    }
-    return error.message
-  }
-  if (error instanceof Error) return error.message
-  return 'Request failed. Please try again.'
-}
+const extractErrorMessage = (error: unknown, fallback = "We couldn't complete that request. Please try again."): string =>
+  toUserFacingError(error, { fallback })
 
 type AsyncStatus = 'idle' | 'loading' | 'succeeded' | 'failed'
 
@@ -1193,6 +1178,14 @@ export const selectCreateAdjustmentStatus = (state: RootState) =>
   state.stockAdjustment.createAdjustmentStatus
 export const selectCreateAdjustmentError = (state: RootState) =>
   state.stockAdjustment.createAdjustmentError
+export const selectUpdateAdjustmentStatus = (state: RootState) =>
+  state.stockAdjustment.updateAdjustmentStatus
+export const selectUpdateAdjustmentError = (state: RootState) =>
+  state.stockAdjustment.updateAdjustmentError
+export const selectDeleteAdjustmentStatus = (state: RootState) =>
+  state.stockAdjustment.deleteAdjustmentStatus
+export const selectDeleteAdjustmentError = (state: RootState) =>
+  state.stockAdjustment.deleteAdjustmentError
 export const selectApproveAdjustmentStatus = (state: RootState) =>
   state.stockAdjustment.approveAdjustmentStatus
 export const selectRejectAdjustmentStatus = (state: RootState) =>

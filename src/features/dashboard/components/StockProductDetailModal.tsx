@@ -1,11 +1,21 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import Alert from 'react-bootstrap/Alert'
 import Badge from 'react-bootstrap/Badge'
 import Button from 'react-bootstrap/Button'
 import Form from 'react-bootstrap/Form'
 import Modal from 'react-bootstrap/Modal'
 import Stack from 'react-bootstrap/Stack'
-import type { StockBatch, StockProduct, StockProductPayload, Supplier, Warehouse } from '../../../types/inventory.js'
+import OverlayTrigger from 'react-bootstrap/OverlayTrigger'
+import Tooltip from 'react-bootstrap/Tooltip'
+import { fetchProductStockReconciliation } from '../../../services/inventoryService'
+import type {
+  StockBatch,
+  StockProduct,
+  StockProductPayload,
+  StockReconciliationResponse,
+  Supplier,
+  Warehouse,
+} from '../../../types/inventory.js'
 
 type FormValues = {
   supplier: string
@@ -46,6 +56,35 @@ const defaultFormValues: FormValues = {
   wholesale_price: '',
   expiry_date: '',
   description: '',
+}
+
+const toNumberOrNull = (value: unknown): number | null => {
+  if (value == null) {
+    return null
+  }
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
+const clampToNonNegative = (value: number | null): number | null => {
+  if (value == null) {
+    return null
+  }
+  return Math.max(0, Math.round(value))
+}
+
+const toRoundedNumberOrNull = (value: unknown): number | null => {
+  const parsed = toNumberOrNull(value)
+  if (parsed == null) {
+    return null
+  }
+  return Math.round(parsed)
 }
 
 const normalizeDateInput = (value?: string | null) => {
@@ -95,6 +134,61 @@ const StockProductDetailModal = ({
   const [formValues, setFormValues] = useState<FormValues>(defaultFormValues)
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [reconciliationSnapshot, setReconciliationSnapshot] = useState<StockReconciliationResponse | null>(null)
+  const [reconciliationLoading, setReconciliationLoading] = useState(false)
+  const [reconciliationError, setReconciliationError] = useState<string | null>(null)
+  const isMountedRef = useRef(true)
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
+
+  const resetReconciliationState = useCallback(() => {
+    if (!isMountedRef.current) {
+      return
+    }
+    setReconciliationSnapshot(null)
+    setReconciliationError(null)
+    setReconciliationLoading(false)
+  }, [])
+
+  const fetchReconciliationSnapshot = useCallback(async () => {
+    const productId = stockProduct?.product
+
+    if (!productId) {
+      resetReconciliationState()
+      return
+    }
+
+    try {
+      setReconciliationLoading(true)
+      setReconciliationError(null)
+
+      const snapshot = await fetchProductStockReconciliation(productId)
+
+      if (isMountedRef.current && stockProduct?.product === productId) {
+        setReconciliationSnapshot(snapshot)
+      }
+    } catch (error) {
+      console.error('[StockProductDetailModal] Failed to fetch stock reconciliation snapshot', {
+        stockProductId: stockProduct?.id,
+        productId: stockProduct?.product,
+        error,
+      })
+
+      if (isMountedRef.current) {
+        setReconciliationSnapshot(null)
+        setReconciliationError('Unable to fetch reconciliation snapshot right now.')
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setReconciliationLoading(false)
+      }
+    }
+  }, [resetReconciliationState, stockProduct?.id, stockProduct?.product])
 
   const stockBatch = useMemo(() => {
     if (!stockProduct) return null
@@ -110,6 +204,152 @@ const StockProductDetailModal = ({
     if (!warehouseId) return null
     return warehouses.find((item) => item.id === warehouseId) ?? null
   }, [stockBatch?.warehouse, stockProduct, warehouses])
+
+  const reconciliationMetrics = useMemo(() => {
+    if (!stockProduct) {
+      return {
+        recordedBatchSize: null as number | null,
+        warehouseOnHand: null as number | null,
+        warehouseUnreserved: null as number | null,
+        storefrontOnHand: null as number | null,
+        storefrontSellable: null as number | null,
+        reservations: null as number | null,
+        reservationsLinked: null as number | null,
+        reservationsOrphaned: null as number | null,
+        sold: null as number | null,
+        shrinkage: null as number | null,
+        corrections: null as number | null,
+        netAdjustments: null as number | null,
+        calculatedBaseline: null as number | null,
+        baselineDelta: null as number | null,
+      }
+    }
+
+    const snapshot = reconciliationSnapshot
+
+    const recordedBatchSize = clampToNonNegative(
+      toNumberOrNull(snapshot?.warehouse?.recorded_quantity) ?? toNumberOrNull(stockProduct.quantity),
+    )
+
+    const warehouseOnHand = clampToNonNegative(
+      toNumberOrNull(snapshot?.formula?.warehouse_inventory_on_hand) ??
+        toNumberOrNull(snapshot?.warehouse?.inventory_on_hand),
+    )
+
+    const warehouseUnreserved = clampToNonNegative(
+      toNumberOrNull(snapshot?.formula?.warehouse_unreserved_units),
+    )
+
+    const storefrontOnHand = clampToNonNegative(
+      toNumberOrNull(snapshot?.formula?.storefront_on_hand) ??
+        toNumberOrNull(snapshot?.storefront?.total_on_hand),
+    )
+
+    const reservationsLinked = clampToNonNegative(toNumberOrNull(snapshot?.reservations?.linked_units))
+    const reservationsOrphaned = clampToNonNegative(toNumberOrNull(snapshot?.reservations?.orphaned_units))
+    const reservationsFromFormula = clampToNonNegative(
+      toNumberOrNull(snapshot?.formula?.active_reservations_units),
+    )
+
+    let reservations = reservationsFromFormula
+    if (reservations == null) {
+      if (reservationsLinked != null || reservationsOrphaned != null) {
+        reservations = clampToNonNegative((reservationsLinked ?? 0) + (reservationsOrphaned ?? 0))
+      } else {
+        reservations = clampToNonNegative(toNumberOrNull(stockProduct.reserved_quantity))
+      }
+    }
+
+    const storefrontSellable = clampToNonNegative(
+      toNumberOrNull(snapshot?.formula?.storefront_sellable_units) ??
+        (storefrontOnHand != null && reservations != null ? storefrontOnHand - reservations : null),
+    )
+
+    const sold = clampToNonNegative(
+      toNumberOrNull(snapshot?.formula?.completed_sales_units) ??
+        toNumberOrNull(snapshot?.sales?.completed_units) ??
+        toNumberOrNull(stockProduct.quantity_sold),
+    )
+
+    const shrinkage = clampToNonNegative(
+      toNumberOrNull(snapshot?.formula?.shrinkage_units) ??
+        toNumberOrNull(snapshot?.adjustments?.shrinkage_units),
+    )
+
+    const corrections = clampToNonNegative(
+      toNumberOrNull(snapshot?.formula?.correction_units) ??
+        toNumberOrNull(snapshot?.adjustments?.correction_units),
+    )
+
+    const netAdjustmentsFormula = toRoundedNumberOrNull(snapshot?.formula?.net_adjustment_units)
+    const netAdjustments =
+      netAdjustmentsFormula ?? (shrinkage == null && corrections == null ? null : (corrections ?? 0) - (shrinkage ?? 0))
+
+    const calculatedBaseline = toRoundedNumberOrNull(snapshot?.formula?.calculated_baseline)
+    const baselineDelta = toRoundedNumberOrNull(snapshot?.formula?.baseline_vs_recorded_delta)
+
+    return {
+      recordedBatchSize,
+      warehouseOnHand,
+      warehouseUnreserved,
+      storefrontOnHand,
+      storefrontSellable,
+      reservations,
+      reservationsLinked,
+      reservationsOrphaned,
+      sold,
+      shrinkage,
+      corrections,
+      netAdjustments,
+      calculatedBaseline,
+      baselineDelta,
+    }
+  }, [reconciliationSnapshot, stockProduct])
+
+  const storefrontBreakdown = useMemo(() => {
+    const entries = reconciliationSnapshot?.storefront?.entries ?? []
+    if (!entries.length) {
+      return [] as Array<{
+        key: string
+        name: string
+        onHand: number | null
+        sellable: number | null
+        reserved: number | null
+        linked: number | null
+        orphaned: number | null
+      }>
+    }
+
+    return entries.map((entry, index) => {
+      const onHand = clampToNonNegative(toNumberOrNull(entry.on_hand))
+      const linked = clampToNonNegative(toNumberOrNull(entry.linked_reservations))
+      const orphaned = clampToNonNegative(toNumberOrNull(entry.orphaned_reservations))
+      const reservedSum =
+        linked == null && orphaned == null ? null : clampToNonNegative((linked ?? 0) + (orphaned ?? 0))
+
+      const sellable =
+        onHand == null
+          ? null
+          : reservedSum == null
+            ? onHand
+            : clampToNonNegative(onHand - (reservedSum ?? 0))
+
+      return {
+        key: entry.storefront ? String(entry.storefront) : `storefront-${index}`,
+        name: entry.storefront_name ?? `Storefront ${index + 1}`,
+        onHand,
+        sellable,
+        reserved: reservedSum,
+        linked,
+        orphaned,
+      }
+    })
+  }, [reconciliationSnapshot])
+
+  const formatQuantity = useCallback((value: number | null) => {
+    if (value == null) return '—'
+    return value.toLocaleString()
+  }, [])
 
   useEffect(() => {
     if (!show) {
@@ -139,6 +379,15 @@ const StockProductDetailModal = ({
     setSuccessMessage(null)
     setIsConfirmingDelete(false)
   }, [stockProduct])
+
+  useEffect(() => {
+    if (!show || !stockProduct) {
+      resetReconciliationState()
+      return
+    }
+
+    void fetchReconciliationSnapshot()
+  }, [fetchReconciliationSnapshot, resetReconciliationState, show, stockProduct])
 
   const handleChange = (field: keyof FormValues) => (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const value = event.target.value
@@ -262,6 +511,28 @@ const StockProductDetailModal = ({
                     <div>Created {formatDateTime(stockProduct.created_at)}</div>
                   </div>
                 </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                  <span>
+                    {reconciliationLoading
+                      ? 'Loading stock reconciliation…'
+                      : reconciliationSnapshot?.generated_at
+                        ? `Reconciled ${formatDateTime(reconciliationSnapshot.generated_at)}`
+                        : 'Reconciliation snapshot not available yet.'}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline-secondary"
+                    onClick={() => {
+                      void fetchReconciliationSnapshot()
+                    }}
+                    disabled={reconciliationLoading}
+                  >
+                    {reconciliationLoading ? 'Refreshing…' : 'Refresh snapshot'}
+                  </Button>
+                </div>
+                {reconciliationError ? (
+                  <div className="mt-1 text-xs text-danger">{reconciliationError}</div>
+                ) : null}
                 <div className="mt-3 grid gap-3 text-sm text-slate-600 sm:grid-cols-2">
                   <div>
                     <span className="font-medium text-slate-700">Warehouse:</span>{' '}
@@ -278,38 +549,157 @@ const StockProductDetailModal = ({
                           : '—'}
                   </div>
                   <div>
-                    <span className="font-medium text-slate-700">Current Quantity:</span>{' '}
-                    <Badge bg="primary" pill>
-                      {stockProduct.quantity.toLocaleString()}
+                    <span className="font-medium text-slate-700">Recorded batch size:</span>{' '}
+                    <Badge bg="dark" pill>
+                      {formatQuantity(reconciliationMetrics.recordedBatchSize)}
                     </Badge>
                   </div>
-                  <div>
-                    <span className="font-medium text-slate-700">Available to Sell:</span>{' '}
-                    <Badge bg="success" pill>
-                      {(stockProduct.available_quantity ?? stockProduct.quantity).toLocaleString()}
-                    </Badge>
-                  </div>
-                  {stockProduct.reserved_quantity !== undefined && stockProduct.reserved_quantity > 0 && (
-                    <div>
-                      <span className="font-medium text-slate-700">Reserved (in carts):</span>{' '}
-                      <Badge bg="warning" pill>
-                        {stockProduct.reserved_quantity.toLocaleString()}
-                      </Badge>
-                    </div>
-                  )}
-                  {stockProduct.sold_quantity !== undefined && stockProduct.sold_quantity > 0 && (
-                    <div>
-                      <span className="font-medium text-slate-700">Total Sold:</span>{' '}
-                      <Badge bg="info" pill>
-                        {stockProduct.sold_quantity.toLocaleString()}
-                      </Badge>
-                    </div>
-                  )}
                   <div>
                     <span className="font-medium text-slate-700">Landed unit cost:</span>{' '}
                     {formatDecimal(stockProduct.landed_unit_cost)}
                   </div>
                 </div>
+                <div className="mt-3 grid gap-3 text-sm text-slate-600 sm:grid-cols-2 lg:grid-cols-4">
+                  <div>
+                    <span className="font-medium text-slate-700">Warehouse on hand:</span>{' '}
+                    <Badge bg="info" pill>
+                      {formatQuantity(reconciliationMetrics.warehouseOnHand)}
+                    </Badge>
+                    {reconciliationMetrics.warehouseUnreserved !== null &&
+                      reconciliationMetrics.warehouseOnHand !== null &&
+                      reconciliationMetrics.warehouseUnreserved !== reconciliationMetrics.warehouseOnHand ? (
+                        <div className="text-muted small mt-1">
+                          Unreserved: {formatQuantity(reconciliationMetrics.warehouseUnreserved)}
+                        </div>
+                      ) : null}
+                  </div>
+                  <div>
+                    <OverlayTrigger
+                      placement="top"
+                      overlay={(
+                        <Tooltip id="storefront-availability-tooltip">
+                          Sum of completed transfers currently on storefront shelves. Sellable excludes active
+                          reservations.
+                        </Tooltip>
+                      )}
+                    >
+                      <span className="font-medium text-slate-700 d-inline-flex align-items-center gap-1">
+                        Storefront on hand
+                      </span>
+                    </OverlayTrigger>
+                    {' '}
+                    <Badge bg="primary" pill>
+                      {formatQuantity(reconciliationMetrics.storefrontOnHand)}
+                    </Badge>
+                    {reconciliationMetrics.storefrontSellable !== null ? (
+                      <div className="text-muted small mt-1">
+                        Sellable now: {formatQuantity(reconciliationMetrics.storefrontSellable)}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div>
+                    <span className="font-medium text-slate-700">Units sold:</span>{' '}
+                    <Badge bg="secondary" pill>
+                      {formatQuantity(reconciliationMetrics.sold)}
+                    </Badge>
+                    {reconciliationMetrics.recordedBatchSize !== null ? (
+                      <div className="text-muted small mt-1">
+                        Recorded batch size: {formatQuantity(reconciliationMetrics.recordedBatchSize)}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div>
+                    <span className="font-medium text-slate-700">Active reservations:</span>{' '}
+                    <Badge bg="warning" text="dark" pill>
+                      {formatQuantity(reconciliationMetrics.reservations)}
+                    </Badge>
+                  </div>
+                  <div>
+                    <span className="font-medium text-slate-700">Shrinkage / write-offs:</span>{' '}
+                    <Badge bg="danger" pill>
+                      {formatQuantity(reconciliationMetrics.shrinkage)}
+                    </Badge>
+                  </div>
+                  <div>
+                    <span className="font-medium text-slate-700">Corrections applied:</span>{' '}
+                    <Badge bg="success" pill>
+                      {formatQuantity(reconciliationMetrics.corrections)}
+                    </Badge>
+                    {reconciliationMetrics.netAdjustments !== null ? (
+                      <div className="text-muted small mt-1">
+                        Net adjustment:{' '}
+                        {reconciliationMetrics.netAdjustments > 0
+                          ? '+'
+                          : reconciliationMetrics.netAdjustments < 0
+                            ? '−'
+                            : ''}
+                        {formatQuantity(Math.abs(reconciliationMetrics.netAdjustments ?? 0))}
+                        {reconciliationMetrics.netAdjustments !== 0 ? (
+                          <>
+                            {' '}
+                            {reconciliationMetrics.netAdjustments > 0 ? '(adds units)' : '(removes units)'}
+                          </>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+                {reconciliationMetrics.calculatedBaseline !== null ? (
+                  <div className="mt-3 rounded-xl bg-slate-100 p-3 text-xs text-slate-600">
+                    Warehouse ({formatQuantity(reconciliationMetrics.warehouseOnHand)}) + Storefront ({formatQuantity(reconciliationMetrics.storefrontOnHand)}) + Sold ({formatQuantity(reconciliationMetrics.sold)}) − Shrinkage ({formatQuantity(reconciliationMetrics.shrinkage)}) + Corrections ({formatQuantity(reconciliationMetrics.corrections)}) − Reservations ({formatQuantity(reconciliationMetrics.reservations)}) = {formatQuantity(reconciliationMetrics.calculatedBaseline)}
+                    {' '}
+                    &mdash; Recorded batch size {formatQuantity(reconciliationMetrics.recordedBatchSize)}
+                  </div>
+                ) : null}
+                {reconciliationMetrics.baselineDelta !== null && reconciliationMetrics.baselineDelta !== 0 ? (
+                  <Alert variant="warning" className="mt-3 mb-0">
+                    <div className="d-flex align-items-start gap-2">
+                      <span className="fw-bold">⚠️</span>
+                      <div className="flex-grow-1">
+                        <div className="fw-semibold mb-1">
+                          Reconciliation mismatch detected: {formatQuantity(Math.abs(reconciliationMetrics.baselineDelta))} units{' '}
+                          {reconciliationMetrics.baselineDelta > 0 ? 'over' : 'under'} accounted
+                        </div>
+                        <div className="small text-muted">
+                          <div>Possible causes:</div>
+                          <ul className="mb-0 ps-3">
+                            <li>Unrecorded transfers or intake</li>
+                            <li>Incorrect shrinkage/adjustment entries</li>
+                            <li>Data entry errors in batch size</li>
+                          </ul>
+                          <div className="mt-1">
+                            Contact inventory team to investigate transaction history for this product.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </Alert>
+                ) : null}
+                {storefrontBreakdown.length > 0 ? (
+                  <div className="mt-3 rounded-xl border border-slate-200 p-3">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Storefront breakdown
+                    </div>
+                    <div className="mt-2 flex flex-col gap-2 text-sm">
+                      {storefrontBreakdown.map((entry) => (
+                        <div key={entry.key} className="d-flex flex-column gap-1">
+                          <div className="d-flex flex-wrap justify-between gap-2">
+                            <span className="font-medium text-slate-700">{entry.name}</span>
+                            <span className="text-slate-600">
+                              On hand: {formatQuantity(entry.onHand)} • Sellable: {formatQuantity(entry.sellable)} • Reserved: {formatQuantity(entry.reserved)}
+                            </span>
+                          </div>
+                          {entry.linked !== null || entry.orphaned !== null ? (
+                            <div className="text-muted small">
+                              Linked: {formatQuantity(entry.linked)} • Orphaned: {formatQuantity(entry.orphaned)}
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
               </div>
 
               <Form.Group controlId="stockProductSupplier">

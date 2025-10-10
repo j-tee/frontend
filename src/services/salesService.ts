@@ -150,6 +150,40 @@ export async function getSalesSummary(params?: Record<string, unknown>): Promise
   return response.data
 }
 
+export interface TodaysSalesStats {
+  date?: string
+  storefront?: string | null
+  statuses?: string[]
+  transactions?: number
+  total_sales?: number
+  avg_transaction?: number | null
+  cash_at_hand?: number | null
+  accounts_receivable?: number | null
+  partial_transactions?: number
+  pending_transactions?: number
+  status_breakdown?: Array<{
+    status: string
+    count: number
+    total: number
+  }>
+  payment_breakdown?: Array<{
+    payment_type: string
+    count: number
+    total: number
+  }>
+  credit_snapshot?: Record<string, unknown>
+  daily_trend?: Array<{
+    date: string
+    sales: number
+    transactions: number
+  }>
+}
+
+export async function getTodaysSalesStats(params?: Record<string, unknown>): Promise<TodaysSalesStats> {
+  const response = await httpClient.get<TodaysSalesStats>('/sales/api/sales/todays-stats/', { params })
+  return response.data
+}
+
 /**
  * Export sales to CSV
  * GET /sales/api/sales/export/
@@ -247,6 +281,7 @@ export async function completeSale(
     }>
     discount_amount?: number
     notes?: string
+    customer?: UUID | null
   }
 ): Promise<Sale> {
   const response = await httpClient.post<Sale>(`/sales/api/sales/${saleId}/complete/`, checkoutData)
@@ -256,8 +291,25 @@ export async function completeSale(
 /**
  * Cancel sale
  */
-export async function cancelSale(saleId: UUID, reason: string): Promise<Sale> {
-  const response = await httpClient.post<Sale>(`/api/sales/${saleId}/cancel/`, { reason })
+export interface AbandonSaleResponse {
+  message: string
+  sale: Sale
+  released: {
+    count: number
+    total_quantity: string
+    reservations: Array<{
+      reservation_id: string
+      stock_product_id: string
+      product_id: string
+      product_name: string
+      quantity: string
+      expires_at: string | null
+    }>
+  }
+}
+
+export async function abandonSale(saleId: UUID): Promise<AbandonSaleResponse> {
+  const response = await httpClient.post<AbandonSaleResponse>(`/sales/api/sales/${saleId}/abandon/`, {})
   return response.data
 }
 

@@ -1,5 +1,5 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/toolkit'
-import { isAxiosError, type AxiosError } from 'axios'
+import { toUserFacingError } from '../../utils/errorMessage'
 import { fetchSubscriptions } from '../../services/subscriptionService.js'
 import type { Subscription } from '../../types/subscriptions.js'
 import type { RootState } from '../index.js'
@@ -20,17 +20,8 @@ const initialState: SubscriptionState = {
   isGateVisible: false,
 }
 
-const extractErrorMessage = (error: unknown) => {
-  if (isAxiosError(error)) {
-    const axiosError = error as AxiosError
-    if (axiosError.response) {
-      return axiosError.response.data ?? axiosError.message
-    }
-    return axiosError.message
-  }
-  if (error instanceof Error) return error.message
-  return String(error)
-}
+const extractErrorMessage = (error: unknown, fallback = 'Unable to load subscription details right now. Please try again.') =>
+  toUserFacingError(error, { fallback })
 
 type RejectValue = string | Record<string, unknown>
 
@@ -44,7 +35,7 @@ export const loadActiveSubscription = createAsyncThunk<
     const [subscription] = response.results
     return subscription ?? null
   } catch (error: unknown) {
-    return thunkAPI.rejectWithValue(extractErrorMessage(error) as RejectValue)
+  return thunkAPI.rejectWithValue(extractErrorMessage(error) as RejectValue)
   }
 })
 
@@ -85,7 +76,7 @@ const subscriptionSlice = createSlice({
         loadActiveSubscription.rejected,
         (state: SubscriptionState, action: PayloadAction<RejectValue | undefined>) => {
           state.status = 'failed'
-          state.error = (action.payload as string) ?? 'Failed to load subscription'
+          state.error = (typeof action.payload === 'string' && action.payload) ?? null
         },
       )
   },

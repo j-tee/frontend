@@ -1,5 +1,5 @@
 import httpClient from './httpClient.js'
-import type { PaginatedResponse } from '../types/common.js'
+import type { PaginatedResponse, UUID } from '../types/common.js'
 import type {
   Category,
   CategoryPayload,
@@ -8,11 +8,13 @@ import type {
   OwnerWorkspaceSnapshot,
   Product,
   ProductPayload,
+  SaleCatalogResponse,
   StockAlert,
   StockBatch,
   StockBatchPayload,
   StockProduct,
   StockProductPayload,
+  StockReconciliationResponse,
   Supplier,
   SupplierPayload,
   Storefront,
@@ -32,13 +34,24 @@ import type {
   TransferUpdatePayload,
   Warehouse,
   WarehousePayload,
+  WarehouseAvailabilityResponse,
+  StorefrontAvailabilityResponse,
 } from '../types/inventory.js'
+import type { StockAdjustment } from '../types/stockAdjustments.js'
 
 export const fetchCategories = async () => {
   const { data } = await httpClient.get<PaginatedResponse<Category> | Category[]>(
     '/inventory/api/categories/',
+
   )
   return extractResults(data)
+}
+
+export const fetchSaleCatalog = async (storefrontId: UUID) => {
+  const { data } = await httpClient.get<SaleCatalogResponse>(
+    `/inventory/api/storefronts/${storefrontId}/sale-catalog/`,
+  )
+  return data
 }
 
 export const createCategory = async (payload: CategoryPayload) => {
@@ -193,6 +206,14 @@ export const deleteStockBatch = async (stockBatchId: string) => {
 export const fetchStockProducts = async (params?: Record<string, unknown>) => {
   const { data } = await httpClient.get<PaginatedResponse<StockProduct>>(
     '/inventory/api/stock-products/',
+    { params },
+  )
+  return data
+}
+
+export const searchStockProducts = async (params?: Record<string, unknown>) => {
+  const { data } = await httpClient.get<PaginatedResponse<StockProduct>>(
+    '/inventory/api/stock-products/search/',
     { params },
   )
   return data
@@ -425,6 +446,49 @@ export const confirmTransferReceipt = async (id: string, payload?: TransferConfi
 export const fetchEmployeeWorkspace = async () => {
   const { data } = await httpClient.get<EmployeeWorkspaceResponse>(
     '/inventory/api/employee/workspace/',
+  )
+  return data
+}
+
+export const fetchWarehouseAvailability = async (warehouseId: string, productId: string) => {
+  const { data } = await httpClient.get<WarehouseAvailabilityResponse>(
+    '/inventory/api/stock/availability/',
+    {
+      params: {
+        warehouse: warehouseId,
+        product: productId,
+      },
+    },
+  )
+
+  return data
+}
+
+export const fetchStorefrontAvailability = async (storefrontId: string, productId: string) => {
+  const { data } = await httpClient.get<StorefrontAvailabilityResponse>(
+    `/inventory/api/storefronts/${storefrontId}/stock-products/${productId}/availability/`,
+  )
+  return data
+}
+
+export const fetchProductStockReconciliation = async (productId: string) => {
+  const { data } = await httpClient.get<StockReconciliationResponse>(
+    `/inventory/api/products/${productId}/stock-reconciliation/`,
+  )
+  return data
+}
+
+export const fetchStockAdjustments = async (params: {
+  stock_product: string
+  status?: string
+  page?: number
+  page_size?: number
+}) => {
+  const { data } = await httpClient.get<PaginatedResponse<StockAdjustment>>(
+    '/inventory/api/stock-adjustments/',
+    {
+      params,
+    },
   )
   return data
 }

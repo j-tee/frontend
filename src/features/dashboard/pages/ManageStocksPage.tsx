@@ -1,8 +1,9 @@
-import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useState, useCallback, Fragment, type ChangeEvent, type FormEvent } from 'react'
 import Alert from 'react-bootstrap/Alert'
 import Badge from 'react-bootstrap/Badge'
 import Button from 'react-bootstrap/Button'
 import Form from 'react-bootstrap/Form'
+import Modal from 'react-bootstrap/Modal'
 import Nav from 'react-bootstrap/Nav'
 import Spinner from 'react-bootstrap/Spinner'
 import Table from 'react-bootstrap/Table'
@@ -15,6 +16,8 @@ import StockRequestDetailModal from '../components/stock-requests/StockRequestDe
 import EditFulfilledRequestModal from '../components/stock-requests/EditFulfilledRequestModal'
 import CreateAdjustmentModal from '../components/CreateAdjustmentModal'
 import AdjustmentDetailModal from '../components/AdjustmentDetailModal'
+import EditAdjustmentModal from '../components/EditAdjustmentModal'
+import type { StockAdjustmentEditPayload } from '../components/EditAdjustmentModal'
 import { fetchProducts, fetchStorefronts } from '../../../services/inventoryService.js'
 import {
   addStockBatch,
@@ -96,7 +99,13 @@ import {
   rejectAdjustment,
   selectApproveAdjustmentStatus,
   selectRejectAdjustmentStatus,
-} from '../../../store/slices/stockAdjustmentSlice.js'
+  editStockAdjustment,
+  selectUpdateAdjustmentStatus,
+  selectUpdateAdjustmentError,
+  removeStockAdjustment,
+  selectDeleteAdjustmentStatus,
+  selectDeleteAdjustmentError,
+} from '../../../store/slices/stockAdjustmentSlice'
 import { getAdjustmentIcon, getAdjustmentColor, formatAdjustmentType } from '../../../utils/stockAdjustmentHelpers.js'
 import type { Product, StockProduct, StockProductPayload, Storefront, SupplierPayload, TransferRequest, TransferRequestCreatePayload } from '../../../types/inventory.js'
 import type { StockAdjustmentCreatePayload, StockAdjustment } from '../../../types/stockAdjustments.js'
@@ -192,6 +201,10 @@ const ManageStocksPage = () => {
   const createAdjustmentError = useAppSelector(selectCreateAdjustmentError)
   const approveAdjustmentStatus = useAppSelector(selectApproveAdjustmentStatus)
   const rejectAdjustmentStatus = useAppSelector(selectRejectAdjustmentStatus)
+  const updateAdjustmentStatus = useAppSelector(selectUpdateAdjustmentStatus)
+  const updateAdjustmentError = useAppSelector(selectUpdateAdjustmentError)
+  const deleteAdjustmentStatus = useAppSelector(selectDeleteAdjustmentStatus)
+  const deleteAdjustmentError = useAppSelector(selectDeleteAdjustmentError)
 
   // Local state
   const [activeTab, setActiveTab] = useState('stock-products')
@@ -215,6 +228,24 @@ const ManageStocksPage = () => {
   const [showCreateAdjustmentModal, setShowCreateAdjustmentModal] = useState(false)
   const [showAdjustmentDetailModal, setShowAdjustmentDetailModal] = useState(false)
   const [selectedAdjustment, setSelectedAdjustment] = useState<StockAdjustment | null>(null)
+  const [showEditAdjustmentModal, setShowEditAdjustmentModal] = useState(false)
+  const [editingAdjustment, setEditingAdjustment] = useState<StockAdjustment | null>(null)
+  const [adjustmentToDelete, setAdjustmentToDelete] = useState<StockAdjustment | null>(null)
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
+  
+  // Adjustments filters
+  const [adjustmentSearchTerm, setAdjustmentSearchTerm] = useState('')
+  const [adjustmentStatusFilter, setAdjustmentStatusFilter] = useState<string>('')
+  const [adjustmentTypeFilter, setAdjustmentTypeFilter] = useState<string>('')
+
+  // Adjustment filter helper - defined early so it can be used in useEffects and handlers
+  const buildAdjustmentParams = useCallback((page: number = adjustmentsPage, additionalParams: Record<string, unknown> = {}) => {
+    const params: Record<string, unknown> = { page, ...additionalParams }
+    if (adjustmentSearchTerm) params.search = adjustmentSearchTerm
+    if (adjustmentStatusFilter) params.status = adjustmentStatusFilter
+    if (adjustmentTypeFilter) params.adjustment_type = adjustmentTypeFilter
+    return params
+  }, [adjustmentsPage, adjustmentSearchTerm, adjustmentStatusFilter, adjustmentTypeFilter])
 
   useEffect(() => {
     if (stockProductsStatus === 'idle') {
@@ -329,11 +360,11 @@ const ManageStocksPage = () => {
   // Load stock adjustments when on that tab
   useEffect(() => {
     if (activeTab === 'stock-adjustments') {
-      // Always reload when switching to this tab to ensure fresh data
-      void dispatch(loadStockAdjustments({ page: adjustmentsPage }))
-      console.log('📊 Loading stock adjustments, page:', adjustmentsPage)
+      const params = buildAdjustmentParams()
+      void dispatch(loadStockAdjustments(params))
+      console.log('📊 Loading stock adjustments with filters:', params)
     }
-  }, [activeTab, dispatch, adjustmentsPage])
+  }, [activeTab, dispatch, buildAdjustmentParams])
 
   const isLoading = stockProductsStatus === 'loading'
   const totalItems = stockProductsPagination.count ?? 0
@@ -632,7 +663,7 @@ const ManageStocksPage = () => {
     await dispatch(addStockAdjustment(payload)).unwrap()
     // Reset to page 1 and reload adjustments list
     dispatch(setAdjustmentsPage(1))
-    void dispatch(loadStockAdjustments({ page: 1 }))
+    void dispatch(loadStockAdjustments(buildAdjustmentParams(1)))
     console.log('✅ Created adjustment, reloading list from page 1')
   }
 
@@ -644,7 +675,7 @@ const ManageStocksPage = () => {
   const handleApproveAdjustment = async (id: string) => {
     await dispatch(approveAdjustment(id)).unwrap()
     // Reload adjustments list
-    void dispatch(loadStockAdjustments({ page: adjustmentsPage }))
+    void dispatch(loadStockAdjustments(buildAdjustmentParams()))
     setShowAdjustmentDetailModal(false)
     setSelectedAdjustment(null)
     console.log('✅ Approved adjustment, reloading list')
@@ -653,10 +684,75 @@ const ManageStocksPage = () => {
   const handleRejectAdjustment = async (id: string) => {
     await dispatch(rejectAdjustment(id)).unwrap()
     // Reload adjustments list
-    void dispatch(loadStockAdjustments({ page: adjustmentsPage }))
+    void dispatch(loadStockAdjustments(buildAdjustmentParams()))
     setShowAdjustmentDetailModal(false)
     setSelectedAdjustment(null)
     console.log('❌ Rejected adjustment, reloading list')
+  }
+
+  const handleEditAdjustment = (adjustment: StockAdjustment) => {
+    setEditingAdjustment(adjustment)
+    setShowEditAdjustmentModal(true)
+    setShowAdjustmentDetailModal(false)
+  }
+
+  const handleEditAdjustmentSubmit = async (id: string, payload: StockAdjustmentEditPayload) => {
+    await dispatch(editStockAdjustment({ id, payload })).unwrap()
+    // Reload adjustments list and close modals
+    void dispatch(loadStockAdjustments(buildAdjustmentParams()))
+    setShowEditAdjustmentModal(false)
+    setEditingAdjustment(null)
+    console.log('✏️ Edited adjustment, reloading list')
+  }
+
+  const handleDeleteAdjustment = (adjustment: StockAdjustment) => {
+    setAdjustmentToDelete(adjustment)
+    setShowDeleteConfirmation(true)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!adjustmentToDelete) return
+    
+    try {
+      await dispatch(removeStockAdjustment({ id: adjustmentToDelete.id })).unwrap()
+      // Reload adjustments list and close modals
+      void dispatch(loadStockAdjustments(buildAdjustmentParams()))
+      setShowDeleteConfirmation(false)
+      setAdjustmentToDelete(null)
+      setShowAdjustmentDetailModal(false)
+      console.log('🗑️ Deleted adjustment, reloading list')
+    } catch (error) {
+      console.error('Failed to delete adjustment:', error)
+      // Keep the confirmation modal open to show error
+    }
+  }
+
+  const handleCancelDelete = () => {
+    setShowDeleteConfirmation(false)
+    setAdjustmentToDelete(null)
+  }
+
+  // Adjustment filter handlers
+  const handleAdjustmentSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setAdjustmentSearchTerm(e.target.value)
+    dispatch(setAdjustmentsPage(1)) // Reset to first page on search
+  }
+
+  const handleAdjustmentStatusFilter = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setAdjustmentStatusFilter(e.target.value)
+    dispatch(setAdjustmentsPage(1)) // Reset to first page on filter change
+  }
+
+  const handleAdjustmentTypeFilter = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setAdjustmentTypeFilter(e.target.value)
+    dispatch(setAdjustmentsPage(1)) // Reset to first page on filter change
+  }
+
+  const handleClearAdjustmentFilters = () => {
+    setAdjustmentSearchTerm('')
+    setAdjustmentStatusFilter('')
+    setAdjustmentTypeFilter('')
+    dispatch(setAdjustmentsPage(1))
   }
 
   return (
@@ -1029,7 +1125,7 @@ const ManageStocksPage = () => {
                   className="rounded-pill px-4"
                   onClick={() => {
                     // Filter to show only pending adjustments
-                    void dispatch(loadStockAdjustments({ page: 1, status: 'PENDING' }))
+                    setAdjustmentStatusFilter('PENDING')
                     dispatch(setAdjustmentsPage(1))
                   }}
                 >
@@ -1044,6 +1140,122 @@ const ManageStocksPage = () => {
                 </Button>
               </div>
             </div>
+          </section>
+
+          {/* Search and Filters */}
+          <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="row g-3">
+              <div className="col-md-4">
+                <Form.Group>
+                  <Form.Label className="text-sm font-medium text-slate-700">
+                    Search
+                  </Form.Label>
+                  <Form.Control
+                    type="text"
+                    placeholder="Search by product, reason, or creator..."
+                    value={adjustmentSearchTerm}
+                    onChange={handleAdjustmentSearch}
+                  />
+                </Form.Group>
+              </div>
+              <div className="col-md-3">
+                <Form.Group>
+                  <Form.Label className="text-sm font-medium text-slate-700">
+                    Status
+                  </Form.Label>
+                  <Form.Select
+                    value={adjustmentStatusFilter}
+                    onChange={handleAdjustmentStatusFilter}
+                  >
+                    <option value="">All Statuses</option>
+                    <option value="PENDING">Pending</option>
+                    <option value="APPROVED">Approved</option>
+                    <option value="REJECTED">Rejected</option>
+                    <option value="COMPLETED">Completed</option>
+                  </Form.Select>
+                </Form.Group>
+              </div>
+              <div className="col-md-3">
+                <Form.Group>
+                  <Form.Label className="text-sm font-medium text-slate-700">
+                    Adjustment Type
+                  </Form.Label>
+                  <Form.Select
+                    value={adjustmentTypeFilter}
+                    onChange={handleAdjustmentTypeFilter}
+                  >
+                    <option value="">All Types</option>
+                    <option value="shrinkage">Shrinkage</option>
+                    <option value="damaged">Damaged</option>
+                    <option value="returned">Returned</option>
+                    <option value="miscellaneous">Miscellaneous</option>
+                  </Form.Select>
+                </Form.Group>
+              </div>
+              <div className="col-md-2">
+                <Form.Group>
+                  <Form.Label className="text-sm font-medium text-slate-700">
+                    &nbsp;
+                  </Form.Label>
+                  <Button
+                    variant="outline-secondary"
+                    className="w-100"
+                    onClick={handleClearAdjustmentFilters}
+                    disabled={!adjustmentSearchTerm && !adjustmentStatusFilter && !adjustmentTypeFilter}
+                  >
+                    Clear Filters
+                  </Button>
+                </Form.Group>
+              </div>
+            </div>
+            
+            {(adjustmentSearchTerm || adjustmentStatusFilter || adjustmentTypeFilter) && (
+              <div className="d-flex gap-2 flex-wrap">
+                <small className="text-slate-600">Active filters:</small>
+                {adjustmentSearchTerm && (
+                  <Badge bg="secondary" className="d-flex align-items-center gap-1">
+                    Search: {adjustmentSearchTerm}
+                    <button
+                      className="btn-close btn-close-white"
+                      style={{ fontSize: '0.6rem', padding: '0.25rem' }}
+                      onClick={() => {
+                        setAdjustmentSearchTerm('')
+                        dispatch(setAdjustmentsPage(1))
+                      }}
+                      aria-label="Clear search"
+                    />
+                  </Badge>
+                )}
+                {adjustmentStatusFilter && (
+                  <Badge bg="secondary" className="d-flex align-items-center gap-1">
+                    Status: {adjustmentStatusFilter}
+                    <button
+                      className="btn-close btn-close-white"
+                      style={{ fontSize: '0.6rem', padding: '0.25rem' }}
+                      onClick={() => {
+                        setAdjustmentStatusFilter('')
+                        dispatch(setAdjustmentsPage(1))
+                      }}
+                      aria-label="Clear status filter"
+                    />
+                  </Badge>
+                )}
+                {adjustmentTypeFilter && (
+                  <Badge bg="secondary" className="d-flex align-items-center gap-1">
+                    Type: {formatAdjustmentType(adjustmentTypeFilter)}
+                    <button
+                      className="btn-close btn-close-white"
+                      style={{ fontSize: '0.6rem', padding: '0.25rem' }}
+                      onClick={() => {
+                        setAdjustmentTypeFilter('')
+                        dispatch(setAdjustmentsPage(1))
+                      }}
+                      aria-label="Clear type filter"
+                    />
+                  </Badge>
+                )}
+              </div>
+            )}
           </section>
 
           {/* Adjustments Table */}
@@ -1130,8 +1342,24 @@ const ManageStocksPage = () => {
                                 >
                                   View
                                 </Button>
+                                <Button
+                                  variant="outline-primary"
+                                  size="sm"
+                                  onClick={() => handleEditAdjustment(adjustment)}
+                                  disabled={updateAdjustmentStatus === 'loading'}
+                                >
+                                  Edit
+                                </Button>
+                                <Button
+                                  variant="outline-danger"
+                                  size="sm"
+                                  onClick={() => handleDeleteAdjustment(adjustment)}
+                                  disabled={deleteAdjustmentStatus === 'loading'}
+                                >
+                                  Delete
+                                </Button>
                                 {adjustment.status === 'PENDING' && adjustment.requires_approval && (
-                                  <>
+                                  <Fragment key={`actions-${adjustment.id}`}>
                                     <Button
                                       variant="success"
                                       size="sm"
@@ -1148,7 +1376,7 @@ const ManageStocksPage = () => {
                                     >
                                       Reject
                                     </Button>
-                                  </>
+                                  </Fragment>
                                 )}
                               </div>
                             </td>
@@ -1173,7 +1401,7 @@ const ManageStocksPage = () => {
                             onClick={() => {
                               if (adjustmentsPage > 1) {
                                 dispatch(setAdjustmentsPage(adjustmentsPage - 1))
-                                void dispatch(loadStockAdjustments({ page: adjustmentsPage - 1 }))
+                                void dispatch(loadStockAdjustments(buildAdjustmentParams(adjustmentsPage - 1)))
                               }
                             }}
                           >
@@ -1188,7 +1416,7 @@ const ManageStocksPage = () => {
                             disabled={!adjustmentsPagination.next}
                             onClick={() => {
                               dispatch(setAdjustmentsPage(adjustmentsPage + 1))
-                              void dispatch(loadStockAdjustments({ page: adjustmentsPage + 1 }))
+                              void dispatch(loadStockAdjustments(buildAdjustmentParams(adjustmentsPage + 1)))
                             }}
                           >
                             Next
@@ -1273,7 +1501,6 @@ const ManageStocksPage = () => {
       <CreateAdjustmentModal
         show={showCreateAdjustmentModal}
         onClose={() => setShowCreateAdjustmentModal(false)}
-        stockProducts={stockProducts}
         onSubmit={handleCreateAdjustment}
         isSubmitting={createAdjustmentStatus === 'loading'}
         error={createAdjustmentError}
@@ -1288,9 +1515,95 @@ const ManageStocksPage = () => {
         adjustment={selectedAdjustment}
         onApprove={handleApproveAdjustment}
         onReject={handleRejectAdjustment}
+        onEdit={handleEditAdjustment}
+        onDelete={handleDeleteAdjustment}
         isApproving={approveAdjustmentStatus === 'loading'}
         isRejecting={rejectAdjustmentStatus === 'loading'}
+        isDeleting={deleteAdjustmentStatus === 'loading'}
       />
+
+      <EditAdjustmentModal
+        show={showEditAdjustmentModal}
+        onClose={() => {
+          setShowEditAdjustmentModal(false)
+          setEditingAdjustment(null)
+        }}
+        adjustment={editingAdjustment}
+        onSubmit={handleEditAdjustmentSubmit}
+        isSubmitting={updateAdjustmentStatus === 'loading'}
+        error={updateAdjustmentError}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <Modal show={showDeleteConfirmation} onHide={handleCancelDelete}>
+        <Modal.Header closeButton>
+          <Modal.Title>Confirm Delete</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {deleteAdjustmentError && (
+            <Alert variant="danger" className="mb-3">
+              <Alert.Heading>Error</Alert.Heading>
+              <p className="mb-0">{deleteAdjustmentError}</p>
+            </Alert>
+          )}
+          <Alert variant="danger">
+            <Alert.Heading>⚠️ Warning: Permanent Action</Alert.Heading>
+            <p>
+              Are you sure you want to delete this stock adjustment?
+            </p>
+            {adjustmentToDelete && (
+              <div className="mt-3">
+                <strong>Details:</strong>
+                <ul className="mb-0 mt-2">
+                  <li><strong>Product:</strong> {adjustmentToDelete.stock_product_details?.product_name}</li>
+                  <li><strong>Type:</strong> {formatAdjustmentType(adjustmentToDelete.adjustment_type)}</li>
+                  <li><strong>Quantity:</strong> {adjustmentToDelete.is_increase ? '+' : '-'}{adjustmentToDelete.quantity}</li>
+                  <li><strong>Status:</strong> <Badge bg={
+                    adjustmentToDelete.status === 'COMPLETED' ? 'success' :
+                    adjustmentToDelete.status === 'APPROVED' ? 'info' :
+                    adjustmentToDelete.status === 'REJECTED' ? 'danger' :
+                    'warning'
+                  }>{adjustmentToDelete.status}</Badge></li>
+                </ul>
+              </div>
+            )}
+            <p className="mt-3 mb-0">
+              <strong>This action cannot be undone!</strong>
+              {adjustmentToDelete?.status === 'COMPLETED' && (
+                <span className="text-danger d-block mt-2">
+                  ⚠️ This adjustment is COMPLETED. Deleting it may cause inventory discrepancies!
+                </span>
+              )}
+            </p>
+          </Alert>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={handleCancelDelete}>
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            onClick={handleConfirmDelete}
+            disabled={deleteAdjustmentStatus === 'loading'}
+          >
+            {deleteAdjustmentStatus === 'loading' ? (
+              <>
+                <Spinner
+                  as="span"
+                  animation="border"
+                  size="sm"
+                  role="status"
+                  aria-hidden="true"
+                  className="me-2"
+                />
+                Deleting...
+              </>
+            ) : (
+              'Yes, Delete Adjustment'
+            )}
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   )
 }

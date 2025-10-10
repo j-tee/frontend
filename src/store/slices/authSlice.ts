@@ -1,5 +1,6 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/toolkit'
 import { isAxiosError, type AxiosError } from 'axios'
+import { toUserFacingError } from '../../utils/errorMessage'
 import {
   changePassword as changePasswordRequest,
   fetchCurrentUser as fetchCurrentUserRequest,
@@ -193,39 +194,8 @@ const extractErrorPayload = (error: unknown) => {
 
 type RejectValue = unknown
 
-const normalizeErrorMessage = (payload: unknown): string => {
-  if (typeof payload === 'string') {
-    const trimmed = payload.trim()
-    if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html')) {
-      return 'Received an unexpected response from the server. Please confirm the backend is running.'
-    }
-    return trimmed || 'An unexpected error occurred. Please try again.'
-  }
-  if (payload && typeof payload === 'object') {
-    const messageParts: string[] = []
-    const entries = Object.entries(payload as Record<string, unknown>)
-    entries.forEach(([key, value]) => {
-      if (value == null) {
-        messageParts.push(key)
-        return
-      }
-      if (Array.isArray(value)) {
-        messageParts.push(`${key}: ${value.join(', ')}`)
-        return
-      }
-      if (typeof value === 'object') {
-        messageParts.push(`${key}: ${JSON.stringify(value)}`)
-        return
-      }
-      messageParts.push(`${key}: ${String(value)}`)
-    })
-
-    if (messageParts.length > 0) {
-      return messageParts.join('\n')
-    }
-  }
-  return 'An unexpected error occurred. Please try again.'
-}
+const normalizeErrorMessage = (payload: unknown): string =>
+  toUserFacingError(payload, { fallback: 'An unexpected error occurred. Please try again.' })
 
 export const registerAccount = createAsyncThunk<
   RegisterAccountResponse,

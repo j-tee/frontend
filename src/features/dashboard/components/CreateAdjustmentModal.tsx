@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState, useEffect, useCallback, type FormEvent } from 'react'
 import Alert from 'react-bootstrap/Alert'
 import Button from 'react-bootstrap/Button'
 import Form from 'react-bootstrap/Form'
@@ -7,6 +7,7 @@ import Spinner from 'react-bootstrap/Spinner'
 import Badge from 'react-bootstrap/Badge'
 import type { StockProduct } from '../../../types/inventory.js'
 import type { AdjustmentType, StockAdjustmentCreatePayload } from '../../../types/stockAdjustments.js'
+import { searchStockProducts } from '../../../services/inventoryService.js'
 import { 
   getAdjustmentIcon, 
   getAdjustmentColor, 
@@ -15,10 +16,22 @@ import {
   isIncreaseType,
 } from '../../../utils/stockAdjustmentHelpers.js'
 
+// Debounce utility
+function debounce<T extends (...args: never[]) => unknown>(func: T, wait: number) {
+  let timeout: ReturnType<typeof setTimeout> | null = null
+  return function executedFunction(...args: Parameters<T>) {
+    const later = () => {
+      timeout = null
+      func(...args)
+    }
+    if (timeout) clearTimeout(timeout)
+    timeout = setTimeout(later, wait)
+  }
+}
+
 interface CreateAdjustmentModalProps {
   show: boolean
   onClose: () => void
-  stockProducts: StockProduct[]
   onSubmit: (payload: StockAdjustmentCreatePayload) => Promise<void>
   isSubmitting: boolean
   error: string | null
@@ -45,21 +58,55 @@ const initialFormState: AdjustmentFormState = {
 export default function CreateAdjustmentModal({
   show,
   onClose,
-  stockProducts,
   onSubmit,
   isSubmitting,
   error,
 }: CreateAdjustmentModalProps) {
   const [formData, setFormData] = useState<AdjustmentFormState>(initialFormState)
   const [validated, setValidated] = useState(false)
+  const [productSearchTerm, setProductSearchTerm] = useState('')
+  const [searchResults, setSearchResults] = useState<StockProduct[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
 
   const adjustmentTypeGroups = getAdjustmentTypeGroups()
 
-  const selectedStockProduct = stockProducts.find(sp => sp.id === formData.stock_product)
+  // Debounced search handler
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const handleSearchProducts = useCallback(
+    debounce(async (searchTerm: string) => {
+      try {
+        setIsSearching(true)
+        setSearchError(null)
+        const response = await searchStockProducts({ 
+          q: searchTerm.trim() || undefined, 
+          limit: 50 
+        })
+        setSearchResults(response.results || [])
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to search products'
+        setSearchError(errorMessage)
+        console.error('Failed to search products:', err)
+      } finally {
+        setIsSearching(false)
+      }
+    }, 300),
+    []
+  )
+
+  // Load initial products when modal opens
+  useEffect(() => {
+    if (show) {
+      handleSearchProducts('')
+    }
+  }, [show, handleSearchProducts])
+
+  const selectedStockProduct = searchResults.find(sp => sp.id === formData.stock_product)
 
   const handleClose = () => {
     setFormData(initialFormState)
     setValidated(false)
+    setProductSearchTerm('')
     onClose()
   }
 
@@ -151,27 +198,74 @@ export default function CreateAdjustmentModal({
           {/* Stock Product Selection */}
           <Form.Group className="mb-3" controlId="stockProduct">
             <Form.Label>Stock Product *</Form.Label>
+            
+            {/* Search Input */}
+            <Form.Control
+              type="text"
+              placeholder="🔍 Search products by name, SKU, or warehouse..."
+              value={productSearchTerm}
+              onChange={(e) => {
+                setProductSearchTerm(e.target.value)
+                handleSearchProducts(e.target.value)
+              }}
+              disabled={isSubmitting}
+              className="mb-2"
+            />
+            
+            {/* Loading Indicator */}
+            {isSearching && (
+              <div className="text-muted small mb-2">
+                <Spinner animation="border" size="sm" className="me-2" />
+                Searching...
+              </div>
+            )}
+            
+            {/* Error Message */}
+            {searchError && (
+              <Alert variant="warning" className="mb-2 py-2">
+                {searchError}
+              </Alert>
+            )}
+            
+            {/* Product Select Dropdown */}
             <Form.Select
               required
               value={formData.stock_product}
               onChange={handleChange('stock_product')}
-              disabled={isSubmitting}
+              disabled={isSubmitting || isSearching}
+              size="lg"
+              style={{ maxHeight: '200px' }}
             >
-              <option value="">Select a stock product...</option>
-              {stockProducts.map(sp => (
-                <option key={sp.id} value={sp.id}>
-                  {sp.product_name}
-                  {sp.product_sku && ` - ${sp.product_sku}`}
-                  {sp.warehouse_name && ` (${sp.warehouse_name})`}
-                  {` - Qty: ${sp.quantity}`}
-                </option>
-              ))}
+              <option value="">
+                {isSearching 
+                  ? 'Searching...' 
+                  : productSearchTerm 
+                    ? `${searchResults.length} product(s) found - Select one...` 
+                    : 'Select a stock product...'}
+              </option>
+              {searchResults.length === 0 && !isSearching && productSearchTerm ? (
+                <option disabled>No products match your search</option>
+              ) : (
+                searchResults.map(sp => (
+                  <option key={sp.id} value={sp.id}>
+                    {sp.product_name}
+                    {sp.product_sku && ` - ${sp.product_sku}`}
+                    {sp.warehouse_name && ` (${sp.warehouse_name})`}
+                    {` - Qty: ${sp.quantity}`}
+                  </option>
+                ))
+              )}
             </Form.Select>
             <Form.Control.Feedback type="invalid">
               Please select a stock product.
             </Form.Control.Feedback>
+            {productSearchTerm && searchResults.length > 0 && !isSearching && (
+              <Form.Text className="text-success">
+                ✓ Found {searchResults.length} matching product(s)
+              </Form.Text>
+            )}
             {selectedStockProduct && (
-              <Form.Text className="text-muted">
+              <Form.Text className="text-muted d-block mt-1">
                 Current quantity: {selectedStockProduct.quantity} | 
                 Unit cost: ${selectedStockProduct.unit_cost}
                 {selectedStockProduct.expiry_date && 

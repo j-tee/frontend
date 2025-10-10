@@ -2,13 +2,15 @@ import { useState } from 'react'
 import { Card, Table, Button, Badge, Form, InputGroup, Spinner } from 'react-bootstrap'
 import { useAppDispatch } from '../../../../hooks'
 import { updateCartItem, removeCartItem } from '../../../../store/slices/salesSlice'
+import { calculateSaleTotals } from '../../../../utils/salesTotals'
 import type { Sale } from '../../../../types/sales'
 import type { UUID } from '../../../../types/common'
 
 interface SaleCartProps {
   cart: Sale | null
-  onCheckout?: () => void
+  onCheckout?: () => void | Promise<void>
   disabled?: boolean
+  checkoutLoading?: boolean
 }
 
 // Helper function to safely format prices (handles both strings and numbers)
@@ -18,7 +20,7 @@ const formatPrice = (price: number | string | undefined): string => {
   return isNaN(numPrice) ? '0.00' : numPrice.toFixed(2)
 }
 
-export function SaleCart({ cart, onCheckout, disabled }: SaleCartProps) {
+export function SaleCart({ cart, onCheckout, disabled, checkoutLoading }: SaleCartProps) {
   const saleId = cart?.id
   const dispatch = useAppDispatch()
   const [editingItem, setEditingItem] = useState<UUID | null>(null)
@@ -26,40 +28,7 @@ export function SaleCart({ cart, onCheckout, disabled }: SaleCartProps) {
   const [removingItem, setRemovingItem] = useState<UUID | null>(null)
 
   // Calculate totals from line items if backend doesn't provide them
-  const calculateTotals = () => {
-    if (!cart?.line_items || cart.line_items.length === 0) {
-      return {
-        subtotal: 0,
-        discount_amount: 0,
-        tax_amount: 0,
-        total_amount: 0,
-      }
-    }
-
-    const subtotal = cart.line_items.reduce((sum, item) => {
-      const itemTotal = typeof item.total_price === 'string' 
-        ? parseFloat(item.total_price) 
-        : item.total_price || 0
-      return sum + itemTotal
-    }, 0)
-
-    const discount_amount = cart.line_items.reduce((sum, item) => {
-      const itemDiscount = typeof item.discount_amount === 'string'
-        ? parseFloat(item.discount_amount)
-        : item.discount_amount || 0
-      return sum + itemDiscount
-    }, 0)
-
-    // Use backend values if available, otherwise use calculated values
-    return {
-      subtotal: cart.subtotal && cart.subtotal > 0 ? cart.subtotal : subtotal,
-      discount_amount: cart.discount_amount && cart.discount_amount > 0 ? cart.discount_amount : discount_amount,
-      tax_amount: cart.tax_amount || 0,
-      total_amount: cart.total_amount && cart.total_amount > 0 ? cart.total_amount : subtotal,
-    }
-  }
-
-  const totals = calculateTotals()
+  const totals = calculateSaleTotals(cart)
 
 
   const handleQuantityChange = async (itemId: UUID, newQuantity: number) => {
@@ -251,21 +220,21 @@ export function SaleCart({ cart, onCheckout, disabled }: SaleCartProps) {
                 <span>Subtotal:</span>
                 <strong>GH₵ {formatPrice(totals.subtotal)}</strong>
               </div>
-              {totals.discount_amount > 0 && (
+              {totals.discount > 0 && (
                 <div className="d-flex justify-content-between mb-2 text-success">
                   <span>Discount:</span>
-                  <strong>-GH₵ {formatPrice(totals.discount_amount)}</strong>
+                  <strong>-GH₵ {formatPrice(totals.discount)}</strong>
                 </div>
               )}
-              {totals.tax_amount > 0 && (
+              {totals.tax > 0 && (
                 <div className="d-flex justify-content-between mb-2">
                   <span>Tax:</span>
-                  <strong>GH₵ {formatPrice(totals.tax_amount)}</strong>
+                  <strong>GH₵ {formatPrice(totals.tax)}</strong>
                 </div>
               )}
               <div className="d-flex justify-content-between border-top pt-2 fs-5">
                 <strong>Total:</strong>
-                <strong>GH₵ {formatPrice(totals.total_amount)}</strong>
+                <strong>GH₵ {formatPrice(totals.total)}</strong>
               </div>
             </div>
 
@@ -275,10 +244,14 @@ export function SaleCart({ cart, onCheckout, disabled }: SaleCartProps) {
                 variant="success"
                 size="lg"
                 className="w-100"
-                onClick={onCheckout}
+                onClick={() => {
+                  if (onCheckout) {
+                    void onCheckout()
+                  }
+                }}
                 disabled={disabled || !hasItems}
               >
-                Proceed to Checkout
+                {checkoutLoading ? 'Preparing checkout…' : 'Proceed to Checkout'}
               </Button>
             </div>
           </>
