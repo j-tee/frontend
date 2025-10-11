@@ -25,6 +25,15 @@ export function ReceiptModal({ show, saleId, onHide }: ReceiptModalProps) {
     
     try {
       const data = await getSale(saleId)
+      console.log('📝 Receipt sale data:', data)
+      console.log('💰 Amounts:', {
+        subtotal: data.subtotal,
+        tax: data.tax_amount,
+        discount: data.discount_amount,
+        total: data.total_amount,
+        paid: data.amount_paid,
+        due: data.amount_due
+      })
       setSale(data)
     } catch (err) {
       console.error('Failed to load sale details', err)
@@ -199,13 +208,13 @@ export function ReceiptModal({ show, saleId, onHide }: ReceiptModalProps) {
                     <td>Subtotal:</td>
                     <td className="text-end">{formatCurrency(sale.subtotal || sale.total_amount)}</td>
                   </tr>
-                  {(sale.tax_amount && Number(sale.tax_amount) > 0) && (
+                  {sale.tax_amount && Number(sale.tax_amount) > 0 && (
                     <tr>
                       <td>Tax:</td>
                       <td className="text-end">{formatCurrency(sale.tax_amount)}</td>
                     </tr>
                   )}
-                  {(sale.discount_amount && Number(sale.discount_amount) > 0) && (
+                  {sale.discount_amount && Number(sale.discount_amount) > 0 && (
                     <tr>
                       <td>Discount:</td>
                       <td className="text-end">-{formatCurrency(sale.discount_amount)}</td>
