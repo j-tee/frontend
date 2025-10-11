@@ -207,6 +207,35 @@ export async function updateSale(
 }
 
 /**
+ * Update the customer on a DRAFT sale
+ * POST/PATCH /sales/api/sales/{id}/update_customer/
+ * 
+ * ✅ BACKEND IMPLEMENTED (e60b313) - Production ready
+ * 
+ * This endpoint allows updating the customer on a DRAFT sale.
+ * Backend validates:
+ * - Sale must be in DRAFT status
+ * - Customer must belong to same business as sale
+ * - Customer must exist
+ * 
+ * @param saleId - UUID of the DRAFT sale to update
+ * @param customerId - UUID of the customer to assign to the sale
+ * @returns Updated sale object with new customer
+ * @throws 400 if sale is not DRAFT or customer is invalid
+ * @throws 404 if customer not found or doesn't belong to business
+ */
+export async function updateSaleCustomer(
+  saleId: UUID,
+  customerId: UUID
+): Promise<Sale> {
+  const response = await httpClient.patch<Sale>(
+    `/sales/api/sales/${saleId}/update_customer/`,
+    { customer: customerId }
+  )
+  return response.data
+}
+
+/**
  * Delete sale (only DRAFT)
  * DELETE /sales/api/sales/{id}/
  */

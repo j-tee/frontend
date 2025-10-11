@@ -2,10 +2,10 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Form, InputGroup, Card, Row, Col, Button, Badge, Spinner, Alert } from 'react-bootstrap'
 import { useAppDispatch } from '../../../../hooks'
 import { addItemToCart } from '../../../../store/slices/salesSlice'
-import { fetchSaleCatalog } from '../../../../services/inventoryService'
+import { fetchSaleCatalog, fetchMultiStorefrontCatalog } from '../../../../services/inventoryService'
 import httpClient from '../../../../services/httpClient'
 import type { UUID } from '../../../../types/common'
-import type { SaleCatalogItem } from '../../../../types/inventory'
+import type { SaleCatalogItem, MultiStorefrontCatalogItem, StorefrontLocation } from '../../../../types/inventory'
 
 interface Product {
   id: UUID
@@ -19,6 +19,7 @@ interface Product {
   retail_price: number
   wholesale_price: number
   available_quantity: number
+  locations?: StorefrontLocation[] // For multi-storefront mode
 }
 
 interface StockRecord {
@@ -35,14 +36,15 @@ interface StockRecord {
 }
 
 interface ProductSearchPanelProps {
-  storefrontId: UUID
+  storefrontId?: UUID  // Optional - when not provided, uses multi-storefront mode
   saleId?: UUID
   saleType: 'RETAIL' | 'WHOLESALE'
   disabled?: boolean
-  ensureSaleSession?: () => Promise<UUID | null>
+  ensureSaleSession?: (preferredStorefrontId?: UUID) => Promise<UUID | null>  // Accept storefront parameter
+  multiStorefront?: boolean  // Explicitly enable multi-storefront mode
 }
 
-export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, ensureSaleSession }: ProductSearchPanelProps) {
+export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, ensureSaleSession, multiStorefront = false }: ProductSearchPanelProps) {
   const dispatch = useAppDispatch()
   
   const [searchQuery, setSearchQuery] = useState('')
@@ -55,6 +57,7 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
   const [error, setError] = useState<string | null>(null)
   const [addingItemId, setAddingItemId] = useState<UUID | null>(null)
   const [quantities, setQuantities] = useState<Record<UUID, number>>({})
+  const [accessibleStorefronts, setAccessibleStorefronts] = useState<Array<{ id: UUID; name: string }>>([])
 
   const lastSearchTimestampRef = useRef(0)
   const availabilitySupportedRef = useRef(true)
@@ -80,36 +83,78 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
 
     const loadCatalog = async () => {
       try {
-  setCatalogLoading(true)
-  setLoading(true)
+        setCatalogLoading(true)
+        setLoading(true)
         setError(null)
         availabilitySupportedRef.current = true
         lastSearchTimestampRef.current = 0
 
-        const response = await fetchSaleCatalog(storefrontId)
-        const normalized = (response.products ?? [])
-          .filter((item: SaleCatalogItem) => Array.isArray(item.stock_product_ids) && item.stock_product_ids.length > 0)
-          .map((item: SaleCatalogItem): Product => {
-            const retail = parsePrice(item.retail_price)
-            const wholesale = parsePrice(item.wholesale_price ?? item.retail_price)
-            const available = typeof item.available_quantity === 'number'
-              ? item.available_quantity
-              : Number(item.available_quantity) || 0
+        let normalized: Product[]
 
-            return {
-              id: item.product_id,
-              name: item.product_name,
-              sku: item.sku,
-              barcode: item.barcode ?? null,
-              category_name: item.category_name ?? 'Uncategorized',
-              unit: item.unit ?? 'unit',
-              image: item.product_image ?? null,
-              stock_product_ids: item.stock_product_ids,
-              retail_price: retail,
-              wholesale_price: wholesale,
-              available_quantity: available,
-            }
-          })
+        // Use multi-storefront mode if enabled OR if no storefrontId provided
+        if (multiStorefront || !storefrontId) {
+          // Fetch from all accessible storefronts
+          const multiResponse = await fetchMultiStorefrontCatalog()
+          
+          // Store accessible storefronts for reference
+          setAccessibleStorefronts(multiResponse.storefronts)
+          
+          // Map multi-storefront response to Product format
+          normalized = (multiResponse.products ?? [])
+            .filter((item: MultiStorefrontCatalogItem) => 
+              Array.isArray(item.stock_product_ids) && 
+              item.stock_product_ids.length > 0
+            )
+            .map((item: MultiStorefrontCatalogItem): Product => {
+              const retail = parsePrice(item.retail_price)
+              const wholesale = parsePrice(item.wholesale_price ?? item.retail_price)
+              const available = item.total_available || 0
+
+              return {
+                id: item.product_id,
+                name: item.product_name,
+                sku: item.sku,
+                barcode: item.barcode ?? null,
+                category_name: item.category_name ?? 'Uncategorized',
+                unit: item.unit ?? 'unit',
+                image: item.product_image ?? null,
+                stock_product_ids: item.stock_product_ids,
+                retail_price: retail,
+                wholesale_price: wholesale,
+                available_quantity: available,
+                locations: item.locations, // Include location info
+              }
+            })
+        } else {
+          // Single storefront mode (original behavior)
+          const response = await fetchSaleCatalog(storefrontId)
+          normalized = (response.products ?? [])
+            .filter((item: SaleCatalogItem) => 
+              Array.isArray(item.stock_product_ids) && 
+              item.stock_product_ids.length > 0
+            )
+            .map((item: SaleCatalogItem): Product => {
+              const retail = parsePrice(item.retail_price)
+              const wholesale = parsePrice(item.wholesale_price ?? item.retail_price)
+              const available = typeof item.available_quantity === 'number'
+                ? item.available_quantity
+                : Number(item.available_quantity) || 0
+
+              return {
+                id: item.product_id,
+                name: item.product_name,
+                sku: item.sku,
+                barcode: item.barcode ?? null,
+                category_name: item.category_name ?? 'Uncategorized',
+                unit: item.unit ?? 'unit',
+                image: item.product_image ?? null,
+                stock_product_ids: item.stock_product_ids,
+                retail_price: retail,
+                wholesale_price: wholesale,
+                available_quantity: available,
+              }
+            })
+        }
 
         if (!isMounted) {
           return
@@ -164,7 +209,7 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
     return () => {
       isMounted = false
     }
-  }, [storefrontId])
+  }, [storefrontId, multiStorefront])
 
   useEffect(() => {
     stockDataRef.current = stockData
@@ -172,6 +217,13 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
 
   const fetchStockLevels = useCallback(async (productIds: UUID[]) => {
     if (!productIds.length) {
+      return
+    }
+
+    // In multi-storefront mode, don't fetch individual stock levels
+    // The multi-storefront catalog already includes total_available quantities
+    if (multiStorefront) {
+      console.log('[ProductSearch] Multi-storefront mode: Skipping individual stock level fetches')
       return
     }
 
@@ -363,7 +415,7 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
     } catch (err) {
       console.error('Failed to fetch stock levels:', err)
     }
-  }, [storefrontId])
+  }, [storefrontId, multiStorefront])
 
   const searchProducts = useCallback(async (rawQuery: string) => {
     if (catalogLoading) {
@@ -493,7 +545,26 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
         return
       }
 
-      const ensuredSaleId = await ensureSaleSession()
+      // In multi-storefront mode, determine which storefront this product is from
+      let preferredStorefrontId: UUID | undefined
+      if (multiStorefront) {
+        const product = catalog.find((item) => item.id === productId)
+        if (product && product.locations && product.locations.length > 0) {
+          // Use the first storefront that has this product
+          const primaryLocation = product.locations.find(loc => loc.available_quantity > 0)
+          if (primaryLocation) {
+            preferredStorefrontId = primaryLocation.storefront_id
+            console.log(`🏪 Creating cart for storefront: ${primaryLocation.storefront_name}`, {
+              productId,
+              productName: product.name,
+              storefrontId: preferredStorefrontId,
+              storefrontName: primaryLocation.storefront_name
+            })
+          }
+        }
+      }
+
+      const ensuredSaleId = await ensureSaleSession(preferredStorefrontId)
       if (!ensuredSaleId) {
         if (saleType === 'WHOLESALE') {
           setError('Select a customer before starting a wholesale sale.')

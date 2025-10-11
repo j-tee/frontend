@@ -234,6 +234,44 @@ export interface SaleCatalogResponse {
   products: SaleCatalogItem[]
 }
 
+// Multi-Storefront Catalog Types
+export interface StorefrontLocation {
+  storefront_id: UUID
+  storefront_name: string
+  available_quantity: number
+}
+
+export interface MultiStorefrontCatalogItem {
+  product_id: UUID
+  product_name: string
+  sku: string
+  barcode?: string | null
+  category_name?: string | null
+  unit?: string | null
+  product_image?: string | null
+  total_available: number
+  retail_price: string
+  wholesale_price?: string | null
+  stock_product_ids: UUID[]
+  locations: StorefrontLocation[]
+  last_stocked_at?: string | null
+}
+
+export interface AccessibleStorefront {
+  id: UUID
+  name: string
+  business_id: UUID
+  business_name: string
+}
+
+export interface MultiStorefrontCatalogResponse {
+  storefronts: AccessibleStorefront[]
+  products: MultiStorefrontCatalogItem[]
+  total_products: number
+  total_storefronts: number
+  message?: string
+}
+
 export interface InventorySnapshot {
   id: UUID
   warehouse: UUID
@@ -255,9 +293,13 @@ export interface StockReconciliationWarehouseEntry {
 export interface StockReconciliationStorefrontEntry {
   storefront?: UUID | null
   storefront_name?: string | null
+  location?: string | null
   on_hand?: number | string | null
   linked_reservations?: number | string | null
   orphaned_reservations?: number | string | null
+  transferred_quantity?: number | string | null
+  sold_quantity?: number | string | null
+  last_transfer_date?: string | null
 }
 
 export interface StockReconciliationReservationDetail {
@@ -296,6 +338,7 @@ export interface StockReconciliationResponse {
   }
   storefront?: {
     total_on_hand?: number | string | null
+    sellable_now?: number | string | null
     entries?: StockReconciliationStorefrontEntry[]
   }
   sales?: {

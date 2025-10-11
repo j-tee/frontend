@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Modal, Button, Form, Alert, Spinner } from 'react-bootstrap'
 import { createCustomer } from '../../../../services/salesService'
+import { useAppSelector } from '../../../../hooks'
+import { selectCurrentBusiness } from '../../../../store/slices/authSlice'
 import type { Customer } from '../../../../types/sales'
 
 interface CreateCustomerModalProps {
@@ -17,6 +19,7 @@ const initialFormState = {
 }
 
 export function CreateCustomerModal({ show, saleType, onHide, onCustomerCreated }: CreateCustomerModalProps) {
+  const business = useAppSelector(selectCurrentBusiness)
   const [form, setForm] = useState(initialFormState)
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -44,6 +47,11 @@ export function CreateCustomerModal({ show, saleType, onHide, onCustomerCreated 
       return
     }
 
+    if (!business?.id) {
+      setError('Business information is missing. Please refresh and try again.')
+      return
+    }
+
     setSubmitting(true)
     setError(null)
 
@@ -51,12 +59,15 @@ export function CreateCustomerModal({ show, saleType, onHide, onCustomerCreated 
       const phoneValue = form.phone.trim() || `000000${Math.floor(Math.random() * 900000 + 100000)}`
 
       const payload = {
+        business: business.id,
         name: form.name.trim(),
         phone: phoneValue,
         email: form.email.trim() || undefined,
         type: saleType,
         notes: notes.trim() || undefined,
       }
+
+      console.log('🧑‍💼 Creating customer with payload:', payload)
 
       const customer = await createCustomer(payload)
       onCustomerCreated(customer)

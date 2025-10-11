@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import Alert from 'react-bootstrap/Alert'
-import Badge from 'react-bootstrap/Badge'
 import Button from 'react-bootstrap/Button'
 import Form from 'react-bootstrap/Form'
 import Modal from 'react-bootstrap/Modal'
@@ -262,6 +261,7 @@ const StockProductDetailModal = ({
 
     const storefrontSellable = clampToNonNegative(
       toNumberOrNull(snapshot?.formula?.storefront_sellable_units) ??
+        toNumberOrNull(snapshot?.storefront?.sellable_now) ??
         (storefrontOnHand != null && reservations != null ? storefrontOnHand - reservations : null),
     )
 
@@ -312,11 +312,15 @@ const StockProductDetailModal = ({
       return [] as Array<{
         key: string
         name: string
+        location: string | null
         onHand: number | null
         sellable: number | null
         reserved: number | null
         linked: number | null
         orphaned: number | null
+        transferred: number | null
+        sold: number | null
+        transferDate: string | null
       }>
     }
 
@@ -334,14 +338,24 @@ const StockProductDetailModal = ({
             ? onHand
             : clampToNonNegative(onHand - (reservedSum ?? 0))
 
+      // TODO: Backend integration - these fields need to be added to API response
+      const transferred = clampToNonNegative(toNumberOrNull(entry.transferred_quantity))
+      const sold = clampToNonNegative(toNumberOrNull(entry.sold_quantity))
+      const location = entry.location ?? null
+      const transferDate = entry.last_transfer_date ?? null
+
       return {
         key: entry.storefront ? String(entry.storefront) : `storefront-${index}`,
         name: entry.storefront_name ?? `Storefront ${index + 1}`,
+        location,
         onHand,
         sellable,
         reserved: reservedSum,
         linked,
         orphaned,
+        transferred,
+        sold,
+        transferDate,
       }
     })
   }, [reconciliationSnapshot])
@@ -499,156 +513,190 @@ const StockProductDetailModal = ({
               {updateError ? <Alert variant="danger">{updateError}</Alert> : null}
               {deleteError ? <Alert variant="danger">{deleteError}</Alert> : null}
 
-              <div className="rounded-3xl bg-slate-50 p-3">
-                <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 p-4 shadow-sm border border-slate-200">
+                <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
                   <div>
-                    <div className="text-sm font-medium text-slate-600">Product</div>
-                    <div className="text-base font-semibold text-slate-900">{stockProduct.product_name ?? '—'}</div>
-                    <div className="text-sm text-slate-500">SKU: {stockProduct.product_sku ?? '—'}</div>
+                    <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Product</div>
+                    <div className="text-xl font-bold text-slate-900">{stockProduct.product_name ?? '—'}</div>
+                    <div className="text-sm text-slate-600 font-medium mt-1">SKU: {stockProduct.product_sku ?? '—'}</div>
                   </div>
-                  <div className="text-right text-sm text-slate-600">
-                    <div>Updated {formatDateTime(stockProduct.updated_at)}</div>
-                    <div>Created {formatDateTime(stockProduct.created_at)}</div>
+                  <div className="text-right">
+                    <div className="text-xs text-slate-500">Updated {formatDateTime(stockProduct.updated_at)}</div>
+                    <div className="text-xs text-slate-500">Created {formatDateTime(stockProduct.created_at)}</div>
                   </div>
                 </div>
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                  <span>
-                    {reconciliationLoading
-                      ? 'Loading stock reconciliation…'
-                      : reconciliationSnapshot?.generated_at
-                        ? `Reconciled ${formatDateTime(reconciliationSnapshot.generated_at)}`
-                        : 'Reconciliation snapshot not available yet.'}
-                  </span>
+                
+                <div className="flex flex-wrap items-center gap-2 p-3 bg-white rounded-lg border border-slate-200 mb-4">
+                  <div className="flex-1 min-w-[200px]">
+                    <span className="text-xs text-slate-600">
+                      {reconciliationLoading
+                        ? '🔄 Loading stock reconciliation…'
+                        : reconciliationSnapshot?.generated_at
+                          ? `✅ Reconciled ${formatDateTime(reconciliationSnapshot.generated_at)}`
+                          : '⏳ Reconciliation snapshot not available yet.'}
+                    </span>
+                  </div>
                   <Button
                     size="sm"
-                    variant="outline-secondary"
+                    variant="outline-primary"
                     onClick={() => {
                       void fetchReconciliationSnapshot()
                     }}
                     disabled={reconciliationLoading}
                   >
-                    {reconciliationLoading ? 'Refreshing…' : 'Refresh snapshot'}
+                    {reconciliationLoading ? '⟳ Refreshing…' : '↻ Refresh snapshot'}
                   </Button>
                 </div>
                 {reconciliationError ? (
-                  <div className="mt-1 text-xs text-danger">{reconciliationError}</div>
+                  <Alert variant="danger" className="mb-3 py-2 text-sm">
+                    {reconciliationError}
+                  </Alert>
                 ) : null}
-                <div className="mt-3 grid gap-3 text-sm text-slate-600 sm:grid-cols-2">
-                  <div>
-                    <span className="font-medium text-slate-700">Warehouse:</span>{' '}
-                    {stockProduct.warehouse_name ?? warehouse?.name ?? '—'}
+
+                {/* Key Metrics - Enhanced Cards */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+                  {/* Recorded Batch Size */}
+                  <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg p-3 border border-indigo-200 shadow-sm">
+                    <div className="text-xs font-semibold text-indigo-700 uppercase tracking-wide mb-1">Batch Size</div>
+                    <div className="text-2xl font-bold text-indigo-900">{formatQuantity(reconciliationMetrics.recordedBatchSize)}</div>
+                    <div className="text-xs text-indigo-600 mt-1">Recorded</div>
                   </div>
-                  <div>
-                    <span className="font-medium text-slate-700">Batch:</span>{' '}
-                    {stockBatch?.description?.length
-                      ? stockBatch.description
-                      : stockBatch
-                        ? `Batch ${stockBatch.id.slice(0, 8)}`
-                        : stockProduct.stock_batch
-                          ? `Batch ${stockProduct.stock_batch.slice(0, 8)}`
-                          : '—'}
+
+                  {/* Warehouse Inventory */}
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-3 border border-blue-200 shadow-sm">
+                    <div className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">Warehouse</div>
+                    <div className="text-2xl font-bold text-blue-900">{formatQuantity(reconciliationMetrics.warehouseOnHand)}</div>
+                    <div className="text-xs text-blue-600 mt-1">On hand</div>
                   </div>
-                  <div>
-                    <span className="font-medium text-slate-700">Recorded batch size:</span>{' '}
-                    <Badge bg="dark" pill>
-                      {formatQuantity(reconciliationMetrics.recordedBatchSize)}
-                    </Badge>
+
+                  {/* Storefront Inventory */}
+                  <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-3 border border-purple-200 shadow-sm">
+                    <div className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-1">Storefront</div>
+                    <div className="text-2xl font-bold text-purple-900">{formatQuantity(reconciliationMetrics.storefrontOnHand)}</div>
+                    <div className="text-xs text-purple-600 mt-1">Transferred</div>
                   </div>
-                  <div>
-                    <span className="font-medium text-slate-700">Landed unit cost:</span>{' '}
-                    {formatDecimal(stockProduct.landed_unit_cost)}
-                  </div>
-                </div>
-                <div className="mt-3 grid gap-3 text-sm text-slate-600 sm:grid-cols-2 lg:grid-cols-4">
-                  <div>
-                    <span className="font-medium text-slate-700">Warehouse on hand:</span>{' '}
-                    <Badge bg="info" pill>
-                      {formatQuantity(reconciliationMetrics.warehouseOnHand)}
-                    </Badge>
-                    {reconciliationMetrics.warehouseUnreserved !== null &&
-                      reconciliationMetrics.warehouseOnHand !== null &&
-                      reconciliationMetrics.warehouseUnreserved !== reconciliationMetrics.warehouseOnHand ? (
-                        <div className="text-muted small mt-1">
-                          Unreserved: {formatQuantity(reconciliationMetrics.warehouseUnreserved)}
-                        </div>
-                      ) : null}
-                  </div>
-                  <div>
+
+                  {/* Available for Sale */}
+                  <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-lg p-3 border border-emerald-200 shadow-sm">
                     <OverlayTrigger
                       placement="top"
                       overlay={(
-                        <Tooltip id="storefront-availability-tooltip">
-                          Sum of completed transfers currently on storefront shelves. Sellable excludes active
-                          reservations.
+                        <Tooltip id="sellable-card-tooltip">
+                          Current available inventory for sale (after deducting sold units and reservations)
                         </Tooltip>
                       )}
                     >
-                      <span className="font-medium text-slate-700 d-inline-flex align-items-center gap-1">
-                        Storefront on hand
-                      </span>
+                      <div>
+                        <div className="text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-1">Available</div>
+                        <div className="text-2xl font-bold text-emerald-900">{formatQuantity(reconciliationMetrics.storefrontSellable)}</div>
+                        <div className="text-xs text-emerald-600 mt-1">For sale</div>
+                      </div>
                     </OverlayTrigger>
-                    {' '}
-                    <Badge bg="primary" pill>
-                      {formatQuantity(reconciliationMetrics.storefrontOnHand)}
-                    </Badge>
-                    {reconciliationMetrics.storefrontSellable !== null ? (
-                      <div className="text-muted small mt-1">
-                        Sellable now: {formatQuantity(reconciliationMetrics.storefrontSellable)}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div>
-                    <span className="font-medium text-slate-700">Units sold:</span>{' '}
-                    <Badge bg="secondary" pill>
-                      {formatQuantity(reconciliationMetrics.sold)}
-                    </Badge>
-                    {reconciliationMetrics.recordedBatchSize !== null ? (
-                      <div className="text-muted small mt-1">
-                        Recorded batch size: {formatQuantity(reconciliationMetrics.recordedBatchSize)}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div>
-                    <span className="font-medium text-slate-700">Active reservations:</span>{' '}
-                    <Badge bg="warning" text="dark" pill>
-                      {formatQuantity(reconciliationMetrics.reservations)}
-                    </Badge>
-                  </div>
-                  <div>
-                    <span className="font-medium text-slate-700">Shrinkage / write-offs:</span>{' '}
-                    <Badge bg="danger" pill>
-                      {formatQuantity(reconciliationMetrics.shrinkage)}
-                    </Badge>
-                  </div>
-                  <div>
-                    <span className="font-medium text-slate-700">Corrections applied:</span>{' '}
-                    <Badge bg="success" pill>
-                      {formatQuantity(reconciliationMetrics.corrections)}
-                    </Badge>
-                    {reconciliationMetrics.netAdjustments !== null ? (
-                      <div className="text-muted small mt-1">
-                        Net adjustment:{' '}
-                        {reconciliationMetrics.netAdjustments > 0
-                          ? '+'
-                          : reconciliationMetrics.netAdjustments < 0
-                            ? '−'
-                            : ''}
-                        {formatQuantity(Math.abs(reconciliationMetrics.netAdjustments ?? 0))}
-                        {reconciliationMetrics.netAdjustments !== 0 ? (
-                          <>
-                            {' '}
-                            {reconciliationMetrics.netAdjustments > 0 ? '(adds units)' : '(removes units)'}
-                          </>
-                        ) : null}
-                      </div>
-                    ) : null}
                   </div>
                 </div>
+
+                {/* Secondary Metrics */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+                  {/* Units Sold */}
+                  <div className="bg-white rounded-lg p-3 border-2 border-slate-200">
+                    <OverlayTrigger
+                      placement="top"
+                      overlay={(
+                        <Tooltip id="sold-units-card-tooltip">
+                          Total completed sales. Tracked separately from reconciliation.
+                        </Tooltip>
+                      )}
+                    >
+                      <div>
+                        <div className="text-xs font-medium text-slate-600 mb-1">💰 Sold</div>
+                        <div className="text-xl font-bold text-slate-900">{formatQuantity(reconciliationMetrics.sold)}</div>
+                      </div>
+                    </OverlayTrigger>
+                  </div>
+
+                  {/* Reservations */}
+                  <div className="bg-white rounded-lg p-3 border-2 border-amber-200">
+                    <div className="text-xs font-medium text-amber-700 mb-1">🔒 Reserved</div>
+                    <div className="text-xl font-bold text-amber-900">{formatQuantity(reconciliationMetrics.reservations)}</div>
+                  </div>
+
+                  {/* Shrinkage */}
+                  <div className="bg-white rounded-lg p-3 border-2 border-red-200">
+                    <div className="text-xs font-medium text-red-700 mb-1">📉 Shrinkage</div>
+                    <div className="text-xl font-bold text-red-900">{formatQuantity(reconciliationMetrics.shrinkage)}</div>
+                  </div>
+
+                  {/* Corrections */}
+                  <div className="bg-white rounded-lg p-3 border-2 border-green-200">
+                    <div className="text-xs font-medium text-green-700 mb-1">✏️ Corrections</div>
+                    <div className="text-xl font-bold text-green-900">{formatQuantity(reconciliationMetrics.corrections)}</div>
+                  </div>
+                </div>
+
+                {/* Warehouse and Batch Info */}
+                <div className="grid gap-3 sm:grid-cols-2 mb-4">
+                  <div className="bg-white rounded-lg p-3 border border-slate-200">
+                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Warehouse</div>
+                    <div className="text-sm font-medium text-slate-900">
+                      {stockProduct.warehouse_name ?? warehouse?.name ?? '—'}
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 border border-slate-200">
+                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Batch</div>
+                    <div className="text-sm font-medium text-slate-900">
+                      {stockBatch?.description?.length
+                        ? stockBatch.description
+                        : stockBatch
+                          ? `Batch ${stockBatch.id.slice(0, 8)}`
+                          : stockProduct.stock_batch
+                            ? `Batch ${stockProduct.stock_batch.slice(0, 8)}`
+                            : '—'}
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 border border-slate-200">
+                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Landed Cost</div>
+                    <div className="text-sm font-bold text-slate-900">
+                      ${formatDecimal(stockProduct.landed_unit_cost)}
+                    </div>
+                  </div>
+                  {reconciliationMetrics.netAdjustments !== null && reconciliationMetrics.netAdjustments !== 0 ? (
+                    <div className="bg-white rounded-lg p-3 border border-slate-200">
+                      <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Net Adjustment</div>
+                      <div className={`text-sm font-bold ${reconciliationMetrics.netAdjustments > 0 ? 'text-green-700' : 'text-red-700'}`}>
+                        {reconciliationMetrics.netAdjustments > 0 ? '+' : '−'}
+                        {formatQuantity(Math.abs(reconciliationMetrics.netAdjustments))} units
+                        <span className="text-xs ml-1">
+                          {reconciliationMetrics.netAdjustments > 0 ? '(adds)' : '(removes)'}
+                        </span>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
                 {reconciliationMetrics.calculatedBaseline !== null ? (
-                  <div className="mt-3 rounded-xl bg-slate-100 p-3 text-xs text-slate-600">
-                    Warehouse ({formatQuantity(reconciliationMetrics.warehouseOnHand)}) + Storefront ({formatQuantity(reconciliationMetrics.storefrontOnHand)}) + Sold ({formatQuantity(reconciliationMetrics.sold)}) − Shrinkage ({formatQuantity(reconciliationMetrics.shrinkage)}) + Corrections ({formatQuantity(reconciliationMetrics.corrections)}) − Reservations ({formatQuantity(reconciliationMetrics.reservations)}) = {formatQuantity(reconciliationMetrics.calculatedBaseline)}
-                    {' '}
-                    &mdash; Recorded batch size {formatQuantity(reconciliationMetrics.recordedBatchSize)}
+                  <div className="mt-3 rounded-xl bg-slate-100 p-3">
+                    <div className="text-xs text-slate-600">
+                      <strong>Reconciliation Formula:</strong>
+                    </div>
+                    <div className="text-xs text-slate-700 mt-1 font-mono">
+                      Warehouse ({formatQuantity(reconciliationMetrics.warehouseOnHand)}) + Storefront transferred ({formatQuantity(reconciliationMetrics.storefrontOnHand)}) − Shrinkage ({formatQuantity(reconciliationMetrics.shrinkage)}) + Corrections ({formatQuantity(reconciliationMetrics.corrections)}) − Reservations ({formatQuantity(reconciliationMetrics.reservations)}) = {formatQuantity(reconciliationMetrics.calculatedBaseline)}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-2 pt-2 border-top">
+                      <div>Recorded batch size: <strong>{formatQuantity(reconciliationMetrics.recordedBatchSize)}</strong></div>
+                      {reconciliationMetrics.baselineDelta !== null && reconciliationMetrics.baselineDelta === 0 && (
+                        <div className="text-success mt-1">✅ Inventory is balanced</div>
+                      )}
+                    </div>
+                    {(reconciliationMetrics.storefrontSellable !== null || (reconciliationMetrics.sold !== null && reconciliationMetrics.sold > 0)) && (
+                      <div className="text-xs text-slate-500 mt-2 pt-2 border-top">
+                        <div className="fw-semibold mb-1">Additional Information:</div>
+                        {reconciliationMetrics.storefrontSellable !== null && (
+                          <div>• Available for sale: {formatQuantity(reconciliationMetrics.storefrontSellable)} units</div>
+                        )}
+                        {reconciliationMetrics.sold !== null && reconciliationMetrics.sold > 0 && (
+                          <div>• Units sold: {formatQuantity(reconciliationMetrics.sold)} (tracked separately, doesn't affect reconciliation)</div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ) : null}
                 {reconciliationMetrics.baselineDelta !== null && reconciliationMetrics.baselineDelta !== 0 ? (
@@ -658,16 +706,30 @@ const StockProductDetailModal = ({
                       <div className="flex-grow-1">
                         <div className="fw-semibold mb-1">
                           Reconciliation mismatch detected: {formatQuantity(Math.abs(reconciliationMetrics.baselineDelta))} units{' '}
-                          {reconciliationMetrics.baselineDelta > 0 ? 'over' : 'under'} accounted
+                          {reconciliationMetrics.baselineDelta > 0 ? 'under accounted' : 'over accounted'}
                         </div>
-                        <div className="small text-muted">
+                        <div className="small">
+                          {reconciliationMetrics.baselineDelta > 0 ? (
+                            <div className="mb-2">
+                              <strong>Meaning:</strong> The recorded batch quantity ({formatQuantity(reconciliationMetrics.recordedBatchSize)}) is LESS than 
+                              the calculated baseline ({formatQuantity(reconciliationMetrics.calculatedBaseline)}). 
+                              You have {formatQuantity(Math.abs(reconciliationMetrics.baselineDelta))} more units in the system than originally recorded.
+                            </div>
+                          ) : (
+                            <div className="mb-2">
+                              <strong>Meaning:</strong> The recorded batch quantity ({formatQuantity(reconciliationMetrics.recordedBatchSize)}) is MORE than 
+                              the calculated baseline ({formatQuantity(reconciliationMetrics.calculatedBaseline)}). 
+                              You have {formatQuantity(Math.abs(reconciliationMetrics.baselineDelta))} fewer units in the system than originally recorded.
+                            </div>
+                          )}
                           <div>Possible causes:</div>
                           <ul className="mb-0 ps-3">
                             <li>Unrecorded transfers or intake</li>
                             <li>Incorrect shrinkage/adjustment entries</li>
                             <li>Data entry errors in batch size</li>
+                            <li>Physical inventory discrepancies (theft, damage, misplacement)</li>
                           </ul>
-                          <div className="mt-1">
+                          <div className="mt-2 fst-italic">
                             Contact inventory team to investigate transaction history for this product.
                           </div>
                         </div>
@@ -676,28 +738,121 @@ const StockProductDetailModal = ({
                   </Alert>
                 ) : null}
                 {storefrontBreakdown.length > 0 ? (
-                  <div className="mt-3 rounded-xl border border-slate-200 p-3">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Storefront breakdown
+                  <div className="mt-4">
+                    <div className="mb-3">
+                      <div className="text-sm font-bold text-slate-900 uppercase tracking-wide flex items-center gap-2">
+                        <span>🏪</span>
+                        <span>Storefront Breakdown</span>
+                        <span className="text-xs font-normal text-slate-500 normal-case">
+                          ({storefrontBreakdown.length} {storefrontBreakdown.length === 1 ? 'location' : 'locations'})
+                        </span>
+                      </div>
                     </div>
-                    <div className="mt-2 flex flex-col gap-2 text-sm">
+                    <div className="space-y-3">
                       {storefrontBreakdown.map((entry) => (
-                        <div key={entry.key} className="d-flex flex-column gap-1">
-                          <div className="d-flex flex-wrap justify-between gap-2">
-                            <span className="font-medium text-slate-700">{entry.name}</span>
-                            <span className="text-slate-600">
-                              On hand: {formatQuantity(entry.onHand)} • Sellable: {formatQuantity(entry.sellable)} • Reserved: {formatQuantity(entry.reserved)}
-                            </span>
-                          </div>
-                          {entry.linked !== null || entry.orphaned !== null ? (
-                            <div className="text-muted small">
-                              Linked: {formatQuantity(entry.linked)} • Orphaned: {formatQuantity(entry.orphaned)}
+                        <div key={entry.key} className="bg-white rounded-lg border-2 border-slate-200 overflow-hidden hover:border-blue-300 hover:shadow-md transition-all">
+                          {/* Storefront Header */}
+                          <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-4 py-3 border-b border-slate-200">
+                            <div className="flex justify-between items-start gap-3">
+                              <div className="flex-1">
+                                <div className="text-base font-bold text-slate-900">{entry.name}</div>
+                                {entry.location ? (
+                                  <div className="text-xs text-slate-600 mt-1">📍 {entry.location}</div>
+                                ) : (
+                                  <div className="text-xs text-slate-400 mt-1 italic">Location not available</div>
+                                )}
+                              </div>
+                              {entry.transferDate ? (
+                                <div className="text-xs text-slate-500">
+                                  <div>Last transfer:</div>
+                                  <div className="font-medium">{formatDateTime(entry.transferDate)}</div>
+                                </div>
+                              ) : null}
                             </div>
-                          ) : null}
+                          </div>
+
+                          {/* Metrics Grid */}
+                          <div className="p-4">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                              {/* Total Transferred */}
+                              {entry.transferred !== null ? (
+                                <div className="text-center p-2 bg-blue-50 rounded border border-blue-200">
+                                  <div className="text-xs text-blue-600 font-medium mb-1">Transferred</div>
+                                  <div className="text-xl font-bold text-blue-900">{formatQuantity(entry.transferred)}</div>
+                                </div>
+                              ) : (
+                                <div className="text-center p-2 bg-slate-50 rounded border border-slate-200">
+                                  <div className="text-xs text-slate-400 font-medium mb-1">Transferred</div>
+                                  <div className="text-sm text-slate-400 italic">Not available</div>
+                                </div>
+                              )}
+
+                              {/* On Hand */}
+                              <div className="text-center p-2 bg-purple-50 rounded border border-purple-200">
+                                <div className="text-xs text-purple-600 font-medium mb-1">On Hand</div>
+                                <div className="text-xl font-bold text-purple-900">{formatQuantity(entry.onHand)}</div>
+                              </div>
+
+                              {/* Sellable */}
+                              <div className="text-center p-2 bg-emerald-50 rounded border border-emerald-200">
+                                <div className="text-xs text-emerald-600 font-medium mb-1">Sellable</div>
+                                <div className="text-xl font-bold text-emerald-900">{formatQuantity(entry.sellable)}</div>
+                              </div>
+
+                              {/* Sold */}
+                              {entry.sold !== null ? (
+                                <div className="text-center p-2 bg-amber-50 rounded border border-amber-200">
+                                  <div className="text-xs text-amber-600 font-medium mb-1">Sold</div>
+                                  <div className="text-xl font-bold text-amber-900">{formatQuantity(entry.sold)}</div>
+                                </div>
+                              ) : (
+                                <div className="text-center p-2 bg-slate-50 rounded border border-slate-200">
+                                  <div className="text-xs text-slate-400 font-medium mb-1">Sold</div>
+                                  <div className="text-sm text-slate-400 italic">Not available</div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Reservations Detail */}
+                            {(entry.reserved !== null && entry.reserved > 0) ? (
+                              <div className="mt-3 p-3 bg-yellow-50 rounded border border-yellow-200">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <span className="text-xs font-semibold text-yellow-800">🔒 Reserved Units</span>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="text-lg font-bold text-yellow-900">{formatQuantity(entry.reserved)}</div>
+                                    {(entry.linked !== null || entry.orphaned !== null) && (
+                                      <div className="text-xs text-yellow-700">
+                                        Linked: {formatQuantity(entry.linked)} • Orphaned: {formatQuantity(entry.orphaned)}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ) : null}
+
+                            {/* Data Availability Warning */}
+                            {(entry.transferred === null || entry.sold === null) && (
+                              <Alert variant="info" className="mt-3 mb-0 py-2 text-xs">
+                                <strong>ℹ️ Limited Data:</strong> Some metrics are not available. 
+                                The backend needs to provide transferred_quantity, sold_quantity, and location fields.
+                              </Alert>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
                   </div>
+                ) : reconciliationSnapshot?.storefront?.total_on_hand ? (
+                  <Alert variant="warning" className="mt-3 mb-0">
+                    <strong>⚠️ No Storefront Breakdown Available</strong>
+                    <p className="mb-0 mt-1 text-sm">
+                      Storefront data shows {formatQuantity(reconciliationMetrics.storefrontOnHand)} units transferred, 
+                      but detailed breakdown by location is not available. The backend needs to provide the 
+                      storefront.entries array with per-location details.
+                    </p>
+                  </Alert>
                 ) : null}
 
               </div>

@@ -9,6 +9,7 @@ import type {
   Product,
   ProductPayload,
   SaleCatalogResponse,
+  MultiStorefrontCatalogResponse,
   StockAlert,
   StockBatch,
   StockBatchPayload,
@@ -50,6 +51,23 @@ export const fetchCategories = async () => {
 export const fetchSaleCatalog = async (storefrontId: UUID) => {
   const { data } = await httpClient.get<SaleCatalogResponse>(
     `/inventory/api/storefronts/${storefrontId}/sale-catalog/`,
+  )
+  return data
+}
+
+/**
+ * Fetch multi-storefront catalog - Returns products from ALL storefronts accessible to the user
+ * 
+ * For business owners: Returns products from all storefronts in their business
+ * For employees: Returns products from storefronts they're assigned to
+ * 
+ * @param params Optional query parameters
+ * @returns Promise with multi-storefront catalog response
+ */
+export const fetchMultiStorefrontCatalog = async (params?: { include_zero?: boolean }) => {
+  const { data } = await httpClient.get<MultiStorefrontCatalogResponse>(
+    '/inventory/api/storefronts/multi-storefront-catalog/',
+    { params }
   )
   return data
 }

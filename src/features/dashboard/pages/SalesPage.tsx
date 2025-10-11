@@ -14,6 +14,7 @@ import {
   loadSales,
 } from '../../../store/slices/salesSlice'
 import { selectActiveLocation } from '../../../store/slices/locationSlice'
+import { selectUserStorefronts } from '../../../store/slices/authSlice'
 import {
   SaleCart,
   ProductSearchPanel,
@@ -22,6 +23,7 @@ import {
   SalesHistory,
   CreditManagement,
   CreateCustomerModal,
+  ReceiptModal,
 } from '../components/sales'
 import type { UUID } from '../../../types/common'
 import type { Customer, Sale } from '../../../types/sales'
@@ -31,6 +33,7 @@ import {
   createCustomer as createCustomerService,
   getSalesSummary,
   getTodaysSalesStats,
+  updateSaleCustomer,
 } from '../../../services/salesService'
 
 const WALK_IN_NAME = 'Walk-In-Customer'
@@ -52,6 +55,11 @@ export default function SalesPage() {
   const mutations = useAppSelector(selectMutations)
   const errors = useAppSelector(selectErrors)
   const { formatCurrency } = useCurrency()
+  const accessibleStorefronts = useAppSelector(selectUserStorefronts)
+
+  // Enable multi-storefront mode if user has access to more than one storefront
+  // This includes business owners AND employees linked to multiple stores
+  const isMultiStorefrontEnabled = accessibleStorefronts.length > 1
 
   const currentCartRef = useRef<Sale | null>(currentCart)
   currentCartRef.current = currentCart
@@ -60,6 +68,8 @@ export default function SalesPage() {
   const [saleType, setSaleType] = useState<'RETAIL' | 'WHOLESALE'>('RETAIL')
   const [selectedCustomer, setSelectedCustomer] = useState<UUID | null>(null)
   const [showPayment, setShowPayment] = useState(false)
+  const [showReceipt, setShowReceipt] = useState(false)
+  const [completedSaleId, setCompletedSaleId] = useState<UUID | null>(null)
   const [customerOptions, setCustomerOptions] = useState<CustomerOption[]>([])
   const [customersLoading, setCustomersLoading] = useState(false)
   const [customerError, setCustomerError] = useState<string | null>(null)
@@ -72,6 +82,13 @@ export default function SalesPage() {
   const statsCacheRef = useRef<Record<string, typeof DEFAULT_TODAY_STATS>>({})
   const initializingSaleRef = useRef(false)
   const pendingSalePromiseRef = useRef<Promise<Sale | null> | null>(null)
+  const prevCartCustomerRef = useRef<string | null>(null)
+  const hasUserSelectedCustomer = useRef<boolean>(false)
+
+  // Debug: Log sale type changes
+  useEffect(() => {
+    console.log('📊 Sale type changed to:', saleType)
+  }, [saleType])
 
   const normalizeStats = useCallback((stats: Partial<typeof DEFAULT_TODAY_STATS> | null | undefined) => {
     const safe = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : 0)
@@ -402,8 +419,11 @@ export default function SalesPage() {
     }
   }, [customerOptions, upsertCustomerOption])
 
-  const startFreshSaleSession = useCallback(async (): Promise<Sale | null> => {
-    if (!currentLocation) {
+  const startFreshSaleSession = useCallback(async (preferredStorefrontId?: UUID): Promise<Sale | null> => {
+    // Use preferred storefront if provided (multi-storefront mode), otherwise use current location
+    const targetStorefront = preferredStorefrontId || currentLocation?.id
+    
+    if (!targetStorefront) {
       setCustomerError('Please select a storefront before starting a sale.')
       return null
     }
@@ -411,23 +431,29 @@ export default function SalesPage() {
     let customerId: UUID | undefined
     let customerName: string | null = null
 
-    if (saleType === 'WHOLESALE') {
-      if (!selectedCustomer) {
-        setCustomerError('Please select a customer before starting a wholesale sale.')
-        return null
-      }
+    // Customer is optional for both retail and wholesale
+    if (selectedCustomer) {
       customerId = selectedCustomer
       customerName = customerOptions.find((option) => option.id === selectedCustomer)?.name ?? null
     } else {
+      // Use walk-in customer if no customer selected
       const walkIn = await getOrCreateWalkInCustomer()
       customerId = walkIn?.id
       customerName = walkIn?.name ?? null
     }
 
     try {
+      console.log('🛒 Creating sale with storefront:', {
+        targetStorefront,
+        preferredStorefrontId,
+        currentLocationId: currentLocation?.id,
+        saleType,
+        customerId
+      })
+      
       const sale = await dispatch(
         createSale({
-          storefront: currentLocation.id,
+          storefront: targetStorefront,
           type: saleType,
           customer: customerId,
         })
@@ -453,7 +479,7 @@ export default function SalesPage() {
     }
   }, [currentLocation, customerOptions, dispatch, getOrCreateWalkInCustomer, saleType, selectedCustomer])
 
-  const prepareFreshSale = useCallback(async (options?: { startNewDraft?: boolean }) => {
+  const prepareFreshSale = useCallback(async (options?: { startNewDraft?: boolean; clearCustomer?: boolean }) => {
     if (initializingSaleRef.current) {
       return
     }
@@ -461,11 +487,22 @@ export default function SalesPage() {
     initializingSaleRef.current = true
 
     setShowPayment(false)
-    setSaleType('RETAIL')
+    // Don't reset saleType - preserve user's preference (RETAIL/WHOLESALE)
+    // setSaleType('RETAIL')  // Removed: This was causing toggle to reset
     setCustomerError(null)
     setEnsuringCustomer(false)
-    setSelectedCustomer(null)
-    setCheckoutCustomerId(null)
+    
+    // Only reset customer selection if explicitly requested (e.g., after completing a sale)
+    // Default is to preserve user's customer selection
+    if (options?.clearCustomer === true) {
+      console.log('🔄 Clearing customer selection (fresh sale after completion)')
+      setSelectedCustomer(null)
+      setCheckoutCustomerId(null)
+      hasUserSelectedCustomer.current = false
+      prevCartCustomerRef.current = null
+    } else {
+      console.log('🔄 Preserving customer selection (initializing sale session)')
+    }
 
     try {
       await clearExistingCart()
@@ -477,7 +514,7 @@ export default function SalesPage() {
     }
   }, [clearExistingCart, startFreshSaleSession])
 
-  const ensureSaleSession = useCallback(async (): Promise<UUID | null> => {
+  const ensureSaleSession = useCallback(async (preferredStorefrontId?: UUID): Promise<UUID | null> => {
     const existingCart = currentCartRef.current
 
     if (existingCart?.id) {
@@ -489,7 +526,7 @@ export default function SalesPage() {
       return pendingSale?.id ?? null
     }
 
-    const createPromise = startFreshSaleSession()
+    const createPromise = startFreshSaleSession(preferredStorefrontId)
     pendingSalePromiseRef.current = createPromise
 
     try {
@@ -589,17 +626,77 @@ export default function SalesPage() {
     }
   }, [dispatch])
 
+  // Sync selected customer TO cart when cart is created (user selected customer before adding products)
   useEffect(() => {
-    if (currentCart?.customer && currentCart.customer_name) {
-      upsertCustomerOption({ id: currentCart.customer, name: currentCart.customer_name })
-      if (!selectedCustomer) {
-        setSelectedCustomer(currentCart.customer)
-      }
-      if (!checkoutCustomerId) {
-        setCheckoutCustomerId(currentCart.customer)
+    console.log('🟢 useEffect (user→cart sync) triggered:', {
+      hasCart: !!currentCart?.id,
+      cartId: currentCart?.id,
+      cartCustomer: currentCart?.customer,
+      selectedCustomer,
+      willSync: currentCart?.id && selectedCustomer && currentCart.customer !== selectedCustomer
+    })
+    
+    if (currentCart?.id && selectedCustomer && currentCart.customer !== selectedCustomer) {
+      console.log('🟢 Syncing user-selected customer to backend cart:', {
+        cartId: currentCart.id,
+        cartCustomer: currentCart.customer,
+        cartCustomerName: currentCart.customer_name,
+        selectedCustomer,
+      })
+      
+      // Update backend with the customer user selected before cart existed
+      void (async () => {
+        try {
+          const updatedSale = await updateSaleCustomer(currentCart.id, selectedCustomer)
+          console.log('✅ Cart customer synced to backend:', updatedSale.customer_name)
+          
+          dispatch(
+            setCurrentCartCustomer({
+              customerId: updatedSale.customer,
+              customerName: updatedSale.customer_name,
+            })
+          )
+        } catch (err) {
+          console.error('❌ Failed to sync customer to new cart:', err)
+          setCustomerError('Failed to assign customer to sale. Please reselect from dropdown.')
+        }
+      })()
+    }
+  }, [currentCart?.id, selectedCustomer, currentCart?.customer, currentCart?.customer_name, dispatch])
+
+  // Sync cart customer TO dropdown ONLY when cart is first loaded or user hasn't made a selection
+  // This prevents overwriting user's active selection
+  
+  useEffect(() => {
+    const cartCustomer = currentCart?.customer || null
+    const cartCustomerName = currentCart?.customer_name || null
+    
+    console.log('🟣 useEffect (cart→dropdown sync) triggered:', {
+      currentCartCustomer: cartCustomer,
+      currentCartCustomerName: cartCustomerName,
+      prevCartCustomer: prevCartCustomerRef.current,
+      selectedCustomer,
+      hasUserSelected: hasUserSelectedCustomer.current,
+      willSync: cartCustomer && cartCustomer !== prevCartCustomerRef.current && !hasUserSelectedCustomer.current
+    })
+    
+    // Only sync from cart to dropdown if:
+    // 1. Cart customer actually CHANGED from backend (not just re-render)
+    // 2. User hasn't manually selected a different customer
+    if (cartCustomer && cartCustomerName && cartCustomer !== prevCartCustomerRef.current) {
+      prevCartCustomerRef.current = cartCustomer
+      upsertCustomerOption({ id: cartCustomer, name: cartCustomerName })
+      
+      // ONLY update dropdown if user hasn't made their own selection
+      if (!hasUserSelectedCustomer.current) {
+        console.log('🟣 Syncing cart customer to dropdown (no user selection):', cartCustomer)
+        setSelectedCustomer(cartCustomer)
+        setCheckoutCustomerId(cartCustomer)
+      } else {
+        console.log('🟣 Skipping dropdown sync - user has made selection:', selectedCustomer)
       }
     }
-  }, [currentCart?.customer, currentCart?.customer_name, selectedCustomer, checkoutCustomerId, upsertCustomerOption])
+  }, [currentCart?.customer, currentCart?.customer_name, selectedCustomer, upsertCustomerOption])
 
   const handleTabSelect = useCallback(
     (key: string | null) => {
@@ -638,34 +735,131 @@ export default function SalesPage() {
       currentCartRef.current = null
       setSelectedCustomer(null)
       setCheckoutCustomerId(null)
+      
+      // Reset user selection flag when clearing cart
+      hasUserSelectedCustomer.current = false
+      prevCartCustomerRef.current = null
     } catch (err) {
       console.error('Failed to abandon sale before clearing cart', err)
     }
   }, [currentCartRef, dispatch])
 
-  const handleCustomerChange = (customerId: UUID | null) => {
+  const handleCustomerChange = async (customerId: UUID | null) => {
+    console.log('🔵 handleCustomerChange called:', {
+      customerId,
+      currentCartExists: !!currentCart,
+      currentCartId: currentCart?.id,
+      currentCartCustomer: currentCart?.customer,
+      currentCartCustomerName: currentCart?.customer_name,
+    })
+    
+    // Mark that user has manually selected a customer
+    hasUserSelectedCustomer.current = true
+    
+    console.log('🔵 Setting selectedCustomer to:', customerId, 'hasUserSelectedCustomer:', hasUserSelectedCustomer.current)
     setSelectedCustomer(customerId)
     setCheckoutCustomerId(customerId)
+    console.log('🔵 After setSelectedCustomer, hasUserSelectedCustomer:', hasUserSelectedCustomer.current)
+    
     if (customerId) {
       const option = customerOptions.find((customer) => customer.id === customerId)
-      dispatch(
-        setCurrentCartCustomer({
-          customerId,
-          customerName: option?.name ?? null,
-        })
-      )
-      setCustomerError(null)
+      const customerName = option?.name ?? null
+      
+      console.log('🔵 Customer option found:', { customerName, option })
+      
+      // Backend endpoint implemented (e60b313) - customer updates now persist to database
+      if (currentCart?.id) {
+        try {
+          console.log('🔄 Calling updateSaleCustomer API...', {
+            saleId: currentCart.id,
+            customerId,
+            endpoint: `/sales/api/sales/${currentCart.id}/update_customer/`
+          })
+          
+          const updatedSale = await updateSaleCustomer(currentCart.id, customerId)
+          
+          console.log('✅ Backend response received:', {
+            customer: updatedSale.customer,
+            customer_name: updatedSale.customer_name,
+            status: updatedSale.status,
+            fullResponse: updatedSale
+          })
+          
+          // Update Redux store with backend response to ensure consistency
+          dispatch(
+            setCurrentCartCustomer({
+              customerId: updatedSale.customer,
+              customerName: updatedSale.customer_name,
+            })
+          )
+          
+          console.log('✅ Redux updated with backend data')
+          setCustomerError(null)
+        } catch (err) {
+          console.error('❌ Failed to update customer on backend:', err)
+          console.error('❌ Error details:', {
+            error: err,
+            message: err instanceof Error ? err.message : 'Unknown error',
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            response: (err as any)?.response?.data
+          })
+          setCustomerError('Failed to update customer. Please try again.')
+          // Revert selection on error
+          setSelectedCustomer(currentCart.customer)
+          setCheckoutCustomerId(currentCart.customer)
+        }
+      } else {
+        // No cart yet, just update local state
+        console.log('⚠️ No cart exists, updating local state only')
+        dispatch(
+          setCurrentCartCustomer({
+            customerId,
+            customerName,
+          })
+        )
+        setCustomerError(null)
+      }
     } else {
+      console.log('🔵 Clearing customer selection')
       dispatch(setCurrentCartCustomer({ customerId: null, customerName: null }))
     }
   }
 
-  const handleCustomerCreated = (customer: Customer) => {
+  const handleCustomerCreated = async (customer: Customer) => {
+    // Mark that user has manually selected/created a customer
+    hasUserSelectedCustomer.current = true
+    
     upsertCustomerOption({ id: customer.id, name: customer.name })
     setSelectedCustomer(customer.id)
     setCheckoutCustomerId(customer.id)
-    dispatch(setCurrentCartCustomer({ customerId: customer.id, customerName: customer.name }))
-    setCustomerError(null)
+    
+    // Backend endpoint implemented (e60b313) - newly created customers now persist to sale
+    if (currentCart?.id) {
+      try {
+        console.log('🔄 Updating newly created customer on backend sale:', currentCart.id, '→', customer.id)
+        const updatedSale = await updateSaleCustomer(currentCart.id, customer.id)
+        console.log('✅ Customer updated on backend:', updatedSale.customer_name)
+        
+        // Update Redux store with backend response to ensure consistency
+        dispatch(
+          setCurrentCartCustomer({
+            customerId: updatedSale.customer,
+            customerName: updatedSale.customer_name,
+          })
+        )
+        setCustomerError(null)
+      } catch (err) {
+        console.error('❌ Failed to update customer on backend:', err)
+        setCustomerError('Customer created but failed to assign to sale. Please select from dropdown.')
+        // Revert selection on error
+        setSelectedCustomer(currentCart.customer)
+        setCheckoutCustomerId(currentCart.customer)
+      }
+    } else {
+      // No cart yet, just update local state
+      dispatch(setCurrentCartCustomer({ customerId: customer.id, customerName: customer.name }))
+      setCustomerError(null)
+    }
   }
 
   const ensureCustomerForSale = useCallback(async (): Promise<UUID | null> => {
@@ -731,6 +925,10 @@ export default function SalesPage() {
     currentCartRef.current = completedSale
     setShowPayment(false)
 
+    // Show receipt modal
+    setCompletedSaleId(completedSale.id)
+    setShowReceipt(true)
+
     void dispatch(loadSales())
 
     const parseAmount = (value: unknown) => {
@@ -758,7 +956,7 @@ export default function SalesPage() {
 
     void loadTodayStats({ preserveExisting: true })
 
-    void prepareFreshSale()
+    void prepareFreshSale({ clearCustomer: true })
   }
 
   return (
@@ -795,12 +993,22 @@ export default function SalesPage() {
                     </div>
                     <div className="d-flex gap-2">
                       <Button
-                        variant="outline-secondary"
+                        variant={saleType === 'WHOLESALE' ? 'warning' : 'outline-secondary'}
                         size="sm"
-                        onClick={() => setSaleType(saleType === 'RETAIL' ? 'WHOLESALE' : 'RETAIL')}
+                        onClick={() => {
+                          console.log('🔄 Sale type toggle clicked:', {
+                            current: saleType,
+                            willChangeTo: saleType === 'RETAIL' ? 'WHOLESALE' : 'RETAIL',
+                            hasCart: !!currentCart,
+                            cartId: currentCart?.id
+                          })
+                          setSaleType(saleType === 'RETAIL' ? 'WHOLESALE' : 'RETAIL')
+                        }}
                         disabled={!!currentCart}
+                        title={currentCart ? 'Clear cart to change sale type' : 'Toggle between retail and wholesale pricing'}
+                        className={saleType === 'WHOLESALE' ? 'fw-bold' : ''}
                       >
-                        {saleType}
+                        {saleType === 'WHOLESALE' ? '⚠️ WHOLESALE' : 'RETAIL'}
                       </Button>
                       {currentCart && (
                         <Button
@@ -836,6 +1044,29 @@ export default function SalesPage() {
                       </Alert>
                     )}
 
+                    {/* Wholesale Mode Warning */}
+                    {saleType === 'WHOLESALE' && (
+                      <Alert variant="warning" className="mb-3 border-warning border-2">
+                        <div className="d-flex align-items-center">
+                          <i className="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
+                          <div>
+                            <Alert.Heading className="h5 mb-1">
+                              <strong>⚠️ WHOLESALE MODE ACTIVE</strong>
+                            </Alert.Heading>
+                            <p className="mb-0">
+                              You are selling at <strong>WHOLESALE PRICES</strong>. 
+                              All products will be charged at discounted wholesale rates.
+                              {!currentCart && (
+                                <span className="d-block mt-1 small">
+                                  Click the WHOLESALE button above to switch back to retail pricing.
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      </Alert>
+                    )}
+
                     {/* Product Search */}
                     <ProductSearchPanel
                       storefrontId={currentLocation?.id || ''}
@@ -843,6 +1074,7 @@ export default function SalesPage() {
                       saleType={saleType}
                       ensureSaleSession={ensureSaleSession}
                       disabled={mutations.createSale === 'loading'}
+                      multiStorefront={isMultiStorefrontEnabled}
                     />
                     {/* Shopping Cart */}
                     <div className="mt-4">
@@ -930,6 +1162,15 @@ export default function SalesPage() {
         saleType={saleType}
         onHide={() => setShowCreateCustomerModal(false)}
         onCustomerCreated={handleCustomerCreated}
+      />
+
+      <ReceiptModal
+        show={showReceipt}
+        saleId={completedSaleId}
+        onHide={() => {
+          setShowReceipt(false)
+          setCompletedSaleId(null)
+        }}
       />
     </Container>
   )
