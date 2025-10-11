@@ -15,6 +15,7 @@ import {
 } from 'react-bootstrap'
 import './SalesHistory.module.css'
 import { useAppDispatch, useAppSelector, useCurrency } from '../../../../hooks'
+import { ReceiptModal } from './ReceiptModal'
 import {
   loadSales,
   abandonSale,
@@ -107,6 +108,10 @@ export function SalesHistory() {
     message: string
   } | null>(null)
   const selectAllCheckboxRef = useRef<HTMLInputElement | null>(null)
+
+  // Receipt modal state
+  const [showReceipt, setShowReceipt] = useState(false)
+  const [receiptSaleId, setReceiptSaleId] = useState<UUID | null>(null)
 
   const showDraftControls = selectedStatus === 'DRAFT'
 
@@ -539,6 +544,13 @@ export function SalesHistory() {
     setExpandedSale(expandedSale === saleId ? null : saleId)
   }
 
+  // Open receipt modal
+  const handlePrintReceipt = (saleId: UUID, event: React.MouseEvent) => {
+    event.stopPropagation() // Prevent row expansion when clicking print button
+    setReceiptSaleId(saleId)
+    setShowReceipt(true)
+  }
+
   // Filter handlers
   const handleSearch = () => {
     // Reset to page 1 when searching
@@ -727,6 +739,7 @@ export function SalesHistory() {
   const showStorefrontFilter = userStorefronts.length > 1
 
   return (
+    <>
     <Card>
       <Card.Header>
         <div className="d-flex justify-content-between align-items-center">
@@ -1106,6 +1119,7 @@ export function SalesHistory() {
                   <th>Amount</th>
                   <th>Status</th>
                   <th>Payment</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -1188,12 +1202,24 @@ export function SalesHistory() {
                         <Badge bg={getStatusBadge(sale.status)}>{sale.status}</Badge>
                       </td>
                       <td className="small text-muted">{formatPaymentType(sale.payment_type)}</td>
+                      <td onClick={(event) => event.stopPropagation()}>
+                        {sale.status === 'COMPLETED' && (
+                          <Button
+                            variant="outline-primary"
+                            size="sm"
+                            onClick={(event) => handlePrintReceipt(sale.id, event)}
+                            title="Print Receipt"
+                          >
+                            🖨️ Print
+                          </Button>
+                        )}
+                      </td>
                     </tr>
 
                     {/* Expanded row - shows product details */}
                     {expandedSale === sale.id && canExpand && (
                       <tr className="border-0">
-                        <td colSpan={showDraftControls ? 8 : 7} style={{ backgroundColor: '#f8f9fa', padding: '1rem' }}>
+                        <td colSpan={showDraftControls ? 9 : 8} style={{ backgroundColor: '#f8f9fa', padding: '1rem' }}>
                           <div style={{ animation: 'slideDown 0.3s ease-out' }}>
                             <h6 className="mb-3">📦 Products Sold</h6>
                             <Table size="sm" bordered hover>
@@ -1360,5 +1386,16 @@ export function SalesHistory() {
         )}
       </Card.Body>
     </Card>
+
+    {/* Receipt Modal */}
+    <ReceiptModal
+      show={showReceipt}
+      saleId={receiptSaleId}
+      onHide={() => {
+        setShowReceipt(false)
+        setReceiptSaleId(null)
+      }}
+    />
+  </>
   )
 }
