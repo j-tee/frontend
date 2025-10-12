@@ -79,11 +79,13 @@ export interface ExportHistory {
  * Notification Settings - Email preferences per business
  */
 export interface ExportNotificationSettings {
+  enable_notifications?: boolean
   notify_on_success: boolean
   notify_on_failure: boolean
   default_recipients: string[]
-  from_name: string
-  reply_to_email: string
+  cc_recipients?: string[]
+  from_name?: string
+  reply_to_email?: string
 }
 
 /**
@@ -94,6 +96,9 @@ export interface ExportStatistics {
   successful_exports: number
   failed_exports: number
   success_rate: number
+  total_storage_bytes: number
+  last_export_at: string | null
+  active_schedules: number
   by_type: Record<string, { total: number; successful: number; failed: number }>
   by_format: Record<string, { total: number; successful: number; failed: number }>
   recent_exports_7_days: number
