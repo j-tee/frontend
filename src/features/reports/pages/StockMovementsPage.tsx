@@ -111,10 +111,10 @@ const StockMovementsPage: React.FC = () => {
 
   if (loading && !data) return <LoadingState />;
   if (error) return <ErrorState error={error} onRetry={fetchData} />;
-  if (!data) return <EmptyState />;
+  if (!data || !data.summary || !data.movements || !data.pagination) return <EmptyState />;
 
   const summary = data.summary;
-  const movements = data.movements || [];
+  const movements = data.movements;
   const pagination = data.pagination;
 
   return (
