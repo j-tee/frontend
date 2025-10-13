@@ -80,21 +80,21 @@ const ReportsPage = () => {
         title: 'Low Stock Alerts',
         description: 'Products below reorder point',
         icon: '⚠️',
-        path: '/app/reports/inventory/low-stock',
+        path: '/app/reports/inventory/low-stock-alerts',
         features: ['Critical items', 'Reorder suggestions', 'Lead times', 'Cost estimates']
       },
       {
         title: 'Stock Movements',
         description: 'All stock ins, outs, and adjustments',
         icon: '🔄',
-        path: '/app/reports/inventory/movements',
+        path: '/app/reports/inventory/stock-movements',
         features: ['Movement history', 'Transfers', 'Adjustments', 'Audit trail']
       },
       {
         title: 'Warehouse Analytics',
         description: 'Performance metrics per warehouse',
         icon: '🏢',
-        path: '/app/reports/inventory/warehouse',
+        path: '/app/reports/inventory/warehouse-analytics',
         features: ['Turnover ratio', 'Dead stock', 'Top products', 'Utilization']
       }
     ],
