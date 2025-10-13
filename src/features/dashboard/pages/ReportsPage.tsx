@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Tab, Nav, Accordion, Card } from 'react-bootstrap'
+import { Tab, Nav, Card } from 'react-bootstrap'
 import { ExportStatisticsCard } from '../components/exports/ExportStatisticsCard'
 
 const ReportsPage = () => {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('overview')
+  const [expandedAccordion, setExpandedAccordion] = useState<string | null>('sales')
 
   const reportSections = [
     {
@@ -294,98 +295,130 @@ const ReportsPage = () => {
                 <div className="space-y-4">
                   <h3 className="text-xl font-bold text-slate-900">Analytical Reports (16 Total)</h3>
                   <p className="text-sm font-medium text-slate-700 mb-4">
-                    Expand each category to view available reports
+                    Click each category to view available reports
                   </p>
 
-                  <Accordion defaultActiveKey="0">
+                  <div className="space-y-3">
                     {/* Sales Reports */}
-                    <Accordion.Item eventKey="0" className="mb-2 border border-slate-200 rounded-lg overflow-hidden">
-                      <Accordion.Header className="bg-blue-50">
+                    <div className="border border-slate-200 rounded-lg overflow-hidden">
+                      <button
+                        onClick={() => setExpandedAccordion(expandedAccordion === 'sales' ? null : 'sales')}
+                        className="w-full bg-blue-50 p-4 flex items-center justify-between hover:bg-blue-100 transition"
+                      >
                         <div className="flex items-center gap-3">
                           <span className="text-2xl">📊</span>
-                          <div>
+                          <div className="text-left">
                             <div className="font-bold text-slate-900">Sales Reports</div>
                             <div className="text-xs font-medium text-slate-600">
                               4 reports · Performance, trends, and customer analytics
                             </div>
                           </div>
                         </div>
-                      </Accordion.Header>
-                      <Accordion.Body className="p-4 bg-white">
-                        <div className="grid gap-3 md:grid-cols-2">
-                          {analyticalReports.sales.map((report) => (
-                            <ReportCard key={report.title} report={report} navigate={navigate} />
-                          ))}
+                        <span className={`text-slate-600 transition-transform ${expandedAccordion === 'sales' ? 'rotate-180' : ''}`}>
+                          ▼
+                        </span>
+                      </button>
+                      {expandedAccordion === 'sales' && (
+                        <div className="p-4 bg-white border-t border-slate-200">
+                          <div className="grid gap-3 md:grid-cols-2">
+                            {analyticalReports.sales.map((report) => (
+                              <ReportCard key={report.title} report={report} navigate={navigate} />
+                            ))}
+                          </div>
                         </div>
-                      </Accordion.Body>
-                    </Accordion.Item>
+                      )}
+                    </div>
 
                     {/* Inventory Reports */}
-                    <Accordion.Item eventKey="1" className="mb-2 border border-slate-200 rounded-lg overflow-hidden">
-                      <Accordion.Header className="bg-green-50">
+                    <div className="border border-slate-200 rounded-lg overflow-hidden">
+                      <button
+                        onClick={() => setExpandedAccordion(expandedAccordion === 'inventory' ? null : 'inventory')}
+                        className="w-full bg-green-50 p-4 flex items-center justify-between hover:bg-green-100 transition"
+                      >
                         <div className="flex items-center gap-3">
                           <span className="text-2xl">📦</span>
-                          <div>
+                          <div className="text-left">
                             <div className="font-bold text-slate-900">Inventory Reports</div>
                             <div className="text-xs font-medium text-slate-600">
                               4 reports · Stock levels, alerts, and warehouse analytics
                             </div>
                           </div>
                         </div>
-                      </Accordion.Header>
-                      <Accordion.Body className="p-4 bg-white">
-                        <div className="grid gap-3 md:grid-cols-2">
-                          {analyticalReports.inventory.map((report) => (
-                            <ReportCard key={report.title} report={report} navigate={navigate} />
-                          ))}
+                        <span className={`text-slate-600 transition-transform ${expandedAccordion === 'inventory' ? 'rotate-180' : ''}`}>
+                          ▼
+                        </span>
+                      </button>
+                      {expandedAccordion === 'inventory' && (
+                        <div className="p-4 bg-white border-t border-slate-200">
+                          <div className="grid gap-3 md:grid-cols-2">
+                            {analyticalReports.inventory.map((report) => (
+                              <ReportCard key={report.title} report={report} navigate={navigate} />
+                            ))}
+                          </div>
                         </div>
-                      </Accordion.Body>
-                    </Accordion.Item>
+                      )}
+                    </div>
 
                     {/* Financial Reports */}
-                    <Accordion.Item eventKey="2" className="mb-2 border border-slate-200 rounded-lg overflow-hidden">
-                      <Accordion.Header className="bg-purple-50">
+                    <div className="border border-slate-200 rounded-lg overflow-hidden">
+                      <button
+                        onClick={() => setExpandedAccordion(expandedAccordion === 'financial' ? null : 'financial')}
+                        className="w-full bg-purple-50 p-4 flex items-center justify-between hover:bg-purple-100 transition"
+                      >
                         <div className="flex items-center gap-3">
                           <span className="text-2xl">💰</span>
-                          <div>
+                          <div className="text-left">
                             <div className="font-bold text-slate-900">Financial Reports</div>
                             <div className="text-xs font-medium text-slate-600">
                               4 reports · Revenue, AR aging, collections, and cash flow
                             </div>
                           </div>
                         </div>
-                      </Accordion.Header>
-                      <Accordion.Body className="p-4 bg-white">
-                        <div className="grid gap-3 md:grid-cols-2">
-                          {analyticalReports.financial.map((report) => (
-                            <ReportCard key={report.title} report={report} navigate={navigate} />
-                          ))}
+                        <span className={`text-slate-600 transition-transform ${expandedAccordion === 'financial' ? 'rotate-180' : ''}`}>
+                          ▼
+                        </span>
+                      </button>
+                      {expandedAccordion === 'financial' && (
+                        <div className="p-4 bg-white border-t border-slate-200">
+                          <div className="grid gap-3 md:grid-cols-2">
+                            {analyticalReports.financial.map((report) => (
+                              <ReportCard key={report.title} report={report} navigate={navigate} />
+                            ))}
+                          </div>
                         </div>
-                      </Accordion.Body>
-                    </Accordion.Item>
+                      )}
+                    </div>
 
                     {/* Customer Reports */}
-                    <Accordion.Item eventKey="3" className="mb-2 border border-slate-200 rounded-lg overflow-hidden">
-                      <Accordion.Header className="bg-pink-50">
+                    <div className="border border-slate-200 rounded-lg overflow-hidden">
+                      <button
+                        onClick={() => setExpandedAccordion(expandedAccordion === 'customer' ? null : 'customer')}
+                        className="w-full bg-pink-50 p-4 flex items-center justify-between hover:bg-pink-100 transition"
+                      >
                         <div className="flex items-center gap-3">
                           <span className="text-2xl">👥</span>
-                          <div>
+                          <div className="text-left">
                             <div className="font-bold text-slate-900">Customer Reports</div>
                             <div className="text-xs font-medium text-slate-600">
                               4 reports · Top customers, patterns, credit, and segmentation
                             </div>
                           </div>
                         </div>
-                      </Accordion.Header>
-                      <Accordion.Body className="p-4 bg-white">
-                        <div className="grid gap-3 md:grid-cols-2">
-                          {analyticalReports.customer.map((report) => (
-                            <ReportCard key={report.title} report={report} navigate={navigate} />
-                          ))}
+                        <span className={`text-slate-600 transition-transform ${expandedAccordion === 'customer' ? 'rotate-180' : ''}`}>
+                          ▼
+                        </span>
+                      </button>
+                      {expandedAccordion === 'customer' && (
+                        <div className="p-4 bg-white border-t border-slate-200">
+                          <div className="grid gap-3 md:grid-cols-2">
+                            {analyticalReports.customer.map((report) => (
+                              <ReportCard key={report.title} report={report} navigate={navigate} />
+                            ))}
+                          </div>
                         </div>
-                      </Accordion.Body>
-                    </Accordion.Item>
-                  </Accordion>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </Tab.Pane>
 
