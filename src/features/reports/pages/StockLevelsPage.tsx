@@ -35,7 +35,13 @@ const StockLevelsPage: React.FC = () => {
       const response = await inventoryReportsService.getStockLevels(params);
       setData(response);
     } catch (err) {
-      setError((err as Error).message || 'Failed to load stock levels report');
+      // Check for specific backend field error
+      const error = err as { response?: { status?: number }; message?: string };
+      const errorMessage = error.response?.status === 500 
+        ? 'Backend error: Database field configuration issue. Please contact support or try again without valuation enabled.'
+        : (error.message || 'Failed to load stock levels report');
+      setError(errorMessage);
+      console.error('Stock levels fetch error:', err);
     } finally {
       setLoading(false);
     }
@@ -88,7 +94,28 @@ const StockLevelsPage: React.FC = () => {
   };
 
   if (loading) return <LoadingState />;
-  if (error) return <ErrorState error={error} onRetry={fetchData} />;
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-4xl mx-auto">
+          <ErrorState error={error} onRetry={fetchData} />
+          {error.includes('Database field configuration') && includeValuation && (
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>Temporary Workaround:</strong> Try disabling the "Include Valuation" option below to view basic stock levels.
+              </p>
+              <button
+                onClick={() => setIncludeValuation(false)}
+                className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+              >
+                Disable Valuation & Retry
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
   if (!data?.data) return <EmptyState />;
 
   const summary = data.data.summary;
