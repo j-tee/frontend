@@ -75,11 +75,17 @@ const StockLevelsPage: React.FC = () => {
     }
   };
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number | null | undefined) => {
+    if (amount === null || amount === undefined || isNaN(amount)) return '$0.00';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD'
     }).format(amount);
+  };
+
+  const formatNumber = (value: number | null | undefined): string => {
+    if (value === null || value === undefined || isNaN(value)) return '0';
+    return value.toLocaleString();
   };
 
   const getStatusColor = (status: string) => {
@@ -170,25 +176,25 @@ const StockLevelsPage: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <SummaryCard
           title="Total Products"
-          value={summary.total_products.toLocaleString()}
+          value={formatNumber(summary.total_products)}
           icon="📦"
           color="bg-blue-50 border-blue-200"
-          subtitle={`${summary.total_variants.toLocaleString()} variants`}
+          subtitle={`${formatNumber(summary.total_variants)} variants`}
         />
         <SummaryCard
           title="In Stock"
-          value={summary.in_stock.toLocaleString()}
+          value={formatNumber(summary.in_stock)}
           icon="✅"
           color="bg-green-50 border-green-200"
-          change={((summary.in_stock / summary.total_products) * 100)}
+          change={summary.total_products ? ((summary.in_stock / summary.total_products) * 100) : 0}
           changeLabel="of total"
         />
         <SummaryCard
           title="Low Stock Items"
-          value={summary.low_stock.toLocaleString()}
+          value={formatNumber(summary.low_stock)}
           icon="⚠️"
           color="bg-amber-50 border-amber-200"
-          subtitle={`${summary.out_of_stock} out of stock`}
+          subtitle={`${formatNumber(summary.out_of_stock)} out of stock`}
         />
         {includeValuation && (
           <SummaryCard
@@ -196,7 +202,7 @@ const StockLevelsPage: React.FC = () => {
             value={formatCurrency(summary.total_stock_value)}
             icon="💰"
             color="bg-purple-50 border-purple-200"
-            subtitle={`${summary.warehouses_count} locations`}
+            subtitle={`${formatNumber(summary.warehouses_count)} locations`}
           />
         )}
       </div>
@@ -308,10 +314,10 @@ const StockLevelsPage: React.FC = () => {
                       {item.category}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-gray-900">
-                      {item.total_quantity.toLocaleString()}
+                      {formatNumber(item.total_quantity)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
-                      {item.total_available.toLocaleString()}
+                      {formatNumber(item.total_available)}
                     </td>
                     {includeValuation && (
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-gray-900">
@@ -337,15 +343,15 @@ const StockLevelsPage: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-6 py-2 text-sm text-right text-gray-700">
-                        {location.quantity.toLocaleString()}
+                        {formatNumber(location.quantity)}
                       </td>
                       <td className="px-6 py-2 text-sm text-right">
                         <span className="text-gray-700">
-                          {location.available.toLocaleString()}
+                          {formatNumber(location.available)}
                         </span>
                         {location.reserved > 0 && (
                           <span className="text-amber-600 text-xs ml-1">
-                            ({location.reserved} reserved)
+                            ({formatNumber(location.reserved)} reserved)
                           </span>
                         )}
                       </td>
