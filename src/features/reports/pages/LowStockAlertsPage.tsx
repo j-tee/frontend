@@ -9,7 +9,7 @@ import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates
 
 const LowStockAlertsPage: React.FC = () => {
   const navigate = useNavigate();
-  const [data, setData] = useState<LowStockAlertsResponse | null>(null);
+  const [data, setData] = useState<LowStockAlertsResponse['data'] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,7 +29,13 @@ const LowStockAlertsPage: React.FC = () => {
       if (urgency) params.urgency = urgency;
 
       const response = await inventoryReportsService.getLowStockAlerts(params);
-      setData(response);
+      
+      // Handle nested API response structure
+      if (response.success && response.data) {
+        setData(response.data);
+      } else {
+        throw new Error('Invalid response structure');
+      }
     } catch (err) {
       setError((err as Error).message || 'Failed to load low stock alerts');
     } finally {
@@ -54,11 +60,17 @@ const LowStockAlertsPage: React.FC = () => {
     }
   };
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number | null | undefined) => {
+    if (amount === null || amount === undefined || isNaN(amount)) return '$0.00';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD'
     }).format(amount);
+  };
+
+  const formatNumber = (value: number | null | undefined): string => {
+    if (value === null || value === undefined || isNaN(value)) return '0';
+    return value.toLocaleString();
   };
 
   const getUrgencyColor = (urgency: string) => {
@@ -89,10 +101,12 @@ const LowStockAlertsPage: React.FC = () => {
 
   if (loading) return <LoadingState />;
   if (error) return <ErrorState error={error} onRetry={fetchData} />;
-  if (!data?.data) return <EmptyState />;
+  if (!data || !data.summary || !data.alerts) {
+    return <EmptyState message="No low stock alerts data available" />;
+  }
 
-  const summary = data.data.summary;
-  const alerts = data.data.alerts || [];
+  const summary = data.summary;
+  const alerts = data.alerts || [];
 
   return (
     <ReportContainer
@@ -130,28 +144,28 @@ const LowStockAlertsPage: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <SummaryCard
           title="Critical Alerts"
-          value={summary.critical.toLocaleString()}
+          value={formatNumber(summary.critical)}
           icon="🔴"
           color="bg-red-50 border-red-200"
           subtitle="0 stock or negative"
         />
         <SummaryCard
           title="Warning Alerts"
-          value={summary.warning.toLocaleString()}
+          value={formatNumber(summary.warning)}
           icon="🟠"
           color="bg-amber-50 border-amber-200"
           subtitle="Below reorder point"
         />
         <SummaryCard
           title="Watch Items"
-          value={summary.watch.toLocaleString()}
+          value={formatNumber(summary.watch)}
           icon="🟡"
           color="bg-blue-50 border-blue-200"
           subtitle="Within 20% of reorder"
         />
         <SummaryCard
           title="Restock Cost"
-          value={formatCurrency(data.data.total_restock_cost)}
+          value={formatCurrency(data.total_restock_cost)}
           icon="💰"
           color="bg-purple-50 border-purple-200"
           subtitle="Estimated total"
@@ -256,11 +270,11 @@ const LowStockAlertsPage: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
                     <span className={`font-medium ${alert.current_stock <= 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                      {alert.current_stock.toLocaleString()}
+                      {formatNumber(alert.current_stock)}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-700">
-                    {alert.reorder_point.toLocaleString()}
+                    {formatNumber(alert.reorder_point)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     <div className="flex items-center justify-center space-x-1">
@@ -274,7 +288,7 @@ const LowStockAlertsPage: React.FC = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-blue-600">
-                    {alert.reorder_quantity.toLocaleString()} units
+                    {formatNumber(alert.reorder_quantity)} units
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-gray-900">
                     {formatCurrency(alert.estimated_cost)}
@@ -308,7 +322,7 @@ const LowStockAlertsPage: React.FC = () => {
                   </span>
                 )}
                 Review suggested order quantities and estimated costs. Consider lead times
-                when placing orders. Total estimated restock cost: <strong>{formatCurrency(data.data.total_restock_cost)}</strong>
+                when placing orders. Total estimated restock cost: <strong>{formatCurrency(data.total_restock_cost)}</strong>
               </p>
             </div>
           </div>
