@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom'
+import { Route, Routes, Navigate } from 'react-router-dom'
 import { ToastContainer } from 'react-toastify'
 import LandingPage from './pages/LandingPage.tsx'
 import LoginPage from './features/authentication/LoginPage.tsx'
@@ -20,6 +20,28 @@ import SettingsPage from './features/dashboard/pages/SettingsPage.tsx'
 import ManageStocksPage from './features/dashboard/pages/ManageStocksPage.tsx'
 import StorefrontsPage from './features/dashboard/pages/StorefrontsPage.tsx'
 import EmployeesPage from './features/dashboard/pages/EmployeesPage.tsx'
+import ExportSchedulesPage from './features/dashboard/pages/ExportSchedulesPage.tsx'
+import ExportHistoryPage from './features/dashboard/pages/ExportHistoryPage.tsx'
+import SalesSummaryPage from './features/reports/pages/SalesSummaryPage.tsx'
+import SalesReportsIndexPage from './features/reports/pages/SalesReportsIndexPage.tsx'
+import ProductPerformancePage from './features/reports/pages/ProductPerformancePage.tsx'
+import CustomerAnalyticsPage from './features/reports/pages/CustomerAnalyticsPage.tsx'
+import RevenueTrendsPage from './features/reports/pages/RevenueTrendsPage.tsx'
+import FinancialReportsIndexPage from './features/reports/pages/FinancialReportsIndexPage.tsx'
+import RevenueProfitPage from './features/reports/pages/RevenueProfitPage.tsx'
+import ARAgingPage from './features/reports/pages/ARAgingPage.tsx'
+import CollectionRatesPage from './features/reports/pages/CollectionRatesPage.tsx'
+import CashFlowPage from './features/reports/pages/CashFlowPage.tsx'
+import InventoryReportsIndexPage from './features/reports/pages/InventoryReportsIndexPage.tsx'
+import StockLevelsPage from './features/reports/pages/StockLevelsPage.tsx'
+import LowStockAlertsPage from './features/reports/pages/LowStockAlertsPage.tsx'
+import StockMovementsPage from './features/reports/pages/StockMovementsPage.tsx'
+import WarehouseAnalyticsPage from './features/reports/pages/WarehouseAnalyticsPage.tsx'
+import CustomerReportsIndexPage from './features/reports/pages/CustomerReportsIndexPage.tsx'
+import TopCustomersPage from './features/reports/pages/TopCustomersPage.tsx'
+import PurchasePatternsPage from './features/reports/pages/PurchasePatternsPage.tsx'
+import CreditUtilizationPage from './features/reports/pages/CreditUtilizationPage.tsx'
+import CustomerSegmentationPage from './features/reports/pages/CustomerSegmentationPage.tsx'
 import RequirePermission from './components/RequirePermission.tsx'
 import { CAPABILITIES } from './utils/permissions.ts'
 
@@ -105,6 +127,195 @@ const App = () => {
               element={(
                 <RequirePermission capability={CAPABILITIES.REPORTS_VIEW}>
                   <ReportsPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="reports/export-schedules"
+              element={(
+                <RequirePermission capability={CAPABILITIES.REPORTS_VIEW}>
+                  <ExportSchedulesPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="reports/export-history"
+              element={(
+                <RequirePermission capability={CAPABILITIES.REPORTS_VIEW}>
+                  <ExportHistoryPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="reports/sales"
+              element={(
+                <RequirePermission capability={CAPABILITIES.REPORTS_VIEW}>
+                  <SalesReportsIndexPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="reports/sales/summary"
+              element={(
+                <RequirePermission capability={CAPABILITIES.REPORTS_VIEW}>
+                  <SalesSummaryPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="reports/sales/products"
+              element={(
+                <RequirePermission capability={CAPABILITIES.REPORTS_VIEW}>
+                  <ProductPerformancePage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="reports/sales/customers"
+              element={(
+                <RequirePermission capability={CAPABILITIES.REPORTS_VIEW}>
+                  <CustomerAnalyticsPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="reports/sales/trends"
+              element={(
+                <RequirePermission capability={CAPABILITIES.REPORTS_VIEW}>
+                  <RevenueTrendsPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="reports/financial"
+              element={(
+                <RequirePermission capability={CAPABILITIES.REPORTS_VIEW}>
+                  <FinancialReportsIndexPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="reports/financial/revenue-profit"
+              element={(
+                <RequirePermission capability={CAPABILITIES.REPORTS_VIEW}>
+                  <RevenueProfitPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="reports/financial/ar-aging"
+              element={(
+                <RequirePermission capability={CAPABILITIES.REPORTS_VIEW}>
+                  <ARAgingPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="reports/financial/collection-rates"
+              element={(
+                <RequirePermission capability={CAPABILITIES.REPORTS_VIEW}>
+                  <CollectionRatesPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="reports/financial/cash-flow"
+              element={(
+                <RequirePermission capability={CAPABILITIES.REPORTS_VIEW}>
+                  <CashFlowPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="reports/inventory"
+              element={(
+                <RequirePermission capability={CAPABILITIES.REPORTS_VIEW}>
+                  <InventoryReportsIndexPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="reports/inventory/stock-levels"
+              element={(
+                <RequirePermission capability={CAPABILITIES.REPORTS_VIEW}>
+                  <StockLevelsPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="reports/inventory/low-stock-alerts"
+              element={(
+                <RequirePermission capability={CAPABILITIES.REPORTS_VIEW}>
+                  <LowStockAlertsPage />
+                </RequirePermission>
+              )}
+            />
+            {/* Redirect old URLs to new ones */}
+            <Route
+              path="reports/inventory/low-stock"
+              element={<Navigate to="/app/reports/inventory/low-stock-alerts" replace />}
+            />
+            <Route
+              path="reports/inventory/movements"
+              element={<Navigate to="/app/reports/inventory/stock-movements" replace />}
+            />
+            <Route
+              path="reports/inventory/warehouse"
+              element={<Navigate to="/app/reports/inventory/warehouse-analytics" replace />}
+            />
+            <Route
+              path="reports/inventory/stock-movements"
+              element={(
+                <RequirePermission capability={CAPABILITIES.REPORTS_VIEW}>
+                  <StockMovementsPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="reports/inventory/warehouse-analytics"
+              element={(
+                <RequirePermission capability={CAPABILITIES.REPORTS_VIEW}>
+                  <WarehouseAnalyticsPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="reports/customer"
+              element={(
+                <RequirePermission capability={CAPABILITIES.REPORTS_VIEW}>
+                  <CustomerReportsIndexPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="reports/customer/top-customers"
+              element={(
+                <RequirePermission capability={CAPABILITIES.REPORTS_VIEW}>
+                  <TopCustomersPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="reports/customer/purchase-patterns"
+              element={(
+                <RequirePermission capability={CAPABILITIES.REPORTS_VIEW}>
+                  <PurchasePatternsPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="reports/customer/credit-utilization"
+              element={(
+                <RequirePermission capability={CAPABILITIES.REPORTS_VIEW}>
+                  <CreditUtilizationPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
+              path="reports/customer/segmentation"
+              element={(
+                <RequirePermission capability={CAPABILITIES.REPORTS_VIEW}>
+                  <CustomerSegmentationPage />
                 </RequirePermission>
               )}
             />
