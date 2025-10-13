@@ -10,7 +10,7 @@ import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates
 
 const CollectionRatesPage = () => {
   const navigate = useNavigate();
-  const [data, setData] = useState<CollectionRatesResponse | null>(null);
+  const [data, setData] = useState<CollectionRatesResponse['data'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -30,7 +30,11 @@ const CollectionRatesPage = () => {
         start_date: startDate,
         end_date: endDate,
       });
-      setData(response);
+      if (response.success && response.data) {
+        setData(response.data);
+      } else {
+        throw new Error('Invalid response structure');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load report');
     } finally {
@@ -53,26 +57,29 @@ const CollectionRatesPage = () => {
     }
   };
 
-  const formatCurrency = (value: number | string) => {
+  const formatCurrency = (value: number | string | null | undefined) => {
+    if (value === null || value === undefined) return '$0.00';
     const num = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(num)) return '$0.00';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
     }).format(num);
   };
 
-  const formatPercent = (value: number) => {
+  const formatPercent = (value: number | null | undefined) => {
+    if (value === null || value === undefined || isNaN(value)) return '0.0%';
     return `${value.toFixed(1)}%`;
   };
 
   if (loading) return <LoadingState />;
   if (error) return <ErrorState error={error} onRetry={fetchData} />;
-  if (!data?.data) return <EmptyState />;
+  if (!data || !data.summary || !data.by_payment_method || !data.trends || !data.delinquent_accounts) return <EmptyState />;
 
-  const summary = data.data.summary;
-  const paymentMethods = data.data.by_payment_method || [];
-  const trends = data.data.trends || [];
-  const delinquentAccounts = data.data.delinquent_accounts || [];
+  const summary = data.summary;
+  const paymentMethods = data.by_payment_method;
+  const trends = data.trends;
+  const delinquentAccounts = data.delinquent_accounts;
 
   return (
     <ReportContainer
