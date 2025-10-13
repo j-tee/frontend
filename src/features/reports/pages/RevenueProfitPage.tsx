@@ -7,7 +7,7 @@ import { DateRangeFilter } from '../components/DateRangeFilter';
 import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates';
 
 const RevenueProfitPage: React.FC = () => {
-  const [data, setData] = useState<RevenueProfitResponse | null>(null);
+  const [data, setData] = useState<RevenueProfitResponse['data'] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -35,7 +35,11 @@ const RevenueProfitPage: React.FC = () => {
         breakdown_by: breakdownBy,
       });
       
-      setData(result);
+      if (result.success && result.data) {
+        setData(result.data);
+      } else {
+        throw new Error('Invalid response structure');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load revenue & profit report');
       console.error('Error fetching revenue & profit:', err);
@@ -62,24 +66,26 @@ const RevenueProfitPage: React.FC = () => {
     }
   };
 
-  const formatCurrency = (value: number): string => {
+  const formatCurrency = (value: number | null | undefined): string => {
+    if (value === null || value === undefined || isNaN(value)) return '₱0.00';
     return new Intl.NumberFormat('en-PH', {
       style: 'currency',
       currency: 'PHP',
     }).format(value);
   };
 
-  const formatPercent = (value: number): string => {
+  const formatPercent = (value: number | null | undefined): string => {
+    if (value === null || value === undefined || isNaN(value)) return '0.00%';
     return `${value.toFixed(2)}%`;
   };
 
   if (loading && !data) return <LoadingState message="Loading revenue & profit data..." />;
   if (error) return <ErrorState error={error} onRetry={fetchData} />;
-  if (!data || !data.data) return <EmptyState message="No revenue & profit data available" />;
+  if (!data || !data.summary || !data.breakdown || !data.expenses) return <EmptyState message="No revenue & profit data available" />;
 
-  const summary = data.data.summary;
-  const breakdown = data.data.breakdown || [];
-  const expenses = data.data.expenses || [];
+  const summary = data.summary;
+  const breakdown = data.breakdown;
+  const expenses = data.expenses;
 
   return (
     <ReportContainer
