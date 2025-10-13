@@ -299,8 +299,8 @@ const ReportsPage = () => {
 
                   <Accordion defaultActiveKey="0">
                     {/* Sales Reports */}
-                    <Accordion.Item eventKey="0">
-                      <Accordion.Header>
+                    <Accordion.Item eventKey="0" className="mb-2 border border-slate-200 rounded-lg overflow-hidden">
+                      <Accordion.Header className="bg-blue-50">
                         <div className="flex items-center gap-3">
                           <span className="text-2xl">📊</span>
                           <div>
@@ -311,7 +311,7 @@ const ReportsPage = () => {
                           </div>
                         </div>
                       </Accordion.Header>
-                      <Accordion.Body>
+                      <Accordion.Body className="p-4 bg-white">
                         <div className="grid gap-3 md:grid-cols-2">
                           {analyticalReports.sales.map((report) => (
                             <ReportCard key={report.title} report={report} navigate={navigate} />
@@ -321,8 +321,8 @@ const ReportsPage = () => {
                     </Accordion.Item>
 
                     {/* Inventory Reports */}
-                    <Accordion.Item eventKey="1">
-                      <Accordion.Header>
+                    <Accordion.Item eventKey="1" className="mb-2 border border-slate-200 rounded-lg overflow-hidden">
+                      <Accordion.Header className="bg-green-50">
                         <div className="flex items-center gap-3">
                           <span className="text-2xl">📦</span>
                           <div>
@@ -333,7 +333,7 @@ const ReportsPage = () => {
                           </div>
                         </div>
                       </Accordion.Header>
-                      <Accordion.Body>
+                      <Accordion.Body className="p-4 bg-white">
                         <div className="grid gap-3 md:grid-cols-2">
                           {analyticalReports.inventory.map((report) => (
                             <ReportCard key={report.title} report={report} navigate={navigate} />
@@ -343,8 +343,8 @@ const ReportsPage = () => {
                     </Accordion.Item>
 
                     {/* Financial Reports */}
-                    <Accordion.Item eventKey="2">
-                      <Accordion.Header>
+                    <Accordion.Item eventKey="2" className="mb-2 border border-slate-200 rounded-lg overflow-hidden">
+                      <Accordion.Header className="bg-purple-50">
                         <div className="flex items-center gap-3">
                           <span className="text-2xl">💰</span>
                           <div>
@@ -355,7 +355,7 @@ const ReportsPage = () => {
                           </div>
                         </div>
                       </Accordion.Header>
-                      <Accordion.Body>
+                      <Accordion.Body className="p-4 bg-white">
                         <div className="grid gap-3 md:grid-cols-2">
                           {analyticalReports.financial.map((report) => (
                             <ReportCard key={report.title} report={report} navigate={navigate} />
@@ -365,8 +365,8 @@ const ReportsPage = () => {
                     </Accordion.Item>
 
                     {/* Customer Reports */}
-                    <Accordion.Item eventKey="3">
-                      <Accordion.Header>
+                    <Accordion.Item eventKey="3" className="mb-2 border border-slate-200 rounded-lg overflow-hidden">
+                      <Accordion.Header className="bg-pink-50">
                         <div className="flex items-center gap-3">
                           <span className="text-2xl">👥</span>
                           <div>
@@ -377,7 +377,7 @@ const ReportsPage = () => {
                           </div>
                         </div>
                       </Accordion.Header>
-                      <Accordion.Body>
+                      <Accordion.Body className="p-4 bg-white">
                         <div className="grid gap-3 md:grid-cols-2">
                           {analyticalReports.customer.map((report) => (
                             <ReportCard key={report.title} report={report} navigate={navigate} />
