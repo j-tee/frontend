@@ -7,7 +7,7 @@ import { DateRangeFilter } from '../components/DateRangeFilter';
 import { ReportStates } from '../components/ReportStates';
 
 const ProductPerformancePage: React.FC = () => {
-  const [data, setData] = useState<ProductPerformanceResponse | null>(null);
+  const [data, setData] = useState<ProductPerformanceResponse['data'] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -38,7 +38,12 @@ const ProductPerformancePage: React.FC = () => {
         limit: 100,
       });
       
-      setData(result);
+      // Handle nested API response structure
+      if (result.success && result.data) {
+        setData(result.data);
+      } else {
+        throw new Error('Invalid response structure');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load product performance report');
       console.error('Error fetching product performance:', err);
