@@ -8,7 +8,7 @@ import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates
 
 const ARAgingPage = () => {
   const navigate = useNavigate();
-  const [data, setData] = useState<ARAgingResponse | null>(null);
+  const [data, setData] = useState<ARAgingResponse['data'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [asOfDate, setAsOfDate] = useState<string>(
@@ -23,7 +23,11 @@ const ARAgingPage = () => {
         start_date: asOfDate,
         end_date: asOfDate,
       });
-      setData(response);
+      if (response.success && response.data) {
+        setData(response.data);
+      } else {
+        throw new Error('Invalid response structure');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load report');
     } finally {
@@ -46,25 +50,34 @@ const ARAgingPage = () => {
     }
   };
 
-  const formatCurrency = (value: number | string) => {
+  const formatCurrency = (value: number | string | null | undefined) => {
+    if (value === null || value === undefined) return '$0.00';
     const num = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(num)) return '$0.00';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
     }).format(num);
   };
 
-  const formatPercent = (value: number) => {
+  const formatPercent = (value: number | null | undefined) => {
+    if (value === null || value === undefined || isNaN(value)) return '0.0%';
     return `${value.toFixed(1)}%`;
+  };
+
+  const safeParseFloat = (value: number | string | null | undefined): number => {
+    if (value === null || value === undefined) return 0;
+    const num = typeof value === 'string' ? parseFloat(value) : value;
+    return isNaN(num) ? 0 : num;
   };
 
   if (loading) return <LoadingState />;
   if (error) return <ErrorState error={error} onRetry={fetchData} />;
-  if (!data?.data) return <EmptyState />;
+  if (!data || !data.summary || !data.aging_buckets || !data.customers) return <EmptyState />;
 
-  const summary = data.data.summary;
-  const agingBuckets = data.data.aging_buckets || [];
-  const customers = data.data.customers || [];
+  const summary = data.summary;
+  const agingBuckets = data.aging_buckets;
+  const customers = data.customers;
 
   return (
     <ReportContainer
@@ -127,9 +140,9 @@ const ARAgingPage = () => {
         <SummaryCard
           title="Overdue (31+ days)"
           value={formatCurrency(
-            parseFloat(summary.days_31_60.toString()) +
-            parseFloat(summary.days_61_90.toString()) +
-            parseFloat(summary.over_90_days.toString())
+            safeParseFloat(summary.days_31_60) +
+            safeParseFloat(summary.days_61_90) +
+            safeParseFloat(summary.over_90_days)
           )}
           icon="⚠️"
           color="bg-red-50 border-red-200"
