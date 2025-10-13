@@ -10,7 +10,7 @@ import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates
 
 const StockMovementsPage: React.FC = () => {
   const navigate = useNavigate();
-  const [data, setData] = useState<StockMovementsResponse | null>(null);
+  const [data, setData] = useState<StockMovementsResponse['data'] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,7 +44,11 @@ const StockMovementsPage: React.FC = () => {
       if (movementType) params.movement_type = movementType;
 
       const response = await inventoryReportsService.getStockMovements(params);
-      setData(response);
+      if (response.success && response.data) {
+        setData(response.data);
+      } else {
+        throw new Error('Invalid response structure');
+      }
     } catch (err) {
       setError((err as Error).message || 'Failed to load stock movements');
     } finally {
@@ -100,13 +104,18 @@ const StockMovementsPage: React.FC = () => {
     }
   };
 
+  const formatNumber = (value: number | null | undefined): string => {
+    if (value === null || value === undefined || isNaN(value)) return '0';
+    return value.toLocaleString();
+  };
+
   if (loading && !data) return <LoadingState />;
   if (error) return <ErrorState error={error} onRetry={fetchData} />;
-  if (!data?.data) return <EmptyState />;
+  if (!data) return <EmptyState />;
 
-  const summary = data.data.summary;
-  const movements = data.data.movements || [];
-  const pagination = data.data.pagination;
+  const summary = data.summary;
+  const movements = data.movements || [];
+  const pagination = data.pagination;
 
   return (
     <ReportContainer
@@ -153,35 +162,35 @@ const StockMovementsPage: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
         <SummaryCard
           title="Total Movements"
-          value={summary.total_movements.toLocaleString()}
+          value={formatNumber(summary.total_movements)}
           icon="📊"
           color="bg-blue-50 border-blue-200"
           subtitle="All transactions"
         />
         <SummaryCard
           title="Stock In"
-          value={summary.total_in.toLocaleString()}
+          value={formatNumber(summary.total_in)}
           icon="📥"
           color="bg-green-50 border-green-200"
           subtitle="Inbound movements"
         />
         <SummaryCard
           title="Stock Out"
-          value={summary.total_out.toLocaleString()}
+          value={formatNumber(summary.total_out)}
           icon="📤"
           color="bg-red-50 border-red-200"
           subtitle="Outbound movements"
         />
         <SummaryCard
           title="Adjustments"
-          value={summary.total_adjustments.toLocaleString()}
+          value={formatNumber(summary.total_adjustments)}
           icon="⚖️"
           color="bg-amber-50 border-amber-200"
           subtitle="Manual adjustments"
         />
         <SummaryCard
           title="Transfers"
-          value={summary.total_transfers.toLocaleString()}
+          value={formatNumber(summary.total_transfers)}
           icon="🔄"
           color="bg-purple-50 border-purple-200"
           subtitle="Inter-warehouse"
@@ -218,7 +227,7 @@ const StockMovementsPage: React.FC = () => {
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900">
-            Movements ({movements.length} of {pagination.total.toLocaleString()})
+            Movements ({movements.length} of {formatNumber(pagination.total)})
           </h3>
           <div className="text-sm text-gray-600">
             Page {pagination.page} of {pagination.total_pages}
@@ -294,13 +303,13 @@ const StockMovementsPage: React.FC = () => {
                         : 'text-amber-600'
                     }`}>
                       {movement.movement_type === 'in' ? '+' : movement.movement_type === 'out' ? '-' : '±'}
-                      {movement.quantity.toLocaleString()}
+                      {formatNumber(movement.quantity)}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
-                    <span className="text-gray-600">{movement.quantity_before.toLocaleString()}</span>
+                    <span className="text-gray-600">{formatNumber(movement.quantity_before)}</span>
                     <span className="mx-2 text-gray-400">→</span>
-                    <span className="font-medium text-gray-900">{movement.quantity_after.toLocaleString()}</span>
+                    <span className="font-medium text-gray-900">{formatNumber(movement.quantity_after)}</span>
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm">
@@ -336,7 +345,7 @@ const StockMovementsPage: React.FC = () => {
         <div className="mt-6 flex items-center justify-between">
           <div className="text-sm text-gray-700">
             Showing {((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, pagination.total)} of{' '}
-            {pagination.total.toLocaleString()} movements
+            {formatNumber(pagination.total)} movements
           </div>
           <div className="flex items-center space-x-2">
             <button
