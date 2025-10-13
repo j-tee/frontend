@@ -10,7 +10,7 @@ import type { TopCustomersResponse, TopCustomer } from '../../../types/reports';
 
 const TopCustomersPage: React.FC = () => {
   const navigate = useNavigate();
-  const [data, setData] = useState<TopCustomersResponse | null>(null);
+  const [data, setData] = useState<TopCustomersResponse['data'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
 
@@ -34,7 +34,13 @@ const TopCustomersPage: React.FC = () => {
         sort_by: sortBy || 'revenue',
         limit
       });
-      setData(result);
+      
+      // Handle nested API response structure
+      if (result.success && result.data) {
+        setData(result.data);
+      } else {
+        throw new Error('Invalid response structure');
+      }
     } catch (err) {
       setError((err as Error).message || 'Failed to load customer data');
     } finally {
@@ -123,20 +129,20 @@ const TopCustomersPage: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <SummaryCard
           title="Total Customers"
-          value={data.data.summary.total_customers.toLocaleString()}
+          value={data.summary.total_customers.toLocaleString()}
         />
         <SummaryCard
           title="Top 10 Revenue"
-          value={`₦${data.data.summary.top_10_revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          value={`₦${data.summary.top_10_revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
         />
         <SummaryCard
           title="Top 10 %"
-          value={`${data.data.summary.top_10_percentage.toFixed(1)}%`}
+          value={`${data.summary.top_10_percentage.toFixed(1)}%`}
           subtitle="of total revenue"
         />
         <SummaryCard
           title="Avg Customer Value"
-          value={`₦${data.data.summary.average_customer_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          value={`₦${data.summary.average_customer_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
         />
       </div>
 
@@ -144,7 +150,7 @@ const TopCustomersPage: React.FC = () => {
       <div className="bg-white rounded-lg border border-gray-200">
         <div className="px-6 py-4 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900">
-            Top Customers ({data.data.customers.length})
+            Top Customers ({data.customers.length})
           </h3>
         </div>
 
@@ -182,7 +188,7 @@ const TopCustomersPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {data.data.customers.map((customer: TopCustomer, index: number) => (
+              {data.customers.map((customer: TopCustomer, index: number) => (
                 <tr key={customer.customer_id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">

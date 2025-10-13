@@ -7,7 +7,7 @@ import { DateRangeFilter } from '../components/DateRangeFilter';
 import { ReportStates } from '../components/ReportStates';
 
 const CustomerAnalyticsPage: React.FC = () => {
-  const [data, setData] = useState<CustomerAnalyticsResponse | null>(null);
+  const [data, setData] = useState<CustomerAnalyticsResponse['data'] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -35,7 +35,12 @@ const CustomerAnalyticsPage: React.FC = () => {
         segment: selectedSegment === 'all' ? undefined : selectedSegment,
       });
       
-      setData(result);
+      // Handle nested API response structure
+      if (result.success && result.data) {
+        setData(result.data);
+      } else {
+        throw new Error('Invalid response structure');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load customer analytics report');
       console.error('Error fetching customer analytics:', err);
@@ -62,24 +67,29 @@ const CustomerAnalyticsPage: React.FC = () => {
     }
   };
 
-  const formatCurrency = (value: number): string => {
+  const formatCurrency = (value: number | null | undefined): string => {
+    if (value === null || value === undefined || isNaN(value)) return 'PHP 0.00';
     return new Intl.NumberFormat('en-PH', {
       style: 'currency',
       currency: 'PHP',
     }).format(value);
   };
 
-  const formatNumber = (value: number): string => {
+  const formatNumber = (value: number | null | undefined): string => {
+    if (value === null || value === undefined || isNaN(value)) return '0';
     return new Intl.NumberFormat('en-US').format(value);
   };
 
-  const formatPercent = (value: number): string => {
+  const formatPercent = (value: number | null | undefined): string => {
+    if (value === null || value === undefined || isNaN(value)) return '0.0%';
     return `${value.toFixed(1)}%`;
   };
 
   if (loading && !data) return <ReportStates.Loading />;
   if (error) return <ReportStates.Error error={error} onRetry={fetchData} />;
-  if (!data) return <ReportStates.Empty message="No customer analytics data available" />;
+  if (!data || !data.summary || !data.segments || !data.top_customers) {
+    return <ReportStates.Empty message="No customer analytics data available" />;
+  }
 
   return (
     <ReportContainer
@@ -216,7 +226,7 @@ const CustomerAnalyticsPage: React.FC = () => {
                 <div className="d-flex justify-content-between align-items-center">
                   <span>At Risk</span>
                   <span className="badge bg-light text-dark">
-                    {formatNumber(data.segments['at-risk'])}
+                    {formatNumber(data.segments.at_risk)}
                   </span>
                 </div>
               </button>
