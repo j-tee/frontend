@@ -71,25 +71,29 @@ const ProductPerformancePage: React.FC = () => {
     }
   };
 
-  const formatCurrency = (value: number): string => {
+  const formatCurrency = (value: number | null | undefined): string => {
+    if (value === null || value === undefined || isNaN(value)) return 'PHP 0.00';
     return new Intl.NumberFormat('en-PH', {
       style: 'currency',
       currency: 'PHP',
     }).format(value);
   };
 
-  const formatNumber = (value: number): string => {
+  const formatNumber = (value: number | null | undefined): string => {
+    if (value === null || value === undefined || isNaN(value)) return '0';
     return new Intl.NumberFormat('en-US').format(value);
   };
 
-  const formatPercent = (value: number): string => {
+  const formatPercent = (value: number | null | undefined): string => {
+    if (value === null || value === undefined || isNaN(value)) return '0.00%';
     return `${value.toFixed(2)}%`;
   };
 
   if (loading && !data) return <ReportStates.Loading />;
   if (error) return <ReportStates.Error error={error} onRetry={fetchData} />;
-  if (!data) return <ReportStates.Empty message="No product performance data available" />;
-
+  if (!data || !data.summary || !data.products) {
+    return <ReportStates.Empty message="No product performance data available" />;
+  }
   return (
     <ReportContainer
       title="Product Performance Report"
