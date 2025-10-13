@@ -1,13 +1,14 @@
-# Backend Bug: Stock Levels Field Error
+# Backend Bug: Stock Levels Multiple Errors
 
 ## Issue Report
 **Date:** October 13, 2025  
 **Severity:** Critical  
 **Status:** Backend Fix Required
+**Updated:** Added second error type
 
-## Error Description
+## Error Descriptions
 
-### Error Message
+### Error 1: Missing Field
 ```
 FieldError at /reports/api/inventory/stock-levels/
 Cannot resolve keyword 'landed_unit_cost' into field. 
@@ -15,6 +16,16 @@ Choices are: adjustments, count_items, created_at, description,
 expiry_date, id, product, product_id, quantity, reservations, 
 retail_price, storefront, storefront_id, variant, variant_id
 ```
+
+**Trigger:** When `include_valuation=true` is sent in the request
+
+### Error 2: Invalid Response Argument
+```
+TypeError at /reports/api/inventory/stock-levels/
+ReportResponse.success() got an unexpected keyword argument 'meta'
+```
+
+**Trigger:** When `include_valuation=false` (the workaround attempt)
 
 ### Error Details
 - **URL:** `http://localhost:8000/reports/api/inventory/stock-levels/?include_valuation=true&sort_by=quantity`
@@ -25,6 +36,7 @@ retail_price, storefront, storefront_id, variant, variant_id
 
 ## Root Cause
 
+### Error 1: Missing Database Field
 The backend is trying to access a field `landed_unit_cost` that doesn't exist in the database model. Based on the error message, the available fields in the model are:
 - adjustments
 - count_items
@@ -46,6 +58,12 @@ The backend code is likely trying to:
 1. Calculate or access `landed_unit_cost` for valuation purposes
 2. Sort or filter by this non-existent field
 
+### Error 2: Invalid Response Constructor
+The backend is calling `ReportResponse.success(meta=...)` but the `success()` method doesn't accept a `meta` parameter. This suggests:
+1. The response class signature doesn't match how it's being used
+2. The backend is trying to pass metadata that the response constructor doesn't support
+3. **This error occurs EVEN when valuation is disabled**, indicating a fundamental issue with the response structure
+
 ## Frontend Request
 The frontend is correctly sending:
 ```
@@ -56,7 +74,9 @@ The parameters are valid according to the API contract.
 
 ## Backend Fix Required
 
-### Option 1: Add Missing Field
+### Fix for Error 1: Missing Field
+
+#### Option 1: Add Missing Field
 If `landed_unit_cost` should exist in the model:
 ```python
 # Add to the StockLevel model
@@ -70,7 +90,7 @@ class StockLevel(models.Model):
     )
 ```
 
-### Option 2: Calculate Dynamically
+#### Option 2: Calculate Dynamically
 If it should be calculated, use annotation:
 ```python
 from django.db.models import F, Value, DecimalField
@@ -80,8 +100,37 @@ queryset = queryset.annotate(
 )
 ```
 
-### Option 3: Use Existing Field
+#### Option 3: Use Existing Field
 If the functionality should use an existing field, update the backend code to reference the correct field name (e.g., `retail_price` or calculated from `product__cost`).
+
+### Fix for Error 2: Invalid Response Argument
+
+The `ReportResponse.success()` method needs to be updated to accept a `meta` parameter, or the calling code should stop passing it:
+
+#### Option A: Update Response Class
+```python
+class ReportResponse:
+    @classmethod
+    def success(cls, data, meta=None):  # Add meta parameter
+        response = {
+            'success': True,
+            'data': data,
+            'error': None
+        }
+        if meta:
+            response['meta'] = meta
+        return response
+```
+
+#### Option B: Remove Meta from Caller
+```python
+# In the stock levels view, change from:
+return ReportResponse.success(data=result, meta=metadata)
+
+# To:
+return ReportResponse.success(data=result)
+# And include metadata in the data dict if needed
+```
 
 ## Recommended Solution
 
@@ -111,16 +160,20 @@ def get_stock_levels(request):
 
 ## Frontend Workaround
 
-While waiting for backend fix, the frontend can:
-1. ✅ Show user-friendly error message (already implemented)
-2. ✅ Provide retry functionality (already implemented)
-3. ❌ Disable valuation toggle until backend is fixed (optional)
+While waiting for backend fix, the frontend has:
+1. ✅ Show user-friendly error message (implemented)
+2. ✅ Provide retry functionality (implemented)
+3. ✅ Added "Disable Valuation & Retry" button (implemented)
+4. ❌ **Workaround doesn't work** - Error 2 occurs even without valuation
+
+**Status:** No viable frontend workaround exists. Both with and without valuation parameter, the backend returns 500 errors.
 
 ## Impact
 
-- **User Impact:** Users cannot view stock levels report
-- **Feature Impact:** Inventory tracking and valuation unavailable
-- **Business Impact:** Cannot monitor stock values or make informed purchasing decisions
+- **User Impact:** Users CANNOT view stock levels report at all (critical blocker)
+- **Feature Impact:** Inventory tracking completely unavailable
+- **Business Impact:** Cannot monitor stock values, levels, or make informed purchasing decisions
+- **Severity:** CRITICAL - Core inventory feature is non-functional
 
 ## Related Files
 

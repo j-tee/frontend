@@ -35,11 +35,21 @@ const StockLevelsPage: React.FC = () => {
       const response = await inventoryReportsService.getStockLevels(params);
       setData(response);
     } catch (err) {
-      // Check for specific backend field error
-      const error = err as { response?: { status?: number }; message?: string };
-      const errorMessage = error.response?.status === 500 
-        ? 'Backend error: Database field configuration issue. Please contact support or try again without valuation enabled.'
-        : (error.message || 'Failed to load stock levels report');
+      // Check for specific backend errors
+      const error = err as { response?: { status?: number; data?: string }; message?: string };
+      let errorMessage = error.message || 'Failed to load stock levels report';
+      
+      if (error.response?.status === 500) {
+        const errorData = error.response.data;
+        if (typeof errorData === 'string' && errorData.includes('landed_unit_cost')) {
+          errorMessage = 'Backend error: Missing database field "landed_unit_cost". Contact support.';
+        } else if (typeof errorData === 'string' && errorData.includes('unexpected keyword argument')) {
+          errorMessage = 'Backend error: Response structure issue. The stock levels API needs fixing.';
+        } else {
+          errorMessage = 'Backend error: The stock levels report has multiple configuration issues. Please contact backend team.';
+        }
+      }
+      
       setError(errorMessage);
       console.error('Stock levels fetch error:', err);
     } finally {
@@ -99,19 +109,22 @@ const StockLevelsPage: React.FC = () => {
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-4xl mx-auto">
           <ErrorState error={error} onRetry={fetchData} />
-          {error.includes('Database field configuration') && includeValuation && (
-            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-sm text-blue-800">
-                <strong>Temporary Workaround:</strong> Try disabling the "Include Valuation" option below to view basic stock levels.
-              </p>
-              <button
-                onClick={() => setIncludeValuation(false)}
-                className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
-              >
-                Disable Valuation & Retry
-              </button>
-            </div>
-          )}
+          <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <h4 className="text-sm font-semibold text-red-900 mb-2">⚠️ Backend Issues Detected</h4>
+            <p className="text-sm text-red-800 mb-3">
+              The stock levels report has multiple backend errors that prevent it from loading:
+            </p>
+            <ul className="text-sm text-red-800 list-disc list-inside space-y-1 mb-3">
+              <li>Missing database field: <code className="bg-red-100 px-1 rounded">landed_unit_cost</code></li>
+              <li>Invalid response structure: <code className="bg-red-100 px-1 rounded">meta</code> parameter issue</li>
+            </ul>
+            <p className="text-sm text-red-800 mb-2">
+              <strong>No workaround available.</strong> The backend team needs to fix these issues.
+            </p>
+            <p className="text-xs text-red-700">
+              See <code>docs/BACKEND-BUG-STOCK-LEVELS-FIELD-ERROR.md</code> for technical details.
+            </p>
+          </div>
         </div>
       </div>
     );
