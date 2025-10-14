@@ -25,7 +25,8 @@ export function ExportStatisticsCard() {
     }
   }, [dispatch])
 
-  const formatFileSize = (bytes: number): string => {
+  const formatFileSize = (bytes: number | undefined): string => {
+    if (!bytes || bytes === 0) return '0 MB'
     const mb = bytes / (1024 * 1024)
     if (mb < 1024) return `${mb.toFixed(2)} MB`
     return `${(mb / 1024).toFixed(2)} GB`
@@ -37,19 +38,33 @@ export function ExportStatisticsCard() {
     return `${rate.toFixed(1)}%`
   }
 
+  // Safe property access with defaults
+  const safeStatistics = statistics ? {
+    total_exports: statistics.total_exports ?? 0,
+    successful_exports: statistics.successful_exports ?? 0,
+    failed_exports: statistics.failed_exports ?? 0,
+    total_storage_bytes: statistics.total_storage_bytes ?? 0,
+    last_export_at: statistics.last_export_at ?? null,
+    active_schedules: statistics.active_schedules ?? 0,
+  } : null
+
   return (
     <Card className="h-100 shadow-sm">
       <Card.Header className="bg-white">
-        <h5 className="mb-0">
+        <h5 className="mb-0 text-slate-900 font-bold">
           <i className="bi bi-graph-up me-2 text-primary"></i>
           Export Statistics
         </h5>
       </Card.Header>
       <Card.Body>
         {error && (
-          <Alert variant="danger" dismissible onClose={() => dispatch(clearStatisticsError())} className="mb-3">
+          <Alert variant="warning" dismissible onClose={() => dispatch(clearStatisticsError())} className="mb-3">
             <i className="bi bi-exclamation-triangle me-2"></i>
-            {error}
+            <div className="font-medium text-slate-900">Backend Not Available</div>
+            <div className="text-sm text-slate-700 mt-1">
+              Export Automation API endpoints are not implemented yet. 
+              The statistics will be available once the backend is ready.
+            </div>
           </Alert>
         )}
 
@@ -63,7 +78,9 @@ export function ExportStatisticsCard() {
         ) : !statistics ? (
           <div className="text-center py-4">
             <i className="bi bi-info-circle" style={{ fontSize: '2rem', color: '#6c757d' }}></i>
-            <p className="text-muted mt-2 mb-0">No statistics available</p>
+            <p className="text-muted mt-2 mb-0">
+              {error ? 'Statistics unavailable - Backend pending' : 'No statistics available'}
+            </p>
           </div>
         ) : (
           <div className="row g-3">
@@ -71,7 +88,7 @@ export function ExportStatisticsCard() {
             <div className="col-6">
               <div className="p-3 bg-light rounded">
                 <div className="text-muted small mb-1">Total Exports</div>
-                <div className="h4 mb-0 text-primary">{statistics.total_exports.toLocaleString()}</div>
+                <div className="h4 mb-0 text-primary">{safeStatistics?.total_exports.toLocaleString() ?? '0'}</div>
               </div>
             </div>
 
@@ -89,7 +106,7 @@ export function ExportStatisticsCard() {
                 <div className="text-muted small mb-1">Successful</div>
                 <div className="h5 mb-0 text-success">
                   <i className="bi bi-check-circle me-1"></i>
-                  {statistics.successful_exports.toLocaleString()}
+                  {safeStatistics?.successful_exports.toLocaleString() ?? '0'}
                 </div>
               </div>
             </div>
@@ -100,7 +117,7 @@ export function ExportStatisticsCard() {
                 <div className="text-muted small mb-1">Failed</div>
                 <div className="h5 mb-0 text-danger">
                   <i className="bi bi-x-circle me-1"></i>
-                  {statistics.failed_exports.toLocaleString()}
+                  {safeStatistics?.failed_exports.toLocaleString() ?? '0'}
                 </div>
               </div>
             </div>
@@ -111,7 +128,7 @@ export function ExportStatisticsCard() {
                 <div className="text-muted small mb-1">Storage Used</div>
                 <div className="h5 mb-0 text-info">
                   <i className="bi bi-hdd me-1"></i>
-                  {formatFileSize(statistics.total_storage_bytes)}
+                  {formatFileSize(safeStatistics?.total_storage_bytes)}
                 </div>
               </div>
             </div>
@@ -121,10 +138,10 @@ export function ExportStatisticsCard() {
               <div className="p-3 bg-light rounded">
                 <div className="text-muted small mb-1">Last Export</div>
                 <div className="small mb-0">
-                  {statistics.last_export_at ? (
+                  {safeStatistics?.last_export_at ? (
                     <>
                       <i className="bi bi-clock me-1"></i>
-                      {new Date(statistics.last_export_at).toLocaleString()}
+                      {new Date(safeStatistics.last_export_at).toLocaleString()}
                     </>
                   ) : (
                     <span className="text-muted">No exports yet</span>
@@ -139,7 +156,7 @@ export function ExportStatisticsCard() {
                 <div className="opacity-75 small mb-1">Active Schedules</div>
                 <div className="h4 mb-0">
                   <i className="bi bi-calendar-check me-2"></i>
-                  {statistics.active_schedules.toLocaleString()}
+                  {safeStatistics?.active_schedules.toLocaleString() ?? '0'}
                 </div>
               </div>
             </div>

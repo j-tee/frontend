@@ -2,7 +2,7 @@
  * Export Automation API Service
  * 
  * Service layer for interacting with the Export Automation backend API.
- * Base URL: /api/reports/automation/
+ * Base URL: /reports/api/automation/
  * 
  * All requests require authentication via JWT token (handled by httpClient).
  */
@@ -20,7 +20,7 @@ import type {
   HistoryListParams,
 } from '../types/exports'
 
-const BASE_URL = '/api/reports/automation'
+const BASE_URL = '/reports/api/automation'
 
 // ==================== Export Schedules ====================
 

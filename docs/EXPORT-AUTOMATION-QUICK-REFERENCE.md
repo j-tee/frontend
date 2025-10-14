@@ -2,8 +2,13 @@
 
 ## Base URL
 ```
-/api/reports/automation/
+/reports/api/automation/
 ```
+
+**Note**: Following the backend URL pattern:
+- Inventory: `/inventory/api/...`
+- Sales: `/sales/api/...`
+- Reports: `/reports/api/...`
 
 ## Authentication
 All endpoints require JWT token:

@@ -6,6 +6,7 @@ import Form from 'react-bootstrap/Form'
 import Offcanvas from 'react-bootstrap/Offcanvas'
 import Spinner from 'react-bootstrap/Spinner'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import PageTransition from '../../components/PageTransition.tsx'
 import { useAppDispatch, useAppSelector, usePermissions } from '../../hooks/index.js'
 import { fetchCurrentUser, loadUserStorefronts, logout, selectAuthState } from '../../store/slices/authSlice.js'
 import { selectActiveSubscription } from '../../store/slices/subscriptionSlice.js'
@@ -45,6 +46,7 @@ interface SideNavLink {
   icon: NavIconKey
   end?: boolean
   requiredCapability?: Capability
+  subLinks?: { to: string; label: string; requiredCapability?: Capability }[]
 }
 
 interface SideNavSection {
@@ -174,6 +176,18 @@ const SIDE_NAV_SECTIONS: SideNavSection[] = [
         to: '/app/reports',
         icon: 'reports',
         requiredCapability: CAPABILITIES.REPORTS_VIEW,
+        subLinks: [
+          {
+            to: '/app/reports/export-schedules',
+            label: 'Export Automation',
+            requiredCapability: CAPABILITIES.REPORTS_VIEW,
+          },
+          {
+            to: '/app/reports/export-history',
+            label: 'Export History',
+            requiredCapability: CAPABILITIES.REPORTS_VIEW,
+          },
+        ],
       },
       {
         label: 'Bookkeeping',
@@ -532,24 +546,46 @@ const DashboardLayout = () => {
               </p>
               <div className="flex flex-col gap-1.5">
                 {section.links.map((link) => (
-                  <NavLink
-                    key={link.to}
-                    to={link.to}
-                    end={link.end}
-                    onClick={onNavigate}
-                    className={({ isActive }) =>
-                      `flex items-center gap-3 rounded-2xl px-3 py-2 text-sm font-medium transition ${
-                        isActive
-                          ? 'bg-white/15 text-white shadow-md shadow-indigo-500/10'
-                          : 'text-slate-200 hover:bg-white/10 hover:text-white'
-                      }`
-                    }
-                  >
-                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900/60">
-                      {ICONS[link.icon]}
-                    </span>
-                    <span>{link.label}</span>
-                  </NavLink>
+                  <div key={link.to}>
+                    <NavLink
+                      to={link.to}
+                      end={link.end}
+                      onClick={onNavigate}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 rounded-2xl px-3 py-2 text-sm font-medium transition ${
+                          isActive
+                            ? 'bg-white/15 text-white shadow-md shadow-indigo-500/10'
+                            : 'text-slate-200 hover:bg-white/10 hover:text-white'
+                        }`
+                      }
+                    >
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900/60">
+                        {ICONS[link.icon]}
+                      </span>
+                      <span>{link.label}</span>
+                    </NavLink>
+                    {link.subLinks && link.subLinks.length > 0 && (
+                      <div className="ml-12 mt-1 flex flex-col gap-1">
+                        {link.subLinks.map((subLink) => (
+                          <NavLink
+                            key={subLink.to}
+                            to={subLink.to}
+                            onClick={onNavigate}
+                            className={({ isActive }) =>
+                              `flex items-center rounded-lg px-3 py-1.5 text-sm transition ${
+                                isActive
+                                  ? 'bg-white/10 text-white font-medium'
+                                  : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                              }`
+                            }
+                          >
+                            <span className="mr-2 text-xs">•</span>
+                            <span>{subLink.label}</span>
+                          </NavLink>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>
@@ -848,8 +884,8 @@ const DashboardLayout = () => {
           <header className="rounded-3xl border border-slate-200 bg-white/90 px-6 py-5 shadow-sm backdrop-blur-sm">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="space-y-2">
-                <h1 className="text-2xl font-semibold text-slate-900">{business?.name ?? 'Your business'}</h1>
-                <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600">
+                <h1 className="text-2xl font-bold text-slate-900">{business?.name ?? 'Your business'}</h1>
+                <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm font-medium text-slate-700">
                   <span aria-live="polite">{`Business role: ${businessRoleLabel}`}</span>
                   <span aria-live="polite">{`Platform role: ${platformRoleLabel}`}</span>
                   <span aria-live="polite">{formattedToday}</span>
@@ -875,7 +911,9 @@ const DashboardLayout = () => {
             aria-live="polite"
           >
             <div className="space-y-6">
-              <Outlet />
+              <PageTransition>
+                <Outlet />
+              </PageTransition>
             </div>
           </main>
         </div>

@@ -25,6 +25,9 @@ const ExportSchedulesPage = () => {
   const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
+  // Ensure schedules is always an array
+  const schedulesList = Array.isArray(schedules) ? schedules : []
+
   useEffect(() => {
     dispatch(fetchSchedules())
   }, [dispatch])
@@ -146,14 +149,14 @@ const ExportSchedulesPage = () => {
         </Alert>
       )}
 
-      {loading && !schedules.length ? (
+      {loading && !schedulesList.length ? (
         <div className="text-center py-5">
           <Spinner animation="border" role="status">
             <span className="visually-hidden">Loading schedules...</span>
           </Spinner>
           <p className="text-muted mt-3">Loading export schedules...</p>
         </div>
-      ) : schedules.length === 0 ? (
+      ) : schedulesList.length === 0 ? (
         <div className="text-center py-5">
           <i className="bi bi-calendar-check" style={{ fontSize: '4rem', color: '#6c757d' }}></i>
           <h4 className="mt-3 text-muted">No export schedules yet</h4>
@@ -179,7 +182,7 @@ const ExportSchedulesPage = () => {
               </tr>
             </thead>
             <tbody>
-              {schedules.map((schedule) => (
+              {schedulesList.map((schedule) => (
                 <tr key={schedule.id}>
                   <td>{getStatusBadge(schedule)}</td>
                   <td>

@@ -4,7 +4,7 @@ import type { Currency } from '../types/settings'
  * Format a number as currency based on currency settings
  */
 export const formatCurrency = (
-  amount: number | string,
+  amount: number | string | null | undefined,
   currency: Currency,
   options?: {
     showSymbol?: boolean
@@ -13,16 +13,24 @@ export const formatCurrency = (
 ): string => {
   const { showSymbol = true, showCode = false } = options || {}
   
+  // Handle null/undefined values
+  if (amount === null || amount === undefined) {
+    return showSymbol ? `${currency.symbol}0.${'0'.repeat(currency.decimalPlaces)}` : `0.${'0'.repeat(currency.decimalPlaces)}`
+  }
+  
   // Convert to number if string
   const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount
   
   // Handle invalid numbers
   if (isNaN(numAmount)) {
-    return showSymbol ? `${currency.symbol}0.00` : '0.00'
+    return showSymbol ? `${currency.symbol}0.${'0'.repeat(currency.decimalPlaces)}` : `0.${'0'.repeat(currency.decimalPlaces)}`
   }
   
-  // Format the number
-  const formatted = numAmount.toFixed(currency.decimalPlaces)
+  // Format the number with thousand separators
+  const formatted = numAmount.toLocaleString('en-US', {
+    minimumFractionDigits: currency.decimalPlaces,
+    maximumFractionDigits: currency.decimalPlaces,
+  })
   
   // Build the result based on options
   let result = formatted
@@ -31,7 +39,7 @@ export const formatCurrency = (
     if (currency.position === 'before') {
       result = `${currency.symbol}${formatted}`
     } else {
-      result = `${formatted}${currency.symbol}`
+      result = `${formatted} ${currency.symbol}`
     }
   }
   
