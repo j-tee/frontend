@@ -659,15 +659,34 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
     const availableSource = stock?.available_quantity ?? product.available_quantity ?? 0
     const available = Number.isFinite(availableSource) ? Math.max(0, Math.floor(availableSource)) : 0
 
+    // Get warehouse total if available (from fetched stock data)
+    const warehouseTotal = stock?.quantity ?? null
+    const warehouseTotalNum = warehouseTotal !== null && Number.isFinite(warehouseTotal) ? Math.max(0, Math.floor(warehouseTotal)) : null
+
     if (available === 0) {
       return { color: 'danger', text: 'Out of Stock', available: 0 }
     }
 
-    if (available <= 5) {
-      return { color: 'warning', text: `Low: ${available}`, available }
+    // Show both storefront and warehouse quantities if they differ
+    let text = ''
+    if (warehouseTotalNum !== null && warehouseTotalNum !== available) {
+      // Different values - show both
+      if (available <= 5) {
+        text = `Low: ${available} here (${warehouseTotalNum} total)`
+      } else {
+        text = `${available} here (${warehouseTotalNum} total)`
+      }
+    } else {
+      // Same value or no warehouse data - show single value
+      if (available <= 5) {
+        text = `Low: ${available}`
+      } else {
+        text = `${available} in stock`
+      }
     }
 
-    return { color: 'success', text: `${available} in stock`, available }
+    const color = available <= 5 ? 'warning' : 'success'
+    return { color, text, available }
   }
 
   const getPrice = (product: Product) => {
