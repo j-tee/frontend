@@ -562,26 +562,26 @@ const ManageStocksPage = () => {
     dispatch(clearTransferRequestMutation('create'))
   }
 
-  const handleStockRequestFilterChange = (filters: Partial<typeof transferRequestFilters>) => {
+  const handleStockRequestFilterChange = useCallback((filters: Partial<typeof transferRequestFilters>) => {
     dispatch(setTransferRequestFilters(filters))
     dispatch(setTransferRequestPage(1))
     void dispatch(loadTransferRequests())
-  }
+  }, [dispatch])
 
-  const handleStockRequestPageChange = (page: number) => {
+  const handleStockRequestPageChange = useCallback((page: number) => {
     dispatch(setTransferRequestPage(page))
     void dispatch(loadTransferRequests())
-  }
+  }, [dispatch])
 
-  const handleStockRequestPageSizeChange = (pageSize: number) => {
+  const handleStockRequestPageSizeChange = useCallback((pageSize: number) => {
     dispatch(setTransferRequestPageSize(pageSize))
     dispatch(setTransferRequestPage(1))
     void dispatch(loadTransferRequests())
-  }
+  }, [dispatch])
 
-  const handleStockRequestRefresh = () => {
+  const handleStockRequestRefresh = useCallback(() => {
     void dispatch(loadTransferRequests())
-  }
+  }, [dispatch])
 
   const handleViewStockRequest = (request: TransferRequest) => {
     setSelectedRequest(request)
