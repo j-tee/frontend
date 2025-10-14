@@ -373,6 +373,7 @@ export async function createCustomer(customerData: {
   credit_limit?: number
   credit_terms_days?: number
   notes?: string
+  business?: UUID
 }): Promise<Customer> {
   const response = await httpClient.post<Customer>('/sales/api/customers/', customerData)
   return response.data

@@ -14,7 +14,7 @@ import {
   loadSales,
 } from '../../../store/slices/salesSlice'
 import { selectActiveLocation } from '../../../store/slices/locationSlice'
-import { selectUserStorefronts } from '../../../store/slices/authSlice'
+import { selectUserStorefronts, selectCurrentBusiness } from '../../../store/slices/authSlice'
 import {
   SaleCart,
   ProductSearchPanel,
@@ -56,6 +56,7 @@ export default function SalesPage() {
   const errors = useAppSelector(selectErrors)
   const { formatCurrency } = useCurrency()
   const accessibleStorefronts = useAppSelector(selectUserStorefronts)
+  const currentBusiness = useAppSelector(selectCurrentBusiness)
 
   // Enable multi-storefront mode if user has access to more than one storefront
   // This includes business owners AND employees linked to multiple stores
@@ -390,6 +391,7 @@ export default function SalesPage() {
         phone: '+233000000000',
         type: 'RETAIL',
         notes: 'Auto-generated walk-in customer',
+        business: currentBusiness?.id,
       })
 
       const option = { id: customer.id, name: customer.name }
@@ -417,7 +419,7 @@ export default function SalesPage() {
       setCustomerError('Unable to prepare a walk-in customer automatically. Please add one manually.')
       return null
     }
-  }, [customerOptions, upsertCustomerOption])
+  }, [customerOptions, upsertCustomerOption, currentBusiness?.id])
 
   const startFreshSaleSession = useCallback(async (preferredStorefrontId?: UUID): Promise<Sale | null> => {
     // Use preferred storefront if provided (multi-storefront mode), otherwise use current location
