@@ -141,6 +141,7 @@ export interface BusinessSummary {
   is_active: boolean
   owner: UUID
   owner_name: string
+  subscription_status?: 'ACTIVE' | 'TRIAL' | 'PAST_DUE' | 'EXPIRED' | 'CANCELLED' | 'SUSPENDED' | 'INACTIVE'
   created_at: string
   updated_at: string
 }

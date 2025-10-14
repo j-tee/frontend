@@ -232,6 +232,13 @@ export interface SaleCatalogItem {
 export interface SaleCatalogResponse {
   storefront: UUID
   products: SaleCatalogItem[]
+  // Pagination support (optional - for future server-side filtering)
+  count?: number
+  next?: string | null
+  previous?: string | null
+  page_size?: number
+  total_pages?: number
+  current_page?: number
 }
 
 // Multi-Storefront Catalog Types
@@ -270,6 +277,25 @@ export interface MultiStorefrontCatalogResponse {
   total_products: number
   total_storefronts: number
   message?: string
+  // Pagination support (optional - for future server-side filtering)
+  count?: number
+  next?: string | null
+  previous?: string | null
+  page_size?: number
+  total_pages?: number
+  current_page?: number
+}
+
+// Catalog filter parameters
+export interface CatalogFilters {
+  search?: string
+  category?: UUID
+  min_price?: number
+  max_price?: number
+  in_stock_only?: boolean
+  page?: number
+  page_size?: number
+  storefront?: UUID[]  // For multi-storefront filtering
 }
 
 export interface InventorySnapshot {

@@ -28,6 +28,7 @@ import {
 } from '../../store/slices/locationSlice.js'
 import type { StorefrontPayload, WarehousePayload } from '../../types/inventory.js'
 import { CAPABILITIES, normalizeMembershipRole, type Capability } from '../../utils/permissions.js'
+import { isPlatformAdmin } from '../../utils/platformPermissions.js'
 
 type NavIconKey =
   | 'dashboard'
@@ -451,10 +452,12 @@ const DashboardLayout = () => {
     return formatRoleLabel(platformRole) ?? 'None'
   })()
 
-  const subscriptionStatusLabel = activeSubscription?.status ?? 'Inactive'
+  // Use business subscription status (business-centric architecture)
+  const subscriptionStatusLabel = business?.subscription_status ?? activeSubscription?.status ?? 'Inactive'
   const subscriptionVariant = (() => {
     const normalized = subscriptionStatusLabel.toLowerCase()
     if (normalized === 'active') return 'success'
+    if (normalized === 'trial') return 'info'
     if (normalized === 'suspended') return 'warning'
     return 'danger'
   })()
@@ -892,15 +895,41 @@ const DashboardLayout = () => {
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Badge bg={subscriptionVariant} className="rounded-pill px-3 py-2 text-sm">
+                <Badge 
+                  bg={subscriptionVariant} 
+                  className="rounded-pill px-3 py-2 text-sm"
+                  title={`Business Subscription: ${subscriptionStatusLabel}${business?.subscription ? ` (${business.subscription.plan.name})` : ''} - Click to manage`}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => navigate('/app/subscription')}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      navigate('/app/subscription')
+                    }
+                  }}
+                >
                   {subscriptionStatusLabel}
                 </Badge>
-                <Button variant="outline-secondary" className="rounded-pill px-4">
-                  Switch store
-                </Button>
-                <Button variant="outline-secondary" className="rounded-pill px-4">
-                  Export
-                </Button>
+                
+                {/* Platform Admin Access */}
+                {user && isPlatformAdmin(user) && (
+                  <Button
+                    variant="outline-primary"
+                    size="sm"
+                    className="rounded-pill px-3 py-1"
+                    onClick={() => navigate('/app/platform')}
+                    title="Platform Management Dashboard"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="me-1" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                      <path d="M12 2L2 7l10 5 10-5-10-5z" strokeLinejoin="round" />
+                      <path d="M2 17l10 5 10-5" strokeLinejoin="round" />
+                      <path d="M2 12l10 5 10-5" strokeLinejoin="round" />
+                    </svg>
+                    Platform Admin
+                  </Button>
+                )}
               </div>
             </div>
           </header>

@@ -44,6 +44,12 @@ import CreditUtilizationPage from './features/reports/pages/CreditUtilizationPag
 import CustomerSegmentationPage from './features/reports/pages/CustomerSegmentationPage.tsx'
 import RequirePermission from './components/RequirePermission.tsx'
 import { CAPABILITIES } from './utils/permissions.ts'
+import SubscriptionPortal from './features/subscriptions/pages/SubscriptionPortal.tsx'
+import PaymentCallback from './features/subscriptions/pages/PaymentCallback.tsx'
+import PaymentSuccess from './features/subscriptions/pages/PaymentSuccess.tsx'
+import PaymentCancelled from './features/subscriptions/pages/PaymentCancelled.tsx'
+import PlatformDashboard from './features/platform/pages/PlatformDashboard.tsx'
+import AccountSettingsPage from './features/account/pages/AccountSettingsPage.tsx'
 
 const App = () => {
   return (
@@ -335,9 +341,18 @@ const App = () => {
                 </RequirePermission>
               )}
             />
+            <Route path="subscription" element={<SubscriptionPortal />} />
+            {/* Account Settings Route */}
+            <Route path="account" element={<AccountSettingsPage />} />
+            {/* Platform Admin Route */}
+            <Route path="platform" element={<PlatformDashboard />} />
           </Route>
         </Route>
       </Route>
+      {/* Public routes for payment callbacks */}
+      <Route path="/payment/callback" element={<PaymentCallback />} />
+      <Route path="/payment/success" element={<PaymentSuccess />} />
+      <Route path="/payment/cancelled" element={<PaymentCancelled />} />
       <Route path="*" element={<LandingPage />} />
     </Routes>
       <ToastContainer position="top-right" autoClose={4000} newestOnTop pauseOnHover closeOnClick theme="light" />

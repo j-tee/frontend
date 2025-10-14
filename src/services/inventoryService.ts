@@ -10,6 +10,7 @@ import type {
   ProductPayload,
   SaleCatalogResponse,
   MultiStorefrontCatalogResponse,
+  CatalogFilters,
   StockAlert,
   StockBatch,
   StockBatchPayload,
@@ -48,9 +49,10 @@ export const fetchCategories = async () => {
   return extractResults(data)
 }
 
-export const fetchSaleCatalog = async (storefrontId: UUID) => {
+export const fetchSaleCatalog = async (storefrontId: UUID, filters?: CatalogFilters) => {
   const { data } = await httpClient.get<SaleCatalogResponse>(
     `/inventory/api/storefronts/${storefrontId}/sale-catalog/`,
+    { params: filters }
   )
   return data
 }
@@ -61,13 +63,13 @@ export const fetchSaleCatalog = async (storefrontId: UUID) => {
  * For business owners: Returns products from all storefronts in their business
  * For employees: Returns products from storefronts they're assigned to
  * 
- * @param params Optional query parameters
+ * @param filters Optional query parameters for filtering and pagination
  * @returns Promise with multi-storefront catalog response
  */
-export const fetchMultiStorefrontCatalog = async (params?: { include_zero?: boolean }) => {
+export const fetchMultiStorefrontCatalog = async (filters?: CatalogFilters) => {
   const { data } = await httpClient.get<MultiStorefrontCatalogResponse>(
     '/inventory/api/storefronts/multi-storefront-catalog/',
-    { params }
+    { params: filters }
   )
   return data
 }

@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { isAxiosError } from 'axios'
-import { Container, Row, Col, Card, Button, Tab, Tabs, Alert } from 'react-bootstrap'
+import { Container, Row, Col, Card, Button, Tab, Tabs, Alert, Modal, Badge } from 'react-bootstrap'
 import { useAppDispatch, useAppSelector, useCurrency } from '../../../hooks'
 import {
   selectCurrentCart,
@@ -13,7 +13,7 @@ import {
   setCurrentCartCustomer,
   loadSales,
 } from '../../../store/slices/salesSlice'
-import { selectActiveLocation } from '../../../store/slices/locationSlice'
+import { selectActiveLocation, selectLocation, selectStorefronts } from '../../../store/slices/locationSlice'
 import { selectUserStorefronts, selectCurrentBusiness } from '../../../store/slices/authSlice'
 import {
   SaleCart,
@@ -52,6 +52,7 @@ export default function SalesPage() {
   const dispatch = useAppDispatch()
   const currentCart = useAppSelector(selectCurrentCart)
   const currentLocation = useAppSelector(selectActiveLocation)
+  const storefronts = useAppSelector(selectStorefronts)
   const mutations = useAppSelector(selectMutations)
   const errors = useAppSelector(selectErrors)
   const { formatCurrency } = useCurrency()
@@ -62,6 +63,19 @@ export default function SalesPage() {
   // This includes business owners AND employees linked to multiple stores
   const isMultiStorefrontEnabled = accessibleStorefronts.length > 1
 
+  // Compute current location details with name and address
+  const currentLocationDetails = useMemo(() => {
+    if (!currentLocation || currentLocation.type !== 'storefront') return null
+    const storefront = storefronts.find((item) => item.id === currentLocation.id)
+    return storefront
+      ? {
+          id: storefront.id,
+          name: storefront.name,
+          location: storefront.location,
+        }
+      : null
+  }, [currentLocation, storefronts])
+
   const currentCartRef = useRef<Sale | null>(currentCart)
   currentCartRef.current = currentCart
   
@@ -71,6 +85,7 @@ export default function SalesPage() {
   const [showPayment, setShowPayment] = useState(false)
   const [showReceipt, setShowReceipt] = useState(false)
   const [completedSaleId, setCompletedSaleId] = useState<UUID | null>(null)
+  const [showStorefrontSwitcher, setShowStorefrontSwitcher] = useState(false)
   const [customerOptions, setCustomerOptions] = useState<CustomerOption[]>([])
   const [customersLoading, setCustomersLoading] = useState(false)
   const [customerError, setCustomerError] = useState<string | null>(null)
@@ -961,6 +976,16 @@ export default function SalesPage() {
     void prepareFreshSale({ clearCustomer: true })
   }
 
+  const handleSwitchStorefront = (storefrontId: string) => {
+    if (currentCart && currentCart.line_items.length > 0) {
+      // Prevent switching with items in cart
+      return
+    }
+    
+    dispatch(selectLocation({ type: 'storefront', id: storefrontId }))
+    setShowStorefrontSwitcher(false)
+  }
+
   return (
     <Container fluid className="py-4">
       <Row className="mb-4">
@@ -980,6 +1005,51 @@ export default function SalesPage() {
               Please select a storefront from the dropdown above to start making sales.
             </Alert>
           ) : (
+            <>
+              {/* Storefront Header Badge */}
+              {currentLocationDetails && (
+                <div className="mb-3 d-flex align-items-center justify-content-between bg-light border rounded-3 p-3">
+                  <div className="d-flex align-items-center gap-3">
+                    <div 
+                      className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" 
+                      style={{ width: 48, height: 48, fontSize: '1.5rem' }}
+                    >
+                      <i className="bi bi-shop"></i>
+                    </div>
+                    <div>
+                      <div className="small text-muted text-uppercase fw-semibold" style={{ fontSize: '0.7rem', letterSpacing: '0.5px' }}>
+                        Current Storefront
+                      </div>
+                      <div className="fw-bold fs-5">{currentLocationDetails.name}</div>
+                      {currentLocationDetails.location && (
+                        <div className="small text-muted">{currentLocationDetails.location}</div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div>
+                    {isMultiStorefrontEnabled && (!currentCart || currentCart.line_items.length === 0) && (
+                      <Button
+                        variant="outline-primary"
+                        size="sm"
+                        className="rounded-pill px-3"
+                        onClick={() => setShowStorefrontSwitcher(true)}
+                      >
+                        <i className="bi bi-arrow-left-right me-2"></i>
+                        Switch Store
+                      </Button>
+                    )}
+                    
+                    {currentCart && currentCart.line_items.length > 0 && (
+                      <div className="small text-muted d-flex align-items-center">
+                        <i className="bi bi-lock me-2"></i>
+                        Clear cart to switch stores
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
             <Row>
               {/* Left Panel - Product Search & Cart */}
               <Col lg={8}>
@@ -1147,6 +1217,7 @@ export default function SalesPage() {
                 </Card>
               </Col>
             </Row>
+            </>
           )}
         </Tab>
 
@@ -1174,6 +1245,66 @@ export default function SalesPage() {
           setCompletedSaleId(null)
         }}
       />
+
+      <Modal
+        show={showStorefrontSwitcher}
+        onHide={() => setShowStorefrontSwitcher(false)}
+        centered
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>Switch Storefront</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {currentCart && currentCart.line_items.length > 0 ? (
+            <Alert variant="warning">
+              <i className="bi bi-exclamation-triangle me-2"></i>
+              Please complete or clear your current sale before switching storefronts.
+            </Alert>
+          ) : (
+            <div className="d-flex flex-column gap-3">
+              <p className="text-muted small mb-0">
+                Select the storefront you want to sell from. Products will update to show inventory from the selected location.
+              </p>
+              {accessibleStorefronts.map((storefront) => {
+                const isActive = currentLocation?.id === storefront.id
+                return (
+                  <div
+                    key={storefront.id}
+                    className={`border rounded-3 p-3 ${isActive ? 'border-primary bg-primary bg-opacity-10' : 'border-secondary'}`}
+                    style={{ cursor: isActive ? 'default' : 'pointer' }}
+                    onClick={() => !isActive && handleSwitchStorefront(storefront.id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (!isActive && (e.key === 'Enter' || e.key === ' ')) {
+                        e.preventDefault()
+                        handleSwitchStorefront(storefront.id)
+                      }
+                    }}
+                  >
+                    <div className="d-flex align-items-center justify-content-between">
+                      <div>
+                        <div className="fw-semibold">{storefront.name}</div>
+                        {storefront.location && (
+                          <div className="small text-muted">{storefront.location}</div>
+                        )}
+                      </div>
+                      {isActive && (
+                        <Badge bg="primary">Active</Badge>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowStorefrontSwitcher(false)}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </Container>
   )
 }
