@@ -223,6 +223,13 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
     // REMOVED: No longer skip in multi-storefront mode
     // We need accurate unreserved_quantity which accounts for sold items
     // The catalog's available_quantity only shows transferred quantity, not available to sell
+    
+    console.log('[fetchStockLevels] Starting fetch', {
+      productIds,
+      storefrontId,
+      multiStorefront,
+      productCount: productIds.length
+    })
 
     try {
       const shouldTryAvailability = availabilitySupportedRef.current
@@ -230,9 +237,9 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
       const stockPromises = productIds.map(async (productId) => {
         try {
           if (shouldTryAvailability) {
-            const response = await httpClient.get(
-              `/inventory/api/storefronts/${storefrontId}/stock-products/${productId}/availability/`
-            )
+            const url = `/inventory/api/storefronts/${storefrontId}/stock-products/${productId}/availability/`
+            console.log('[fetchStockLevels] Fetching availability', { productId, url })
+            const response = await httpClient.get(url)
             return {
               productId,
               data: response.data,
@@ -412,7 +419,7 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
     } catch (err) {
       console.error('Failed to fetch stock levels:', err)
     }
-  }, [storefrontId])
+  }, [storefrontId, multiStorefront])
 
   const searchProducts = useCallback(async (rawQuery: string) => {
     if (catalogLoading) {
