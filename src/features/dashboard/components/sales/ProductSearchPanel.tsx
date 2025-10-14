@@ -676,34 +676,18 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
       const available = Number.isFinite(storefrontAvailable) ? Math.max(0, Math.floor(storefrontAvailable)) : 0
       const total = Number.isFinite(totalAvailable) ? Math.max(0, Math.floor(totalAvailable)) : 0
       
-      if (available === 0) {
-        // Check if stock exists elsewhere
-        if (total > 0) {
-          return { color: 'danger', text: `Out of Stock (${total} at other stores)`, available: 0 }
-        }
-        return { color: 'danger', text: 'Out of Stock', available: 0 }
-      }
+      const color = available === 0 ? 'danger' : available <= 5 ? 'warning' : 'success'
       
-      // Show both storefront and total if they differ
-      let text = ''
-      if (total > available) {
-        // Stock exists at other locations
-        if (available <= 5) {
-          text = `Low: ${available} here (${total} total)`
-        } else {
-          text = `${available} here (${total} total)`
-        }
-      } else {
-        // All stock is at this location
-        if (available <= 5) {
-          text = `Low: ${available}`
-        } else {
-          text = `${available} in stock`
-        }
+      // Return separate badge information
+      return {
+        color,
+        text: available === 0 ? 'Out of Stock' : available <= 5 ? `Low: ${available}` : `${available} in stock`,
+        available,
+        // Additional info for separate badges
+        showWarehouseBadge: total > available,
+        warehouseTotal: total - available,
+        totalStock: total
       }
-      
-      const color = available <= 5 ? 'warning' : 'success'
-      return { color, text, available }
     }
     
     // Single storefront mode or no locations data
@@ -714,30 +698,18 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
     const warehouseTotal = stock?.quantity ?? null
     const warehouseTotalNum = warehouseTotal !== null && Number.isFinite(warehouseTotal) ? Math.max(0, Math.floor(warehouseTotal)) : null
 
-    if (available === 0) {
-      return { color: 'danger', text: 'Out of Stock', available: 0 }
-    }
+    const color = available === 0 ? 'danger' : available <= 5 ? 'warning' : 'success'
 
-    // Show both storefront and warehouse quantities if they differ
-    let text = ''
-    if (warehouseTotalNum !== null && warehouseTotalNum !== available) {
-      // Different values - show both
-      if (available <= 5) {
-        text = `Low: ${available} here (${warehouseTotalNum} total)`
-      } else {
-        text = `${available} here (${warehouseTotalNum} total)`
-      }
-    } else {
-      // Same value or no warehouse data - show single value
-      if (available <= 5) {
-        text = `Low: ${available}`
-      } else {
-        text = `${available} in stock`
-      }
+    // Return separate badge information
+    return {
+      color,
+      text: available === 0 ? 'Out of Stock' : available <= 5 ? `Low: ${available}` : `${available} in stock`,
+      available,
+      // Additional info for separate badges
+      showWarehouseBadge: warehouseTotalNum !== null && warehouseTotalNum > available,
+      warehouseTotal: warehouseTotalNum ? warehouseTotalNum - available : 0,
+      totalStock: warehouseTotalNum ?? available
     }
-
-    const color = available <= 5 ? 'warning' : 'success'
-    return { color, text, available }
   }
 
   const getPrice = (product: Product) => {
@@ -855,7 +827,14 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
                             SKU: {product.sku} | {product.category_name}
                           </small>
                           <br />
-                          <Badge bg={stockStatus.color as 'secondary' | 'danger' | 'warning' | 'success'}>{stockStatus.text}</Badge>
+                          <Badge bg={stockStatus.color as 'secondary' | 'danger' | 'warning' | 'success'} className="me-1">
+                            📍 {stockStatus.text}
+                          </Badge>
+                          {stockStatus.showWarehouseBadge && (
+                            <Badge bg="secondary">
+                              🏪 +{stockStatus.warehouseTotal} at other locations
+                            </Badge>
+                          )}
                         </div>
                       </Col>
                       <Col xs={2} className="text-end">
