@@ -1,4 +1,4 @@
-import { type ChangeEvent, memo } from 'react'
+import { type ChangeEvent } from 'react'
 import Alert from 'react-bootstrap/Alert'
 import Badge from 'react-bootstrap/Badge'
 import Button from 'react-bootstrap/Button'
@@ -288,4 +288,4 @@ const StockRequestList = ({
   )
 }
 
-export default memo(StockRequestList)
+export default StockRequestList
