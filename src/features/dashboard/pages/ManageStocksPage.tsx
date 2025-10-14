@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, Fragment, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useState, useCallback, useMemo, Fragment, type ChangeEvent, type FormEvent } from 'react'
 import Alert from 'react-bootstrap/Alert'
 import Badge from 'react-bootstrap/Badge'
 import Button from 'react-bootstrap/Button'
@@ -583,6 +583,23 @@ const ManageStocksPage = () => {
     void dispatch(loadTransferRequests())
   }, [dispatch])
 
+  // Memoize filtered requests to prevent unnecessary re-renders
+  const forwardTransferRequests = useMemo(
+    () => transferRequests.filter(req => (req.direction || 'FORWARD') === 'FORWARD'),
+    [transferRequests]
+  )
+
+  // Memoize pagination object to prevent unnecessary re-renders
+  const stockRequestPagination = useMemo(
+    () => ({
+      count: forwardTransferRequests.length,
+      page: transferRequestsPage,
+      pageSize: transferRequestsPageSize,
+      totalPages: Math.max(1, Math.ceil(forwardTransferRequests.length / transferRequestsPageSize)),
+    }),
+    [forwardTransferRequests.length, transferRequestsPage, transferRequestsPageSize]
+  )
+
   const handleViewStockRequest = (request: TransferRequest) => {
     setSelectedRequest(request)
     setShowRequestDetailModal(true)
@@ -1088,16 +1105,11 @@ const ManageStocksPage = () => {
               )}
 
               <StockRequestList
-                requests={transferRequests.filter(req => (req.direction || 'FORWARD') === 'FORWARD')}
+                requests={forwardTransferRequests}
                 storefronts={storefronts}
                 isLoading={transferRequestsStatus === 'loading'}
                 error={transferRequestsError}
-                pagination={{
-                  count: transferRequests.filter(req => (req.direction || 'FORWARD') === 'FORWARD').length,
-                  page: transferRequestsPage,
-                  pageSize: transferRequestsPageSize,
-                  totalPages: Math.max(1, Math.ceil(transferRequests.filter(req => (req.direction || 'FORWARD') === 'FORWARD').length / transferRequestsPageSize)),
-                }}
+                pagination={stockRequestPagination}
                 filters={transferRequestFilters}
                 onFilterChange={handleStockRequestFilterChange}
                 onPageChange={handleStockRequestPageChange}
