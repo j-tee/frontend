@@ -1070,8 +1070,7 @@ const ManageStocksPage = () => {
       )}
 
       {/* Stock Requests Tab */}
-      {activeTab === 'stock-requests' && (
-            <div className="space-y-6">
+      <div className="space-y-6" style={{ display: activeTab === 'stock-requests' ? 'block' : 'none' }}>
               <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div>
@@ -1118,7 +1117,6 @@ const ManageStocksPage = () => {
                 onViewDetail={handleViewStockRequest}
               />
             </div>
-      )}
 
       {/* Stock Adjustments Tab */}
       {activeTab === 'stock-adjustments' && (
