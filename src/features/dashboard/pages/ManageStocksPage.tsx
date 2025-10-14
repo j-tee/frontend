@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, Fragment, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef, Fragment, type ChangeEvent, type FormEvent } from 'react'
 import Alert from 'react-bootstrap/Alert'
 import Badge from 'react-bootstrap/Badge'
 import Button from 'react-bootstrap/Button'
@@ -562,10 +562,26 @@ const ManageStocksPage = () => {
     dispatch(clearTransferRequestMutation('create'))
   }
 
+  // Debounce timer for search filter
+  const searchDebounceTimerRef = useRef<number | null>(null)
+
   const handleStockRequestFilterChange = useCallback((filters: Partial<typeof transferRequestFilters>) => {
+    // Update filters immediately in Redux (for controlled input)
     dispatch(setTransferRequestFilters(filters))
     dispatch(setTransferRequestPage(1))
-    void dispatch(loadTransferRequests())
+    
+    // If it's a search filter change, debounce the API call
+    if ('search' in filters) {
+      if (searchDebounceTimerRef.current) {
+        clearTimeout(searchDebounceTimerRef.current)
+      }
+      searchDebounceTimerRef.current = window.setTimeout(() => {
+        void dispatch(loadTransferRequests())
+      }, 300)
+    } else {
+      // For other filters, load immediately
+      void dispatch(loadTransferRequests())
+    }
   }, [dispatch])
 
   const handleStockRequestPageChange = useCallback((page: number) => {

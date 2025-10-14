@@ -1,4 +1,4 @@
-import { type ChangeEvent, memo, useState, useEffect, useRef } from 'react'
+import { type ChangeEvent, memo } from 'react'
 import Alert from 'react-bootstrap/Alert'
 import Badge from 'react-bootstrap/Badge'
 import Button from 'react-bootstrap/Button'
@@ -93,45 +93,6 @@ const StockRequestList = ({
   const showingFrom = count === 0 ? 0 : (page - 1) * pageSize + 1
   const showingTo = Math.min(page * pageSize, count)
 
-  // Local state for search input to prevent losing focus
-  const [searchQuery, setSearchQuery] = useState(filters.search)
-  const debounceTimerRef = useRef<number | null>(null)
-  const isUserTypingRef = useRef(false)
-
-  // Sync local state when filters.search changes from outside (e.g., reset button)
-  useEffect(() => {
-    // Only update if we're not currently typing
-    if (!isUserTypingRef.current && filters.search !== searchQuery) {
-      setSearchQuery(filters.search)
-    }
-  }, [filters.search, searchQuery])
-
-  // Handle search input change
-  const handleSearchChange = (value: string) => {
-    isUserTypingRef.current = true
-    setSearchQuery(value)
-
-    // Clear existing timer
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current)
-    }
-
-    // Set new timer
-    debounceTimerRef.current = setTimeout(() => {
-      onFilterChange({ search: value })
-      isUserTypingRef.current = false
-    }, 500)
-  }
-
-  // Cleanup timer on unmount
-  useEffect(() => {
-    return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current)
-      }
-    }
-  }, [])
-
   const handlePageSizeChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const newSize = Number(event.target.value)
     if (!Number.isNaN(newSize) && newSize > 0) {
@@ -156,8 +117,8 @@ const StockRequestList = ({
             <Form.Control
               type="search"
               placeholder="Search requests..."
-              value={searchQuery}
-              onChange={(e) => handleSearchChange(e.target.value)}
+              value={filters.search}
+              onChange={(e) => onFilterChange({ search: e.target.value })}
               disabled={isLoading}
             />
           </Form.Group>
