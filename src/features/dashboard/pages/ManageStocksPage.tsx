@@ -1120,6 +1120,7 @@ const ManageStocksPage = () => {
               )}
 
               <StockRequestList
+                key="stock-requests-list"
                 requests={forwardTransferRequests}
                 storefronts={storefronts}
                 isLoading={transferRequestsStatus === 'loading'}
