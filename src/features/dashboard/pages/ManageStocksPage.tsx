@@ -805,7 +805,7 @@ const ManageStocksPage = () => {
       </Nav>
 
       {/* Stock Products Tab */}
-      {activeTab === 'stock-products' && (
+      <div className="space-y-6" style={{ display: activeTab === 'stock-products' ? 'block' : 'none' }}>
             <div className="space-y-6">
               <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -1067,7 +1067,7 @@ const ManageStocksPage = () => {
         </div>
       </section>
         </div>
-      )}
+      </div>
 
       {/* Stock Requests Tab */}
       <div className="space-y-6" style={{ display: activeTab === 'stock-requests' ? 'block' : 'none' }}>
@@ -1119,7 +1119,7 @@ const ManageStocksPage = () => {
             </div>
 
       {/* Stock Adjustments Tab */}
-      {activeTab === 'stock-adjustments' && (
+      <div className="space-y-6" style={{ display: activeTab === 'stock-adjustments' ? 'block' : 'none' }}>
         <div className="space-y-6">
           <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -1440,7 +1440,7 @@ const ManageStocksPage = () => {
             )}
           </section>
         </div>
-      )}
+      </div>
 
       {/* Modals */}
       <StockIntakeModal
