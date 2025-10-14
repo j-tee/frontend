@@ -673,6 +673,16 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
       const storefrontAvailable = currentLocationStock?.available_quantity ?? 0
       const totalAvailable = product.available_quantity ?? 0
       
+      // Debug logging
+      console.log('[Stock Status Debug]', {
+        productName: product.name,
+        storefrontId,
+        currentLocationStock,
+        storefrontAvailable,
+        totalAvailable,
+        allLocations: product.locations
+      })
+      
       const available = Number.isFinite(storefrontAvailable) ? Math.max(0, Math.floor(storefrontAvailable)) : 0
       const total = Number.isFinite(totalAvailable) ? Math.max(0, Math.floor(totalAvailable)) : 0
       
