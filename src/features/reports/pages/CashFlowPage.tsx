@@ -10,7 +10,7 @@ import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates
 
 const CashFlowPage = () => {
   const navigate = useNavigate();
-  const [data, setData] = useState<CashFlowResponse | null>(null);
+  const [data, setData] = useState<CashFlowResponse['data'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -32,7 +32,11 @@ const CashFlowPage = () => {
         end_date: endDate,
         interval,
       });
-      setData(response);
+      if (response.success && response.data) {
+        setData(response.data);
+      } else {
+        throw new Error('Invalid response structure');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load report');
     } finally {
@@ -56,15 +60,20 @@ const CashFlowPage = () => {
     }
   };
 
-  const formatCurrency = (value: number | string) => {
+  const formatCurrency = (value: number | string | null | undefined) => {
+    if (value === null || value === undefined) return '$0.00';
     const num = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(num)) return '$0.00';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
     }).format(num);
   };
 
-  const getCashFlowHealth = (health: string) => {
+  const getCashFlowHealth = (health: string | null | undefined) => {
+    if (!health) {
+      return { color: 'text-gray-600', bg: 'bg-gray-50', label: 'Neutral' };
+    }
     switch (health.toLowerCase()) {
       case 'positive':
         return { color: 'text-green-600', bg: 'bg-green-50', label: 'Positive' };
@@ -77,13 +86,13 @@ const CashFlowPage = () => {
 
   if (loading) return <LoadingState />;
   if (error) return <ErrorState error={error} onRetry={fetchData} />;
-  if (!data?.data) return <EmptyState />;
+  if (!data || !data.summary || !data.inflows || !data.outflows) return <EmptyState />;
 
-  const summary = data.data.summary;
-  const inflows = data.data.inflows;
-  const outflows = data.data.outflows;
-  const timeline = data.data.timeline || [];
-  const forecast = data.data.forecast || [];
+  const summary = data.summary;
+  const inflows = data.inflows;
+  const outflows = data.outflows;
+  const timeline = data.timeline || [];
+  const forecast = data.forecast || [];
 
   const healthStatus = getCashFlowHealth(summary.cash_flow_health);
 
