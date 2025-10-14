@@ -112,16 +112,17 @@ const StockRequestList = ({
         </div>
 
         <div className="row g-3">
-          <Form.Group className="col-md-3" controlId="filterSearch">
-            <Form.Label>Search</Form.Label>
+          <div className="col-md-3">
+            <Form.Label htmlFor="stock-request-search">Search</Form.Label>
             <Form.Control
-              type="search"
+              id="stock-request-search"
+              type="text"
               placeholder="Search requests..."
               value={filters.search}
               onChange={(e) => onFilterChange({ search: e.target.value })}
               disabled={isLoading}
             />
-          </Form.Group>
+          </div>
 
           <Form.Group className="col-md-3" controlId="filterStatus">
             <Form.Label>Status</Form.Label>
