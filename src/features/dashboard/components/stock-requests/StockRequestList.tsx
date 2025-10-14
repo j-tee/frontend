@@ -1,4 +1,4 @@
-import { type ChangeEvent, memo, useState, useEffect } from 'react'
+import { type ChangeEvent, memo, useState, useEffect, useRef } from 'react'
 import Alert from 'react-bootstrap/Alert'
 import Badge from 'react-bootstrap/Badge'
 import Button from 'react-bootstrap/Button'
@@ -95,22 +95,42 @@ const StockRequestList = ({
 
   // Local state for search input to prevent losing focus
   const [searchQuery, setSearchQuery] = useState(filters.search)
+  const debounceTimerRef = useRef<number | null>(null)
+  const isUserTypingRef = useRef(false)
 
-  // Sync local state when filters.search changes from outside (e.g., reset)
+  // Sync local state when filters.search changes from outside (e.g., reset button)
   useEffect(() => {
-    setSearchQuery(filters.search)
-  }, [filters.search])
+    // Only update if we're not currently typing
+    if (!isUserTypingRef.current && filters.search !== searchQuery) {
+      setSearchQuery(filters.search)
+    }
+  }, [filters.search, searchQuery])
 
-  // Debounce search: only trigger filter change after user stops typing
+  // Handle search input change
+  const handleSearchChange = (value: string) => {
+    isUserTypingRef.current = true
+    setSearchQuery(value)
+
+    // Clear existing timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+    }
+
+    // Set new timer
+    debounceTimerRef.current = setTimeout(() => {
+      onFilterChange({ search: value })
+      isUserTypingRef.current = false
+    }, 500)
+  }
+
+  // Cleanup timer on unmount
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (searchQuery !== filters.search) {
-        onFilterChange({ search: searchQuery })
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
       }
-    }, 500) // 500ms debounce delay
-
-    return () => clearTimeout(timer)
-  }, [searchQuery, filters.search, onFilterChange])
+    }
+  }, [])
 
   const handlePageSizeChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const newSize = Number(event.target.value)
@@ -137,7 +157,7 @@ const StockRequestList = ({
               type="search"
               placeholder="Search requests..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               disabled={isLoading}
             />
           </Form.Group>
