@@ -220,12 +220,9 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
       return
     }
 
-    // In multi-storefront mode, don't fetch individual stock levels
-    // The multi-storefront catalog already includes total_available quantities
-    if (multiStorefront) {
-      console.log('[ProductSearch] Multi-storefront mode: Skipping individual stock level fetches')
-      return
-    }
+    // REMOVED: No longer skip in multi-storefront mode
+    // We need accurate unreserved_quantity which accounts for sold items
+    // The catalog's available_quantity only shows transferred quantity, not available to sell
 
     try {
       const shouldTryAvailability = availabilitySupportedRef.current
@@ -415,7 +412,7 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
     } catch (err) {
       console.error('Failed to fetch stock levels:', err)
     }
-  }, [storefrontId, multiStorefront])
+  }, [storefrontId])
 
   const searchProducts = useCallback(async (rawQuery: string) => {
     if (catalogLoading) {
@@ -666,7 +663,31 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
   const getStockStatus = (product: Product) => {
     const stock = stockData[product.id]
     
-    // In multi-storefront mode with locations data
+    // If we have fetched stock data, use it (it has accurate unreserved_quantity)
+    if (stock) {
+      const available = Number.isFinite(stock.available_quantity) ? Math.max(0, Math.floor(stock.available_quantity)) : 0
+      const total = Number.isFinite(stock.quantity) ? Math.max(0, Math.floor(stock.quantity)) : 0
+      
+      console.log('[Stock Status] Using fetched stock data', {
+        productName: product.name,
+        available,
+        total,
+        stock
+      })
+      
+      const color = available === 0 ? 'danger' : available <= 5 ? 'warning' : 'success'
+      
+      return {
+        color,
+        text: available === 0 ? 'Out of Stock' : available <= 5 ? `Low: ${available}` : `${available} in stock`,
+        available,
+        showWarehouseBadge: total > available,
+        warehouseTotal: total - available,
+        totalStock: total
+      }
+    }
+    
+    // Fallback: In multi-storefront mode with locations data but no fetched stock
     if (product.locations && product.locations.length > 0 && storefrontId) {
       // Find the current storefront in the locations array
       const currentLocationStock = product.locations.find(loc => loc.storefront_id === storefrontId)
@@ -674,7 +695,7 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
       const totalAvailable = product.available_quantity ?? 0
       
       // Debug logging
-      console.log('[Stock Status Debug]', {
+      console.log('[Stock Status] Using catalog locations (no fetched data)', {
         productName: product.name,
         storefrontId,
         currentLocationStock,
@@ -700,25 +721,22 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
       }
     }
     
-    // Single storefront mode or no locations data
-    const availableSource = stock?.available_quantity ?? product.available_quantity ?? 0
-    const available = Number.isFinite(availableSource) ? Math.max(0, Math.floor(availableSource)) : 0
-
-    // Get warehouse total if available (from fetched stock data)
-    const warehouseTotal = stock?.quantity ?? null
-    const warehouseTotalNum = warehouseTotal !== null && Number.isFinite(warehouseTotal) ? Math.max(0, Math.floor(warehouseTotal)) : null
-
+    // Final fallback: use product.available_quantity from catalog
+    const available = Number.isFinite(product.available_quantity) ? Math.max(0, Math.floor(product.available_quantity)) : 0
     const color = available === 0 ? 'danger' : available <= 5 ? 'warning' : 'success'
 
-    // Return separate badge information
+    console.log('[Stock Status] Using product catalog fallback', {
+      productName: product.name,
+      available
+    })
+
     return {
       color,
       text: available === 0 ? 'Out of Stock' : available <= 5 ? `Low: ${available}` : `${available} in stock`,
       available,
-      // Additional info for separate badges
-      showWarehouseBadge: warehouseTotalNum !== null && warehouseTotalNum > available,
-      warehouseTotal: warehouseTotalNum ? warehouseTotalNum - available : 0,
-      totalStock: warehouseTotalNum ?? available
+      showWarehouseBadge: false,
+      warehouseTotal: 0,
+      totalStock: available
     }
   }
 
