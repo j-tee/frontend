@@ -119,7 +119,10 @@ const StockRequestList = ({
               type="text"
               placeholder="Search requests..."
               value={filters.search}
-              onChange={(e) => onFilterChange({ search: e.target.value })}
+              onChange={(e) => {
+                console.log('🔍 Search onChange fired:', e.target.value)
+                onFilterChange({ search: e.target.value })
+              }}
               disabled={isLoading}
             />
           </div>
