@@ -93,6 +93,15 @@ const StockRequestList = ({
   const showingFrom = count === 0 ? 0 : (page - 1) * pageSize + 1
   const showingTo = Math.min(page * pageSize, count)
 
+  // Extract unique product names from all requests for the dropdown
+  const uniqueProducts = Array.from(
+    new Set(
+      requests.flatMap(req => 
+        req.line_items?.map(item => item.product_name || item.product).filter(Boolean) || []
+      )
+    )
+  ).sort()
+
   const handlePageSizeChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const newSize = Number(event.target.value)
     if (!Number.isNaN(newSize) && newSize > 0) {
@@ -112,20 +121,21 @@ const StockRequestList = ({
         </div>
 
         <div className="row g-3">
-          <div className="col-md-3">
-            <Form.Label htmlFor="stock-request-search">Search</Form.Label>
-            <Form.Control
-              id="stock-request-search"
-              type="text"
-              placeholder="Search requests..."
+          <Form.Group className="col-md-3" controlId="filterProduct">
+            <Form.Label>Filter by Product</Form.Label>
+            <Form.Select
               value={filters.search}
-              onChange={(e) => {
-                console.log('🔍 Search onChange fired:', e.target.value)
-                onFilterChange({ search: e.target.value })
-              }}
+              onChange={(e) => onFilterChange({ search: e.target.value })}
               disabled={isLoading}
-            />
-          </div>
+            >
+              <option value="">All products</option>
+              {uniqueProducts.map((productName) => (
+                <option key={productName} value={productName}>
+                  {productName}
+                </option>
+              ))}
+            </Form.Select>
+          </Form.Group>
 
           <Form.Group className="col-md-3" controlId="filterStatus">
             <Form.Label>Status</Form.Label>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Alert from 'react-bootstrap/Alert'
 import Badge from 'react-bootstrap/Badge'
 import Button from 'react-bootstrap/Button'
@@ -6,9 +6,10 @@ import Dropdown from 'react-bootstrap/Dropdown'
 import Modal from 'react-bootstrap/Modal'
 import Spinner from 'react-bootstrap/Spinner'
 import Table from 'react-bootstrap/Table'
-import type { TransferRequest } from '../../../../types/inventory.js'
+import type { TransferRequest, StorefrontAvailabilityResponse } from '../../../../types/inventory.js'
 import usePermissions from '../../../../hooks/usePermissions.js'
 import { useCanEditFulfilled } from '../../../../hooks/index.js'
+import { fetchStorefrontAvailability } from '../../../../services/inventoryService.js'
 
 interface StockRequestDetailModalProps {
   show: boolean
@@ -83,8 +84,56 @@ const StockRequestDetailModal = ({
 }: StockRequestDetailModalProps) => {
   const [showStatusConfirm, setShowStatusConfirm] = useState(false)
   const [targetStatus, setTargetStatus] = useState<string>('')
+  const [availabilityData, setAvailabilityData] = useState<Map<string, StorefrontAvailabilityResponse>>(new Map())
+  const [loadingAvailability, setLoadingAvailability] = useState(false)
   const permissions = usePermissions()
   const canEditFulfilled = useCanEditFulfilled()
+
+  // Fetch current availability for fulfilled requests
+  useEffect(() => {
+    if (!request || request.status !== 'FULFILLED' || !request.storefront || !request.line_items?.length) {
+      setAvailabilityData(new Map())
+      return
+    }
+
+    let isCancelled = false
+    setLoadingAvailability(true)
+
+    const fetchAvailability = async () => {
+      try {
+        const results = await Promise.all(
+          request.line_items.map(async (item) => {
+            try {
+              const data = await fetchStorefrontAvailability(request.storefront, item.product)
+              return [item.product, data] as const
+            } catch (error) {
+              console.error(`Failed to fetch availability for product ${item.product}:`, error)
+              return null
+            }
+          })
+        )
+
+        if (!isCancelled) {
+          const availabilityMap = new Map(
+            results.filter((result): result is [string, StorefrontAvailabilityResponse] => result !== null)
+          )
+          setAvailabilityData(availabilityMap)
+        }
+      } catch (error) {
+        console.error('Error fetching availability data:', error)
+      } finally {
+        if (!isCancelled) {
+          setLoadingAvailability(false)
+        }
+      }
+    }
+
+    void fetchAvailability()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [request])
 
   if (!request) return null
 
@@ -269,6 +318,92 @@ const StockRequestDetailModal = ({
             </tbody>
           </Table>
         </div>
+
+        {/* Current Inventory Status - Only show for fulfilled requests */}
+        {request.status === 'FULFILLED' && request.line_items && request.line_items.length > 0 && (
+          <div className="mb-3">
+            <div className="d-flex align-items-center justify-content-between mb-2">
+              <h6 className="mb-0">Current Inventory Status</h6>
+              {loadingAvailability && (
+                <div className="d-flex align-items-center gap-2 text-muted small">
+                  <Spinner animation="border" size="sm" />
+                  <span>Loading current stock levels...</span>
+                </div>
+              )}
+            </div>
+            
+            {!loadingAvailability && availabilityData.size > 0 && (
+              <>
+                <Table responsive size="sm" className="mb-2">
+                  <thead className="table-light">
+                    <tr>
+                      <th>Product</th>
+                      <th className="text-end">Fulfilled Qty</th>
+                      <th className="text-end">Currently Available</th>
+                      <th className="text-end">Reserved in Carts</th>
+                      <th className="text-end">Total Stock</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {request.line_items.map((item) => {
+                      const availability = availabilityData.get(item.product)
+                      const fulfilledQty = item.fulfilled_quantity || item.requested_quantity
+                      const unreservedQty = availability?.unreserved_quantity ? Number(availability.unreserved_quantity) : null
+                      const reservedQty = availability?.reserved_quantity ? Number(availability.reserved_quantity) : null
+                      const totalAvailable = availability?.total_available ? Number(availability.total_available) : null
+
+                      return (
+                        <tr key={item.id}>
+                          <td className="fw-semibold">{item.product_name}</td>
+                          <td className="text-end">
+                            <Badge bg="success">{fulfilledQty}</Badge>
+                          </td>
+                          <td className="text-end">
+                            {unreservedQty !== null ? (
+                              <span className={unreservedQty > 0 ? 'text-success fw-semibold' : 'text-danger fw-semibold'}>
+                                {unreservedQty}
+                              </span>
+                            ) : (
+                              <span className="text-muted">—</span>
+                            )}
+                          </td>
+                          <td className="text-end">
+                            {reservedQty !== null && reservedQty > 0 ? (
+                              <Badge bg="warning" text="dark">{reservedQty}</Badge>
+                            ) : (
+                              <span className="text-muted">—</span>
+                            )}
+                          </td>
+                          <td className="text-end">
+                            {totalAvailable !== null ? (
+                              <span className="fw-semibold">{totalAvailable}</span>
+                            ) : (
+                              <span className="text-muted">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </Table>
+                <small className="text-muted">
+                  <i className="bi bi-info-circle me-1"></i>
+                  Showing real-time inventory as of {new Date().toLocaleString()}
+                </small>
+              </>
+            )}
+
+            {!loadingAvailability && availabilityData.size === 0 && (
+              <Alert variant="info" className="mb-0">
+                <small>
+                  <i className="bi bi-info-circle me-2"></i>
+                  Unable to load current inventory data. The stock may have been moved or the storefront might be unavailable.
+                </small>
+              </Alert>
+            )}
+          </div>
+        )}
+
       </Modal.Body>
       <Modal.Footer>
         <Button variant="outline-secondary" onClick={onClose}>
