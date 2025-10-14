@@ -7,9 +7,11 @@ import { ReportContainer } from '../components/ReportContainer';
 import { SummaryCard } from '../components/SummaryCard';
 import { DateRangeFilter } from '../components/DateRangeFilter';
 import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates';
+import { useCurrency } from '../../../hooks/useCurrency';
 
 const CashFlowPage = () => {
   const navigate = useNavigate();
+  const { formatCurrency } = useCurrency();
   const [data, setData] = useState<CashFlowResponse['data'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,16 +60,6 @@ const CashFlowPage = () => {
     } catch (err) {
       console.error('Export failed:', err);
     }
-  };
-
-  const formatCurrency = (value: number | string | null | undefined) => {
-    if (value === null || value === undefined) return '$0.00';
-    const num = typeof value === 'string' ? parseFloat(value) : value;
-    if (isNaN(num)) return '$0.00';
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(num);
   };
 
   const getCashFlowHealth = (health: string | null | undefined) => {
