@@ -656,6 +656,48 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
 
   const getStockStatus = (product: Product) => {
     const stock = stockData[product.id]
+    
+    // In multi-storefront mode with locations data
+    if (product.locations && product.locations.length > 0 && storefrontId) {
+      // Find the current storefront in the locations array
+      const currentLocationStock = product.locations.find(loc => loc.storefront_id === storefrontId)
+      const storefrontAvailable = currentLocationStock?.available_quantity ?? 0
+      const totalAvailable = product.available_quantity ?? 0
+      
+      const available = Number.isFinite(storefrontAvailable) ? Math.max(0, Math.floor(storefrontAvailable)) : 0
+      const total = Number.isFinite(totalAvailable) ? Math.max(0, Math.floor(totalAvailable)) : 0
+      
+      if (available === 0) {
+        // Check if stock exists elsewhere
+        if (total > 0) {
+          return { color: 'danger', text: `Out of Stock (${total} at other stores)`, available: 0 }
+        }
+        return { color: 'danger', text: 'Out of Stock', available: 0 }
+      }
+      
+      // Show both storefront and total if they differ
+      let text = ''
+      if (total > available) {
+        // Stock exists at other locations
+        if (available <= 5) {
+          text = `Low: ${available} here (${total} total)`
+        } else {
+          text = `${available} here (${total} total)`
+        }
+      } else {
+        // All stock is at this location
+        if (available <= 5) {
+          text = `Low: ${available}`
+        } else {
+          text = `${available} in stock`
+        }
+      }
+      
+      const color = available <= 5 ? 'warning' : 'success'
+      return { color, text, available }
+    }
+    
+    // Single storefront mode or no locations data
     const availableSource = stock?.available_quantity ?? product.available_quantity ?? 0
     const available = Number.isFinite(availableSource) ? Math.max(0, Math.floor(availableSource)) : 0
 
