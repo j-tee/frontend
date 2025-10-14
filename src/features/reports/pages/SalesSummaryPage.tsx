@@ -5,10 +5,13 @@ import { DateRangeFilter } from '../components/DateRangeFilter';
 import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates';
 import { salesReportsService } from '../../../services/reportsService';
 import type { SalesSummaryResponse } from '../../../types/reports';
+import { useCurrency } from '../../../hooks/useCurrency';
 
 const SalesSummaryPage: React.FC = () => {
+  const { formatCurrency } = useCurrency();
+  
   // State
-  const [data, setData] = useState<SalesSummaryResponse | null>(null);
+  const [data, setData] = useState<SalesSummaryResponse['data'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -34,10 +37,15 @@ const SalesSummaryPage: React.FC = () => {
         period_type: 'daily',
         compare_previous: true,
       });
-      setData(result);
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.error?.message || 
-                          err.message || 
+      if (result.success && result.data) {
+        setData(result.data);
+      } else {
+        throw new Error('Invalid response structure');
+      }
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: { message?: string } } }; message?: string };
+      const errorMessage = error.response?.data?.error?.message || 
+                          error.message || 
                           'Failed to load sales summary report';
       setError(errorMessage);
       console.error('Error fetching sales summary:', err);
@@ -69,18 +77,10 @@ const SalesSummaryPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDate, endDate]);
 
-  // Format currency
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-PH', {
-      style: 'currency',
-      currency: 'PHP',
-      minimumFractionDigits: 2,
-    }).format(value);
-  };
-
-  // Format number
-  const formatNumber = (value: number) => {
-    return new Intl.NumberFormat('en-US').format(value);
+  // Format number with null safety
+  const formatNumber = (value: number | null | undefined): string => {
+    if (value === null || value === undefined || isNaN(value)) return '0';
+    return value.toLocaleString();
   };
 
   // Loading state
@@ -102,7 +102,7 @@ const SalesSummaryPage: React.FC = () => {
   }
 
   // No data
-  if (!data || !data.data) {
+  if (!data || !data.summary || !data.breakdown || !data.top_selling_hours) {
     return (
       <ReportContainer title="Sales Summary Report" icon="📊">
         <EmptyState />
@@ -110,7 +110,7 @@ const SalesSummaryPage: React.FC = () => {
     );
   }
 
-  const { summary, breakdown, top_selling_hours, comparison } = data.data;
+  const { summary, breakdown, top_selling_hours, comparison } = data;
 
   return (
     <ReportContainer
