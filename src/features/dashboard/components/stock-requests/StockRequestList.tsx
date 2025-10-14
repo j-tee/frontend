@@ -1,4 +1,4 @@
-import { type ChangeEvent, memo } from 'react'
+import { type ChangeEvent, memo, useState, useEffect } from 'react'
 import Alert from 'react-bootstrap/Alert'
 import Badge from 'react-bootstrap/Badge'
 import Button from 'react-bootstrap/Button'
@@ -93,6 +93,25 @@ const StockRequestList = ({
   const showingFrom = count === 0 ? 0 : (page - 1) * pageSize + 1
   const showingTo = Math.min(page * pageSize, count)
 
+  // Local state for search input to prevent losing focus
+  const [searchQuery, setSearchQuery] = useState(filters.search)
+
+  // Sync local state when filters.search changes from outside (e.g., reset)
+  useEffect(() => {
+    setSearchQuery(filters.search)
+  }, [filters.search])
+
+  // Debounce search: only trigger filter change after user stops typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchQuery !== filters.search) {
+        onFilterChange({ search: searchQuery })
+      }
+    }, 500) // 500ms debounce delay
+
+    return () => clearTimeout(timer)
+  }, [searchQuery, filters.search, onFilterChange])
+
   const handlePageSizeChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const newSize = Number(event.target.value)
     if (!Number.isNaN(newSize) && newSize > 0) {
@@ -117,8 +136,8 @@ const StockRequestList = ({
             <Form.Control
               type="search"
               placeholder="Search requests..."
-              value={filters.search}
-              onChange={(e) => onFilterChange({ search: e.target.value })}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               disabled={isLoading}
             />
           </Form.Group>
