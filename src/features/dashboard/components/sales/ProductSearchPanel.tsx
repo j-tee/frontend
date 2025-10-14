@@ -580,11 +580,20 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
     if (!stock) {
       const product = catalog.find((item) => item.id === productId)
       if (product && product.stock_product_ids.length > 0) {
+        // In multi-storefront mode, get storefront-specific quantity from locations
+        let storefrontAvailableQty = product.available_quantity
+        if (product.locations && product.locations.length > 0 && storefrontId) {
+          const currentLocationStock = product.locations.find(loc => loc.storefront_id === storefrontId)
+          if (currentLocationStock) {
+            storefrontAvailableQty = currentLocationStock.available_quantity
+          }
+        }
+        
         const fallbackStock: StockRecord = {
           id: product.stock_product_ids[0],
           product: product.id,
-          quantity: product.available_quantity,
-          available_quantity: product.available_quantity,
+          quantity: product.available_quantity, // Total across all locations
+          available_quantity: storefrontAvailableQty, // Storefront-specific quantity
           reserved_quantity: 0,
           unit_cost: 0,
           retail_price: product.retail_price,
