@@ -55,7 +55,7 @@ const SalesSummaryPage: React.FC = () => {
   };
 
   // Export to CSV
-  const handleExport = async () => {
+  const handleExportCSV = async () => {
     try {
       setExporting(true);
       await salesReportsService.exportSummaryCSV({
@@ -64,8 +64,25 @@ const SalesSummaryPage: React.FC = () => {
         period_type: 'daily',
       });
     } catch (err) {
-      console.error('Error exporting report:', err);
-      alert('Failed to export report. Please try again.');
+      console.error('Error exporting CSV:', err);
+      alert('Failed to export CSV. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // Export to PDF
+  const handleExportPDF = async () => {
+    try {
+      setExporting(true);
+      await salesReportsService.exportSummaryPDF({
+        start_date: startDate,
+        end_date: endDate,
+        period_type: 'daily',
+      });
+    } catch (err) {
+      console.error('Error exporting PDF:', err);
+      alert('Failed to export PDF. Please try again.');
     } finally {
       setExporting(false);
     }
@@ -120,11 +137,18 @@ const SalesSummaryPage: React.FC = () => {
       actions={
         <>
           <button
-            onClick={handleExport}
+            onClick={handleExportCSV}
             disabled={exporting}
             className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-green-700 disabled:opacity-50"
           >
             {exporting ? '⏳ Exporting...' : '📥 Export CSV'}
+          </button>
+          <button
+            onClick={handleExportPDF}
+            disabled={exporting}
+            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
+          >
+            {exporting ? '⏳ Exporting...' : '📄 Export PDF'}
           </button>
           <button
             onClick={fetchData}
@@ -178,6 +202,64 @@ const SalesSummaryPage: React.FC = () => {
           icon="🏷️"
           color="bg-orange-50 border-orange-200"
         />
+      </div>
+
+      {/* Retail vs Wholesale Breakdown */}
+      <div className="rounded-3xl border border-slate-300 bg-white p-6 shadow-sm">
+        <h3 className="mb-6 text-xl font-bold text-slate-900">Sales by Channel</h3>
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* Retail */}
+          <div className="rounded-2xl border-2 border-blue-200 bg-blue-50 p-5">
+            <div className="mb-4 flex items-center gap-2">
+              <span className="text-2xl">🏪</span>
+              <h4 className="text-lg font-bold text-slate-900">Retail</h4>
+            </div>
+            <div className="space-y-3">
+              <div className="flex justify-between">
+                <span className="text-sm font-medium text-slate-600">Transactions:</span>
+                <span className="text-sm font-bold text-slate-900">{formatNumber(summary.retail.transactions)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm font-medium text-slate-600">Revenue:</span>
+                <span className="text-sm font-bold text-slate-900">{formatCurrency(summary.retail.revenue)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm font-medium text-slate-600">Avg Value:</span>
+                <span className="text-sm font-bold text-slate-900">{formatCurrency(summary.retail.average_value)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm font-medium text-slate-600">Items Sold:</span>
+                <span className="text-sm font-bold text-slate-900">{formatNumber(summary.retail.items_sold)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Wholesale */}
+          <div className="rounded-2xl border-2 border-green-200 bg-green-50 p-5">
+            <div className="mb-4 flex items-center gap-2">
+              <span className="text-2xl">🏢</span>
+              <h4 className="text-lg font-bold text-slate-900">Wholesale</h4>
+            </div>
+            <div className="space-y-3">
+              <div className="flex justify-between">
+                <span className="text-sm font-medium text-slate-600">Transactions:</span>
+                <span className="text-sm font-bold text-slate-900">{formatNumber(summary.wholesale.transactions)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm font-medium text-slate-600">Revenue:</span>
+                <span className="text-sm font-bold text-slate-900">{formatCurrency(summary.wholesale.revenue)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm font-medium text-slate-600">Avg Value:</span>
+                <span className="text-sm font-bold text-slate-900">{formatCurrency(summary.wholesale.average_value)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm font-medium text-slate-600">Items Sold:</span>
+                <span className="text-sm font-bold text-slate-900">{formatNumber(summary.wholesale.items_sold)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Daily Breakdown Table */}

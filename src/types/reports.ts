@@ -52,6 +52,18 @@ export interface SalesSummary {
   total_discounts_given: number;
   net_sales: number;
   growth_rate: number;
+  retail: {
+    transactions: number;
+    revenue: number;
+    average_value: number;
+    items_sold: number;
+  };
+  wholesale: {
+    transactions: number;
+    revenue: number;
+    average_value: number;
+    items_sold: number;
+  };
   period: ReportPeriod;
 }
 
@@ -89,33 +101,61 @@ export interface SalesSummaryResponse {
   };
 }
 
-export interface ProductPerformance {
+export interface ProductMetrics {
+  revenue: number;
+  quantity: number;
+  transactions: number;
+}
+
+export interface ProductBreakdown {
   product_id: string;
-  product_name: string;
+  name: string;
   sku: string;
   category: string;
   total_revenue: number;
-  total_quantity_sold: number;
-  total_profit: number;
-  profit_margin: number;
-  average_selling_price: number;
-  cost_of_goods_sold: number;
-  times_ordered: number;
-  first_sale_date: string;
-  last_sale_date: string;
-  trend: 'up' | 'down' | 'stable';
+  total_quantity: number;
+  total_transactions: number;
+  avg_price: number;
+  retail: ProductMetrics;
+  wholesale: ProductMetrics;
+}
+
+export interface CategoryBreakdown {
+  category: string;
+  revenue: number;
+  quantity: number;
+  products: number;
+  transactions: number;
+}
+
+export interface ProductPerformanceSummary {
+  total_revenue: number;
+  total_quantity: number;
+  total_products: number;
+  total_transactions: number;
+  avg_items_per_transaction: number;
+  retail: {
+    revenue: number;
+    quantity: number;
+    transactions: number;
+    products: number;
+  };
+  wholesale: {
+    revenue: number;
+    quantity: number;
+    transactions: number;
+    products: number;
+  };
 }
 
 export interface ProductPerformanceResponse {
-  success: boolean;
-  data: {
-    products: ProductPerformance[];
-    summary: {
-      total_products_sold: number;
-      total_revenue: number;
-      total_profit: number;
-      average_profit_margin: number;
-    };
+  summary: ProductPerformanceSummary;
+  products: ProductBreakdown[];
+  categories: CategoryBreakdown[];
+  period: {
+    start: string;
+    end: string;
+    type: string;
   };
 }
 

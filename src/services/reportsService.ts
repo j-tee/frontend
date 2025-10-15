@@ -83,10 +83,21 @@ export const salesReportsService = {
    */
   exportSummaryCSV: async (filters: ReportFilters = {}): Promise<void> => {
     const response = await reportsApi.get(
-      `/reports/api/sales/summary${buildQueryString({ ...filters, format: 'csv' })}`,
+      `/reports/api/sales/summary${buildQueryString({ ...filters, export_format: 'csv' })}`,
       { responseType: 'blob' }
     );
     downloadFile(response.data, `sales-summary-${new Date().toISOString()}.csv`);
+  },
+
+  /**
+   * Export to PDF
+   */
+  exportSummaryPDF: async (filters: ReportFilters = {}): Promise<void> => {
+    const response = await reportsApi.get(
+      `/reports/api/sales/summary${buildQueryString({ ...filters, export_format: 'pdf' })}`,
+      { responseType: 'blob' }
+    );
+    downloadFile(response.data, `sales-summary-${new Date().toISOString()}.pdf`);
   },
 
   /**
@@ -104,10 +115,21 @@ export const salesReportsService = {
    */
   exportProductPerformanceCSV: async (filters: ReportFilters = {}): Promise<void> => {
     const response = await reportsApi.get(
-      `/reports/api/sales/products${buildQueryString({ ...filters, format: 'csv' })}`,
+      `/reports/api/sales/products${buildQueryString({ ...filters, export_format: 'csv' })}`,
       { responseType: 'blob' }
     );
     downloadFile(response.data, `product-performance-${new Date().toISOString()}.csv`);
+  },
+
+  /**
+   * Export to PDF
+   */
+  exportProductPerformancePDF: async (filters: ReportFilters = {}): Promise<void> => {
+    const response = await reportsApi.get(
+      `/reports/api/sales/products${buildQueryString({ ...filters, export_format: 'pdf' })}`,
+      { responseType: 'blob' }
+    );
+    downloadFile(response.data, `product-performance-${new Date().toISOString()}.pdf`);
   },
 
   /**
@@ -125,10 +147,21 @@ export const salesReportsService = {
    */
   exportCustomerAnalyticsCSV: async (filters: ReportFilters = {}): Promise<void> => {
     const response = await reportsApi.get(
-      `/reports/api/sales/customer-analytics${buildQueryString({ ...filters, format: 'csv' })}`,
+      `/reports/api/sales/customer-analytics${buildQueryString({ ...filters, export_format: 'csv' })}`,
       { responseType: 'blob' }
     );
     downloadFile(response.data, `customer-analytics-${new Date().toISOString()}.csv`);
+  },
+
+  /**
+   * Export to PDF
+   */
+  exportCustomerAnalyticsPDF: async (filters: ReportFilters = {}): Promise<void> => {
+    const response = await reportsApi.get(
+      `/reports/api/sales/customer-analytics${buildQueryString({ ...filters, export_format: 'pdf' })}`,
+      { responseType: 'blob' }
+    );
+    downloadFile(response.data, `customer-analytics-${new Date().toISOString()}.pdf`);
   },
 
   /**
@@ -146,10 +179,21 @@ export const salesReportsService = {
    */
   exportRevenueTrendsCSV: async (filters: ReportFilters = {}): Promise<void> => {
     const response = await reportsApi.get(
-      `/reports/api/sales/revenue-trends${buildQueryString({ ...filters, format: 'csv' })}`,
+      `/reports/api/sales/revenue-trends${buildQueryString({ ...filters, export_format: 'csv' })}`,
       { responseType: 'blob' }
     );
     downloadFile(response.data, `revenue-trends-${new Date().toISOString()}.csv`);
+  },
+
+  /**
+   * Export to PDF
+   */
+  exportRevenueTrendsPDF: async (filters: ReportFilters = {}): Promise<void> => {
+    const response = await reportsApi.get(
+      `/reports/api/sales/revenue-trends${buildQueryString({ ...filters, export_format: 'pdf' })}`,
+      { responseType: 'blob' }
+    );
+    downloadFile(response.data, `revenue-trends-${new Date().toISOString()}.pdf`);
   },
 };
 
@@ -173,10 +217,21 @@ export const inventoryReportsService = {
    */
   exportStockLevelsCSV: async (filters: ReportFilters = {}): Promise<void> => {
     const response = await reportsApi.get(
-      `/reports/api/inventory/stock-levels${buildQueryString({ ...filters, format: 'csv' })}`,
+      `/reports/api/inventory/stock-levels${buildQueryString({ ...filters, export_format: 'csv' })}`,
       { responseType: 'blob' }
     );
     downloadFile(response.data, `stock-levels-${new Date().toISOString()}.csv`);
+  },
+
+  /**
+   * Export to PDF
+   */
+  exportStockLevelsPDF: async (filters: ReportFilters = {}): Promise<void> => {
+    const response = await reportsApi.get(
+      `/reports/api/inventory/stock-levels${buildQueryString({ ...filters, export_format: 'pdf' })}`,
+      { responseType: 'blob' }
+    );
+    downloadFile(response.data, `stock-levels-${new Date().toISOString()}.pdf`);
   },
 
   /**
@@ -194,10 +249,21 @@ export const inventoryReportsService = {
    */
   exportLowStockAlertsCSV: async (filters: ReportFilters = {}): Promise<void> => {
     const response = await reportsApi.get(
-      `/reports/api/inventory/low-stock-alerts${buildQueryString({ ...filters, format: 'csv' })}`,
+      `/reports/api/inventory/low-stock-alerts${buildQueryString({ ...filters, export_format: 'csv' })}`,
       { responseType: 'blob' }
     );
     downloadFile(response.data, `low-stock-alerts-${new Date().toISOString()}.csv`);
+  },
+
+  /**
+   * Export to PDF
+   */
+  exportLowStockAlertsPDF: async (filters: ReportFilters = {}): Promise<void> => {
+    const response = await reportsApi.get(
+      `/reports/api/inventory/low-stock-alerts${buildQueryString({ ...filters, export_format: 'pdf' })}`,
+      { responseType: 'blob' }
+    );
+    downloadFile(response.data, `low-stock-alerts-${new Date().toISOString()}.pdf`);
   },
 
   /**
@@ -215,10 +281,21 @@ export const inventoryReportsService = {
    */
   exportStockMovementsCSV: async (filters: ReportFilters = {}): Promise<void> => {
     const response = await reportsApi.get(
-      `/reports/api/inventory/movements${buildQueryString({ ...filters, format: 'csv' })}`,
+      `/reports/api/inventory/movements${buildQueryString({ ...filters, export_format: 'csv' })}`,
       { responseType: 'blob' }
     );
     downloadFile(response.data, `stock-movements-${new Date().toISOString()}.csv`);
+  },
+
+  /**
+   * Export to PDF
+   */
+  exportStockMovementsPDF: async (filters: ReportFilters = {}): Promise<void> => {
+    const response = await reportsApi.get(
+      `/reports/api/inventory/movements${buildQueryString({ ...filters, export_format: 'pdf' })}`,
+      { responseType: 'blob' }
+    );
+    downloadFile(response.data, `stock-movements-${new Date().toISOString()}.pdf`);
   },
 
   /**
@@ -236,10 +313,21 @@ export const inventoryReportsService = {
    */
   exportWarehouseAnalyticsCSV: async (filters: ReportFilters = {}): Promise<void> => {
     const response = await reportsApi.get(
-      `/reports/api/inventory/warehouse-analytics${buildQueryString({ ...filters, format: 'csv' })}`,
+      `/reports/api/inventory/warehouse-analytics${buildQueryString({ ...filters, export_format: 'csv' })}`,
       { responseType: 'blob' }
     );
     downloadFile(response.data, `warehouse-analytics-${new Date().toISOString()}.csv`);
+  },
+
+  /**
+   * Export to PDF
+   */
+  exportWarehouseAnalyticsPDF: async (filters: ReportFilters = {}): Promise<void> => {
+    const response = await reportsApi.get(
+      `/reports/api/inventory/warehouse-analytics${buildQueryString({ ...filters, export_format: 'pdf' })}`,
+      { responseType: 'blob' }
+    );
+    downloadFile(response.data, `warehouse-analytics-${new Date().toISOString()}.pdf`);
   },
 };
 
@@ -263,10 +351,21 @@ export const financialReportsService = {
    */
   exportRevenueProfitCSV: async (filters: ReportFilters = {}): Promise<void> => {
     const response = await reportsApi.get(
-      `/reports/api/financial/revenue-profit${buildQueryString({ ...filters, format: 'csv' })}`,
+      `/reports/api/financial/revenue-profit${buildQueryString({ ...filters, export_format: 'csv' })}`,
       { responseType: 'blob' }
     );
     downloadFile(response.data, `revenue-profit-${new Date().toISOString()}.csv`);
+  },
+
+  /**
+   * Export to PDF
+   */
+  exportRevenueProfitPDF: async (filters: ReportFilters = {}): Promise<void> => {
+    const response = await reportsApi.get(
+      `/reports/api/financial/revenue-profit${buildQueryString({ ...filters, export_format: 'pdf' })}`,
+      { responseType: 'blob' }
+    );
+    downloadFile(response.data, `revenue-profit-${new Date().toISOString()}.pdf`);
   },
 
   /**
@@ -284,10 +383,21 @@ export const financialReportsService = {
    */
   exportARAgingCSV: async (filters: ReportFilters = {}): Promise<void> => {
     const response = await reportsApi.get(
-      `/reports/api/financial/ar-aging${buildQueryString({ ...filters, format: 'csv' })}`,
+      `/reports/api/financial/ar-aging${buildQueryString({ ...filters, export_format: 'csv' })}`,
       { responseType: 'blob' }
     );
     downloadFile(response.data, `ar-aging-${new Date().toISOString()}.csv`);
+  },
+
+  /**
+   * Export to PDF
+   */
+  exportARAgingPDF: async (filters: ReportFilters = {}): Promise<void> => {
+    const response = await reportsApi.get(
+      `/reports/api/financial/ar-aging${buildQueryString({ ...filters, export_format: 'pdf' })}`,
+      { responseType: 'blob' }
+    );
+    downloadFile(response.data, `ar-aging-${new Date().toISOString()}.pdf`);
   },
 
   /**
@@ -305,10 +415,21 @@ export const financialReportsService = {
    */
   exportCollectionRatesCSV: async (filters: ReportFilters = {}): Promise<void> => {
     const response = await reportsApi.get(
-      `/reports/api/financial/collection-rates${buildQueryString({ ...filters, format: 'csv' })}`,
+      `/reports/api/financial/collection-rates${buildQueryString({ ...filters, export_format: 'csv' })}`,
       { responseType: 'blob' }
     );
     downloadFile(response.data, `collection-rates-${new Date().toISOString()}.csv`);
+  },
+
+  /**
+   * Export to PDF
+   */
+  exportCollectionRatesPDF: async (filters: ReportFilters = {}): Promise<void> => {
+    const response = await reportsApi.get(
+      `/reports/api/financial/collection-rates${buildQueryString({ ...filters, export_format: 'pdf' })}`,
+      { responseType: 'blob' }
+    );
+    downloadFile(response.data, `collection-rates-${new Date().toISOString()}.pdf`);
   },
 
   /**
@@ -326,10 +447,21 @@ export const financialReportsService = {
    */
   exportCashFlowCSV: async (filters: ReportFilters = {}): Promise<void> => {
     const response = await reportsApi.get(
-      `/reports/api/financial/cash-flow${buildQueryString({ ...filters, format: 'csv' })}`,
+      `/reports/api/financial/cash-flow${buildQueryString({ ...filters, export_format: 'csv' })}`,
       { responseType: 'blob' }
     );
     downloadFile(response.data, `cash-flow-${new Date().toISOString()}.csv`);
+  },
+
+  /**
+   * Export to PDF
+   */
+  exportCashFlowPDF: async (filters: ReportFilters = {}): Promise<void> => {
+    const response = await reportsApi.get(
+      `/reports/api/financial/cash-flow${buildQueryString({ ...filters, export_format: 'pdf' })}`,
+      { responseType: 'blob' }
+    );
+    downloadFile(response.data, `cash-flow-${new Date().toISOString()}.pdf`);
   },
 };
 
@@ -353,10 +485,21 @@ export const customerReportsService = {
    */
   exportTopCustomersCSV: async (filters: ReportFilters = {}): Promise<void> => {
     const response = await reportsApi.get(
-      `/reports/api/customer/top-customers${buildQueryString({ ...filters, format: 'csv' })}`,
+      `/reports/api/customer/top-customers${buildQueryString({ ...filters, export_format: 'csv' })}`,
       { responseType: 'blob' }
     );
     downloadFile(response.data, `top-customers-${new Date().toISOString()}.csv`);
+  },
+
+  /**
+   * Export to PDF
+   */
+  exportTopCustomersPDF: async (filters: ReportFilters = {}): Promise<void> => {
+    const response = await reportsApi.get(
+      `/reports/api/customer/top-customers${buildQueryString({ ...filters, export_format: 'pdf' })}`,
+      { responseType: 'blob' }
+    );
+    downloadFile(response.data, `top-customers-${new Date().toISOString()}.pdf`);
   },
 
   /**
@@ -374,10 +517,21 @@ export const customerReportsService = {
    */
   exportPurchasePatternsCSV: async (filters: ReportFilters = {}): Promise<void> => {
     const response = await reportsApi.get(
-      `/reports/api/customer/purchase-patterns${buildQueryString({ ...filters, format: 'csv' })}`,
+      `/reports/api/customer/purchase-patterns${buildQueryString({ ...filters, export_format: 'csv' })}`,
       { responseType: 'blob' }
     );
     downloadFile(response.data, `purchase-patterns-${new Date().toISOString()}.csv`);
+  },
+
+  /**
+   * Export to PDF
+   */
+  exportPurchasePatternsPDF: async (filters: ReportFilters = {}): Promise<void> => {
+    const response = await reportsApi.get(
+      `/reports/api/customer/purchase-patterns${buildQueryString({ ...filters, export_format: 'pdf' })}`,
+      { responseType: 'blob' }
+    );
+    downloadFile(response.data, `purchase-patterns-${new Date().toISOString()}.pdf`);
   },
 
   /**
@@ -395,10 +549,21 @@ export const customerReportsService = {
    */
   exportCreditUtilizationCSV: async (filters: ReportFilters = {}): Promise<void> => {
     const response = await reportsApi.get(
-      `/reports/api/customer/credit-utilization${buildQueryString({ ...filters, format: 'csv' })}`,
+      `/reports/api/customer/credit-utilization${buildQueryString({ ...filters, export_format: 'csv' })}`,
       { responseType: 'blob' }
     );
     downloadFile(response.data, `credit-utilization-${new Date().toISOString()}.csv`);
+  },
+
+  /**
+   * Export to PDF
+   */
+  exportCreditUtilizationPDF: async (filters: ReportFilters = {}): Promise<void> => {
+    const response = await reportsApi.get(
+      `/reports/api/customer/credit-utilization${buildQueryString({ ...filters, export_format: 'pdf' })}`,
+      { responseType: 'blob' }
+    );
+    downloadFile(response.data, `credit-utilization-${new Date().toISOString()}.pdf`);
   },
 
   /**
@@ -416,10 +581,21 @@ export const customerReportsService = {
    */
   exportSegmentationCSV: async (filters: ReportFilters = {}): Promise<void> => {
     const response = await reportsApi.get(
-      `/reports/api/customer/segmentation${buildQueryString({ ...filters, format: 'csv' })}`,
+      `/reports/api/customer/segmentation${buildQueryString({ ...filters, export_format: 'csv' })}`,
       { responseType: 'blob' }
     );
     downloadFile(response.data, `customer-segmentation-${new Date().toISOString()}.csv`);
+  },
+
+  /**
+   * Export to PDF
+   */
+  exportSegmentationPDF: async (filters: ReportFilters = {}): Promise<void> => {
+    const response = await reportsApi.get(
+      `/reports/api/customer/segmentation${buildQueryString({ ...filters, export_format: 'pdf' })}`,
+      { responseType: 'blob' }
+    );
+    downloadFile(response.data, `segmentation-${new Date().toISOString()}.pdf`);
   },
 };
 

@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { salesReportsService } from '../../../services/reportsService';
-import type { ProductPerformanceResponse } from '../../../types/reports';
+import type { ProductPerformanceResponse, ReportFilters } from '../../../types/reports';
 import { ReportContainer } from '../components/ReportContainer';
 import { SummaryCard } from '../components/SummaryCard';
 import { DateRangeFilter } from '../components/DateRangeFilter';
 import { ReportStates } from '../components/ReportStates';
+import { useBusinessContext } from '../../../contexts/BusinessContext';
 
 const ProductPerformancePage: React.FC = () => {
-  const [data, setData] = useState<ProductPerformanceResponse['data'] | null>(null);
+  const { currentBusiness } = useBusinessContext();
+  const [data, setData] = useState<ProductPerformanceResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Default to last 30 days
   const [startDate, setStartDate] = useState(() => {
     const date = new Date();
     date.setDate(date.getDate() - 30);
@@ -22,28 +23,27 @@ const ProductPerformancePage: React.FC = () => {
     return new Date().toISOString().split('T')[0];
   });
 
-  const [sortBy, setSortBy] = useState<'revenue' | 'quantity' | 'profit'>('revenue');
-  const [order, setOrder] = useState<'desc' | 'asc'>('desc');
+  const [category, setCategory] = useState<string>('');
+  const [saleType, setSaleType] = useState<string>('');
 
   const fetchData = async () => {
+    if (!currentBusiness?.id) return;
+    
     setLoading(true);
     setError(null);
     
     try {
-      const result = await salesReportsService.getProductPerformance({
+      const filters: ReportFilters = {
+        business_id: currentBusiness.id,
         start_date: startDate,
         end_date: endDate,
-        sort_by: sortBy,
-        order: order,
-        limit: 100,
-      });
+      };
       
-      // Handle nested API response structure
-      if (result.success && result.data) {
-        setData(result.data);
-      } else {
-        throw new Error('Invalid response structure');
-      }
+      if (category) filters.category_id = category;
+      if (saleType) filters.customer_type = saleType as 'retail' | 'wholesale';
+      
+      const result = await salesReportsService.getProductPerformance(filters);
+      setData(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load product performance report');
       console.error('Error fetching product performance:', err);
@@ -54,39 +54,57 @@ const ProductPerformancePage: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, sortBy, order]);
+  }, [startDate, endDate, category, saleType, currentBusiness?.id]);
 
-  const handleExport = async () => {
+  const handleExportCSV = async () => {
+    if (!currentBusiness?.id) return;
+    
     try {
-      await salesReportsService.exportProductPerformanceCSV({
+      const filters: ReportFilters = {
+        business_id: currentBusiness.id,
         start_date: startDate,
         end_date: endDate,
-        sort_by: sortBy,
-        order: order,
-      });
+      };
+      
+      if (category) filters.category_id = category;
+      if (saleType) filters.customer_type = saleType as 'retail' | 'wholesale';
+      
+      await salesReportsService.exportProductPerformanceCSV(filters);
     } catch (err) {
-      console.error('Export failed:', err);
-      alert('Failed to export report. Please try again.');
+      console.error('CSV export failed:', err);
+      alert('Failed to export CSV. Please try again.');
     }
   };
 
-  const formatCurrency = (value: number | null | undefined): string => {
-    if (value === null || value === undefined || isNaN(value)) return 'PHP 0.00';
+  const handleExportPDF = async () => {
+    if (!currentBusiness?.id) return;
+    
+    try {
+      const filters: ReportFilters = {
+        business_id: currentBusiness.id,
+        start_date: startDate,
+        end_date: endDate,
+      };
+      
+      if (category) filters.category_id = category;
+      if (saleType) filters.customer_type = saleType as 'retail' | 'wholesale';
+      
+      await salesReportsService.exportProductPerformancePDF(filters);
+    } catch (err) {
+      console.error('PDF export failed:', err);
+      alert('Failed to export PDF. Please try again.');
+    }
+  };
+
+  const formatCurrency = (value: number): string => {
     return new Intl.NumberFormat('en-PH', {
       style: 'currency',
       currency: 'PHP',
     }).format(value);
   };
 
-  const formatNumber = (value: number | null | undefined): string => {
-    if (value === null || value === undefined || isNaN(value)) return '0';
+  const formatNumber = (value: number): string => {
     return new Intl.NumberFormat('en-US').format(value);
-  };
-
-  const formatPercent = (value: number | null | undefined): string => {
-    if (value === null || value === undefined || isNaN(value)) return '0.00%';
-    return `${value.toFixed(2)}%`;
   };
 
   if (loading && !data) return <ReportStates.Loading />;
@@ -94,6 +112,7 @@ const ProductPerformancePage: React.FC = () => {
   if (!data || !data.summary || !data.products) {
     return <ReportStates.Empty message="No product performance data available" />;
   }
+  
   return (
     <ReportContainer
       title="Product Performance Report"
@@ -101,18 +120,21 @@ const ProductPerformancePage: React.FC = () => {
       icon="📦"
       actions={
         <div className="d-flex gap-2">
-          <button onClick={handleExport} className="btn btn-outline-primary">
-            <i className="bi bi-download me-2"></i>
+          <button onClick={handleExportCSV} className="btn btn-sm btn-success">
+            <i className="bi bi-file-earmark-spreadsheet me-2"></i>
             Export CSV
           </button>
-          <button onClick={fetchData} className="btn btn-outline-secondary">
+          <button onClick={handleExportPDF} className="btn btn-sm btn-danger">
+            <i className="bi bi-file-earmark-pdf me-2"></i>
+            Export PDF
+          </button>
+          <button onClick={fetchData} className="btn btn-sm btn-outline-secondary">
             <i className="bi bi-arrow-clockwise me-2"></i>
             Refresh
           </button>
         </div>
       }
     >
-      {/* Date Filter */}
       <div className="mb-4">
         <DateRangeFilter
           startDate={startDate}
@@ -123,16 +145,7 @@ const ProductPerformancePage: React.FC = () => {
         />
       </div>
 
-      {/* Summary Cards */}
       <div className="row g-3 mb-4">
-        <div className="col-md-3">
-          <SummaryCard
-            title="Total Products"
-            value={formatNumber(data.summary.total_products_sold)}
-            icon="📦"
-            color="primary"
-          />
-        </div>
         <div className="col-md-3">
           <SummaryCard
             title="Total Revenue"
@@ -143,81 +156,153 @@ const ProductPerformancePage: React.FC = () => {
         </div>
         <div className="col-md-3">
           <SummaryCard
-            title="Total Profit"
-            value={formatCurrency(data.summary.total_profit)}
-            icon="📈"
+            title="Total Quantity"
+            value={formatNumber(data.summary.total_quantity)}
+            icon="📦"
+            color="primary"
+          />
+        </div>
+        <div className="col-md-3">
+          <SummaryCard
+            title="Products Sold"
+            value={formatNumber(data.summary.total_products)}
+            icon="🏷️"
             color="info"
           />
         </div>
         <div className="col-md-3">
           <SummaryCard
-            title="Avg Profit Margin"
-            value={formatPercent(data.summary.average_profit_margin)}
-            icon="📊"
+            title="Transactions"
+            value={formatNumber(data.summary.total_transactions)}
+            icon="🧾"
             color="warning"
           />
         </div>
       </div>
 
-      {/* Sorting Controls */}
       <div className="card mb-4">
+        <div className="card-header bg-white">
+          <h5 className="mb-0">Sales by Channel</h5>
+        </div>
         <div className="card-body">
-          <div className="row align-items-center">
+          <div className="row g-4">
             <div className="col-md-6">
-              <label className="form-label fw-bold">Sort By</label>
-              <div className="btn-group w-100" role="group">
-                <button
-                  type="button"
-                  className={`btn ${sortBy === 'revenue' ? 'btn-primary' : 'btn-outline-primary'}`}
-                  onClick={() => setSortBy('revenue')}
-                >
-                  Revenue
-                </button>
-                <button
-                  type="button"
-                  className={`btn ${sortBy === 'quantity' ? 'btn-primary' : 'btn-outline-primary'}`}
-                  onClick={() => setSortBy('quantity')}
-                >
-                  Quantity
-                </button>
-                <button
-                  type="button"
-                  className={`btn ${sortBy === 'profit' ? 'btn-primary' : 'btn-outline-primary'}`}
-                  onClick={() => setSortBy('profit')}
-                >
-                  Profit
-                </button>
+              <div className="border-start border-5 border-success ps-3">
+                <h6 className="text-muted mb-3">
+                  <i className="bi bi-shop me-2"></i>
+                  Retail Sales
+                </h6>
+                <div className="row g-3">
+                  <div className="col-6">
+                    <div className="text-muted small">Revenue</div>
+                    <div className="fw-bold text-success">
+                      {formatCurrency(data.summary.retail.revenue)}
+                    </div>
+                  </div>
+                  <div className="col-6">
+                    <div className="text-muted small">Quantity</div>
+                    <div className="fw-bold">
+                      {formatNumber(data.summary.retail.quantity)}
+                    </div>
+                  </div>
+                  <div className="col-6">
+                    <div className="text-muted small">Transactions</div>
+                    <div className="fw-bold">
+                      {formatNumber(data.summary.retail.transactions)}
+                    </div>
+                  </div>
+                  <div className="col-6">
+                    <div className="text-muted small">Products</div>
+                    <div className="fw-bold">
+                      {formatNumber(data.summary.retail.products)}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
+
             <div className="col-md-6">
-              <label className="form-label fw-bold">Order</label>
-              <div className="btn-group w-100" role="group">
-                <button
-                  type="button"
-                  className={`btn ${order === 'desc' ? 'btn-primary' : 'btn-outline-primary'}`}
-                  onClick={() => setOrder('desc')}
-                >
-                  <i className="bi bi-sort-down me-2"></i>
-                  Highest First
-                </button>
-                <button
-                  type="button"
-                  className={`btn ${order === 'asc' ? 'btn-primary' : 'btn-outline-primary'}`}
-                  onClick={() => setOrder('asc')}
-                >
-                  <i className="bi bi-sort-up me-2"></i>
-                  Lowest First
-                </button>
+              <div className="border-start border-5 border-primary ps-3">
+                <h6 className="text-muted mb-3">
+                  <i className="bi bi-building me-2"></i>
+                  Wholesale Sales
+                </h6>
+                <div className="row g-3">
+                  <div className="col-6">
+                    <div className="text-muted small">Revenue</div>
+                    <div className="fw-bold text-primary">
+                      {formatCurrency(data.summary.wholesale.revenue)}
+                    </div>
+                  </div>
+                  <div className="col-6">
+                    <div className="text-muted small">Quantity</div>
+                    <div className="fw-bold">
+                      {formatNumber(data.summary.wholesale.quantity)}
+                    </div>
+                  </div>
+                  <div className="col-6">
+                    <div className="text-muted small">Transactions</div>
+                    <div className="fw-bold">
+                      {formatNumber(data.summary.wholesale.transactions)}
+                    </div>
+                  </div>
+                  <div className="col-6">
+                    <div className="text-muted small">Products</div>
+                    <div className="fw-bold">
+                      {formatNumber(data.summary.wholesale.products)}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Products Table */}
+      <div className="card mb-4">
+        <div className="card-body">
+          <div className="row align-items-end g-3">
+            <div className="col-md-4">
+              <label className="form-label fw-bold">Category Filter</label>
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Enter category name..."
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              />
+            </div>
+            <div className="col-md-4">
+              <label className="form-label fw-bold">Sale Type</label>
+              <select
+                className="form-select"
+                value={saleType}
+                onChange={(e) => setSaleType(e.target.value)}
+              >
+                <option value="">All Types</option>
+                <option value="RETAIL">Retail Only</option>
+                <option value="WHOLESALE">Wholesale Only</option>
+              </select>
+            </div>
+            <div className="col-md-4">
+              <button
+                className="btn btn-outline-secondary w-100"
+                onClick={() => {
+                  setCategory('');
+                  setSaleType('');
+                }}
+              >
+                <i className="bi bi-x-circle me-2"></i>
+                Clear Filters
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="card">
         <div className="card-header bg-white">
-          <h5 className="mb-0">Product Performance ({data.products.length} items)</h5>
+          <h5 className="mb-0">Top Products ({data.products.length} items)</h5>
         </div>
         <div className="card-body p-0">
           <div className="table-responsive">
@@ -226,14 +311,14 @@ const ProductPerformancePage: React.FC = () => {
                 <tr>
                   <th className="px-4">#</th>
                   <th>Product</th>
-                  <th>SKU</th>
                   <th>Category</th>
-                  <th className="text-end">Qty Sold</th>
-                  <th className="text-end">Revenue</th>
-                  <th className="text-end">Profit</th>
-                  <th className="text-end">Margin</th>
+                  <th className="text-end">Total Revenue</th>
+                  <th className="text-end">Total Qty</th>
+                  <th className="text-end">Retail Revenue</th>
+                  <th className="text-end">Retail Qty</th>
+                  <th className="text-end">Wholesale Revenue</th>
+                  <th className="text-end">Wholesale Qty</th>
                   <th className="text-end">Avg Price</th>
-                  <th className="text-center">Trend</th>
                 </tr>
               </thead>
               <tbody>
@@ -241,13 +326,8 @@ const ProductPerformancePage: React.FC = () => {
                   <tr key={product.product_id}>
                     <td className="px-4 text-muted">{index + 1}</td>
                     <td>
-                      <div className="fw-bold">{product.product_name}</div>
-                      <small className="text-muted">
-                        {product.times_ordered} orders
-                      </small>
-                    </td>
-                    <td>
-                      <code className="text-secondary">{product.sku}</code>
+                      <div className="fw-bold">{product.name}</div>
+                      <small className="text-muted">SKU: {product.sku}</small>
                     </td>
                     <td>
                       <span className="badge bg-light text-dark">
@@ -255,50 +335,33 @@ const ProductPerformancePage: React.FC = () => {
                       </span>
                     </td>
                     <td className="text-end">
-                      <strong>{formatNumber(product.total_quantity_sold)}</strong>
-                    </td>
-                    <td className="text-end">
                       <strong className="text-success">
                         {formatCurrency(product.total_revenue)}
                       </strong>
                     </td>
                     <td className="text-end">
-                      <strong className="text-primary">
-                        {formatCurrency(product.total_profit)}
-                      </strong>
+                      <strong>{formatNumber(product.total_quantity)}</strong>
                     </td>
                     <td className="text-end">
-                      <span 
-                        className={`badge ${
-                          product.profit_margin >= 30 
-                            ? 'bg-success' 
-                            : product.profit_margin >= 15 
-                            ? 'bg-warning' 
-                            : 'bg-danger'
-                        }`}
-                      >
-                        {formatPercent(product.profit_margin)}
+                      <span className="text-success">
+                        {formatCurrency(product.retail.revenue)}
                       </span>
                     </td>
-                    <td className="text-end text-muted">
-                      {formatCurrency(product.average_selling_price)}
+                    <td className="text-end">
+                      {formatNumber(product.retail.quantity)}
                     </td>
-                    <td className="text-center">
-                      {product.trend === 'up' && (
-                        <span className="text-success">
-                          <i className="bi bi-arrow-up-circle-fill"></i>
-                        </span>
-                      )}
-                      {product.trend === 'down' && (
-                        <span className="text-danger">
-                          <i className="bi bi-arrow-down-circle-fill"></i>
-                        </span>
-                      )}
-                      {product.trend === 'stable' && (
-                        <span className="text-secondary">
-                          <i className="bi bi-dash-circle-fill"></i>
-                        </span>
-                      )}
+                    <td className="text-end">
+                      <span className="text-primary">
+                        {formatCurrency(product.wholesale.revenue)}
+                      </span>
+                    </td>
+                    <td className="text-end">
+                      {formatNumber(product.wholesale.quantity)}
+                    </td>
+                    <td className="text-end">
+                      <span className="badge bg-secondary">
+                        {formatCurrency(product.avg_price)}
+                      </span>
                     </td>
                   </tr>
                 ))}
@@ -308,75 +371,41 @@ const ProductPerformancePage: React.FC = () => {
         </div>
       </div>
 
-      {/* Top Performers Highlight */}
-      {data.products.length > 0 && (
-        <div className="row g-3 mt-4">
-          <div className="col-md-4">
-            <div className="card border-success">
-              <div className="card-header bg-success text-white">
-                <h6 className="mb-0">🏆 Top by Revenue</h6>
-              </div>
-              <div className="card-body">
-                <h5 className="mb-1">{data.products[0]?.product_name}</h5>
-                <p className="text-success fw-bold mb-0">
-                  {formatCurrency(data.products[0]?.total_revenue || 0)}
-                </p>
-                <small className="text-muted">
-                  {formatNumber(data.products[0]?.total_quantity_sold || 0)} units sold
-                </small>
-              </div>
-            </div>
+      {data.categories && data.categories.length > 0 && (
+        <div className="card mt-4">
+          <div className="card-header bg-white">
+            <h5 className="mb-0">Category Performance ({data.categories.length} categories)</h5>
           </div>
-          
-          <div className="col-md-4">
-            <div className="card border-primary">
-              <div className="card-header bg-primary text-white">
-                <h6 className="mb-0">💎 Highest Margin</h6>
-              </div>
-              <div className="card-body">
-                {(() => {
-                  const highestMargin = [...data.products].sort(
-                    (a, b) => b.profit_margin - a.profit_margin
-                  )[0];
-                  return (
-                    <>
-                      <h5 className="mb-1">{highestMargin?.product_name}</h5>
-                      <p className="text-primary fw-bold mb-0">
-                        {formatPercent(highestMargin?.profit_margin || 0)}
-                      </p>
-                      <small className="text-muted">
-                        {formatCurrency(highestMargin?.total_profit || 0)} profit
-                      </small>
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
-          </div>
-
-          <div className="col-md-4">
-            <div className="card border-info">
-              <div className="card-header bg-info text-white">
-                <h6 className="mb-0">📦 Best Seller</h6>
-              </div>
-              <div className="card-body">
-                {(() => {
-                  const bestSeller = [...data.products].sort(
-                    (a, b) => b.total_quantity_sold - a.total_quantity_sold
-                  )[0];
-                  return (
-                    <>
-                      <h5 className="mb-1">{bestSeller?.product_name}</h5>
-                      <p className="text-info fw-bold mb-0">
-                        {formatNumber(bestSeller?.total_quantity_sold || 0)} units
-                      </p>
-                      <small className="text-muted">
-                        {bestSeller?.times_ordered || 0} orders
-                      </small>
-                    </>
-                  );
-                })()}
-              </div>
+          <div className="card-body p-0">
+            <div className="table-responsive">
+              <table className="table table-hover mb-0">
+                <thead className="table-light">
+                  <tr>
+                    <th className="px-4">Category</th>
+                    <th className="text-end">Revenue</th>
+                    <th className="text-end">Quantity</th>
+                    <th className="text-end">Products</th>
+                    <th className="text-end">Transactions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.categories.map((cat, index) => (
+                    <tr key={index}>
+                      <td className="px-4">
+                        <span className="badge bg-primary">{cat.category}</span>
+                      </td>
+                      <td className="text-end">
+                        <strong className="text-success">
+                          {formatCurrency(cat.revenue)}
+                        </strong>
+                      </td>
+                      <td className="text-end">{formatNumber(cat.quantity)}</td>
+                      <td className="text-end">{formatNumber(cat.products)}</td>
+                      <td className="text-end">{formatNumber(cat.transactions)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
