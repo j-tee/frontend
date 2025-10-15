@@ -667,9 +667,47 @@ export default function SalesPage() {
         } else {
           // Walk-in customer doesn't exist, create it
           console.log('🚀 Walk-in customer not found, creating...')
-          const walkInCustomer = await getOrCreateWalkInCustomer()
-          if (walkInCustomer && isMounted) {
-            console.log('✅ Walk-in customer created and set as default:', walkInCustomer)
+          try {
+            const WALK_IN_PHONE = '+233000000000'
+            const customer = await createCustomerService({
+              name: WALK_IN_NAME,
+              phone: WALK_IN_PHONE,
+              type: 'RETAIL',
+              notes: 'Auto-generated walk-in customer',
+              business: currentBusiness?.id,
+            })
+            
+            if (isMounted) {
+              const newOption = { id: customer.id, name: customer.name }
+              setCustomerOptions(prev => [...prev, newOption])
+              setSelectedCustomer(newOption.id)
+              setCheckoutCustomerId(newOption.id)
+              console.log('✅ Walk-in customer created and set as default:', newOption)
+            }
+          } catch (createErr) {
+            console.error('Failed to create walk-in customer:', createErr)
+            // If creation fails, try to search again (might exist due to race condition)
+            if (isAxiosError(createErr) && createErr.response?.status === 400) {
+              try {
+                const retryResponse = await listCustomers({ search: WALK_IN_NAME, page_size: 10 })
+                const match = retryResponse.results.find(
+                  (customer) => normalizeCustomerName(customer.name) === WALK_IN_NAME_NORMALIZED
+                )
+                if (match && isMounted) {
+                  const option = { id: match.id, name: match.name }
+                  setCustomerOptions(prev => {
+                    // Check if already exists
+                    if (prev.find(opt => opt.id === option.id)) return prev
+                    return [...prev, option]
+                  })
+                  setSelectedCustomer(option.id)
+                  setCheckoutCustomerId(option.id)
+                  console.log('✅ Found walk-in customer on retry:', option)
+                }
+              } catch (retryErr) {
+                console.warn('Retry search for walk-in customer failed', retryErr)
+              }
+            }
           }
         }
       } catch (err) {
@@ -689,7 +727,8 @@ export default function SalesPage() {
     return () => {
       isMounted = false
     }
-  }, [dispatch, getOrCreateWalkInCustomer])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Only run once on mount
 
   // Sync selected customer TO cart when cart is created (user selected customer before adding products)
   useEffect(() => {
