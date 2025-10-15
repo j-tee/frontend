@@ -1,307 +1,325 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
 import { financialReportsService } from '../../../services/reportsService';
 import type { ARAgingResponse } from '../../../types/reports';
 import { ReportContainer } from '../components/ReportContainer';
 import { SummaryCard } from '../components/SummaryCard';
 import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates';
 
-const ARAgingPage = () => {
-  const navigate = useNavigate();
+const ARAgingPage: React.FC = () => {
   const [data, setData] = useState<ARAgingResponse['data'] | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [asOfDate, setAsOfDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
-  );
+  
+  const [asOfDate, setAsOfDate] = useState(() => {
+    return new Date().toISOString().split('T')[0];
+  });
 
-  const fetchData = useCallback(async () => {
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    
     try {
-      setLoading(true);
-      setError(null);
-      const response = await financialReportsService.getARAging({
-        start_date: asOfDate,
-        end_date: asOfDate,
+      const result = await financialReportsService.getARAging({
+        as_of_date: asOfDate,
       });
-      if (response.success && response.data) {
-        setData(response.data);
+      
+      if (result.success && result.data) {
+        setData(result.data);
       } else {
-        throw new Error('Invalid response structure');
+        throw new Error(result.error || 'Invalid response structure');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load report');
+      setError(err instanceof Error ? err.message : 'Failed to load AR aging report');
+      console.error('Error fetching AR aging:', err);
     } finally {
       setLoading(false);
     }
-  }, [asOfDate]);
+  };
 
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asOfDate]);
 
   const handleExport = async () => {
     try {
       await financialReportsService.exportARAgingCSV({
-        start_date: asOfDate,
-        end_date: asOfDate,
+        as_of_date: asOfDate,
       });
     } catch (err) {
       console.error('Export failed:', err);
+      alert('Failed to export report. Please try again.');
     }
   };
 
-  const formatCurrency = (value: number | string | null | undefined) => {
-    if (value === null || value === undefined) return '$0.00';
-    const num = typeof value === 'string' ? parseFloat(value) : value;
-    if (isNaN(num)) return '$0.00';
-    return new Intl.NumberFormat('en-US', {
+  const formatCurrency = (value: number | null | undefined): string => {
+    if (value === null || value === undefined || isNaN(value)) return '₱0.00';
+    return new Intl.NumberFormat('en-PH', {
       style: 'currency',
-      currency: 'USD',
-    }).format(num);
+      currency: 'PHP',
+    }).format(value);
   };
 
-  const formatPercent = (value: number | null | undefined) => {
-    if (value === null || value === undefined || isNaN(value)) return '0.0%';
-    return `${value.toFixed(1)}%`;
+  const formatPercent = (value: number | null | undefined): string => {
+    if (value === null || value === undefined || isNaN(value)) return '0.00%';
+    return `${value.toFixed(2)}%`;
   };
 
-  const safeParseFloat = (value: number | string | null | undefined): number => {
-    if (value === null || value === undefined) return 0;
-    const num = typeof value === 'string' ? parseFloat(value) : value;
-    return isNaN(num) ? 0 : num;
+  const getRiskBadgeColor = (risk: string): string => {
+    switch (risk) {
+      case 'high': return 'bg-danger';
+      case 'medium': return 'bg-warning';
+      case 'low': return 'bg-success';
+      default: return 'bg-secondary';
+    }
   };
 
-  if (loading) return <LoadingState />;
+  if (loading && !data) return <LoadingState message="Loading AR aging data..." />;
   if (error) return <ErrorState error={error} onRetry={fetchData} />;
-  if (!data || !data.summary || !data.aging_buckets || !data.customers) return <EmptyState />;
+  if (!data || !data.summary || !data.results) return <EmptyState message="No AR aging data available" />;
 
-  const summary = data.summary;
-  const agingBuckets = data.aging_buckets;
-  const customers = data.customers;
+  const { summary, results } = data;
 
   return (
     <ReportContainer
-      title="Accounts Receivable Aging"
-      subtitle="Outstanding customer balances by age"
+      title="📊 Accounts Receivable Aging"
+      subtitle={`As of: ${summary.as_of_date}`}
       actions={
-        <>
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
-            📥 Export CSV
+        <div className="d-flex gap-2">
+          <button onClick={handleExport} className="btn btn-outline-primary">
+            <i className="bi bi-download me-2"></i>
+            Export CSV
           </button>
-          <button
-            onClick={fetchData}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            🔄 Refresh
+          <button onClick={fetchData} className="btn btn-outline-secondary">
+            <i className="bi bi-arrow-clockwise me-2"></i>
+            Refresh
           </button>
-        </>
+        </div>
       }
     >
-      {/* Back Button */}
-      <button
-        onClick={() => navigate('/app/reports/financial')}
-        className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
-      >
-        ← Back to Financial Reports
-      </button>
-
       {/* Date Filter */}
-      <div className="mb-6 flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <span className="text-xl">📅</span>
-          <label className="text-sm font-medium text-gray-700">As of Date:</label>
+      <div className="row mb-4">
+        <div className="col-md-4">
+          <label className="form-label">As of Date</label>
+          <input
+            type="date"
+            className="form-control"
+            value={asOfDate}
+            onChange={(e) => setAsOfDate(e.target.value)}
+            max={new Date().toISOString().split('T')[0]}
+          />
         </div>
-        <input
-          type="date"
-          value={asOfDate}
-          onChange={(e) => setAsOfDate(e.target.value)}
-          max={new Date().toISOString().split('T')[0]}
-          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        />
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <SummaryCard
-          title="Total Outstanding"
-          value={formatCurrency(summary.total_outstanding)}
-          icon="💰"
-          subtitle={`${summary.total_customers} customers`}
-        />
-        <SummaryCard
-          title="Current (0-30 days)"
-          value={formatCurrency(summary.current)}
-          icon="📅"
-          color="bg-green-50 border-green-200"
-        />
-        <SummaryCard
-          title="Overdue (31+ days)"
-          value={formatCurrency(
-            safeParseFloat(summary.days_31_60) +
-            safeParseFloat(summary.days_61_90) +
-            safeParseFloat(summary.over_90_days)
-          )}
-          icon="⚠️"
-          color="bg-red-50 border-red-200"
-        />
-        <SummaryCard
-          title="Average Days Outstanding"
-          value={`${summary.average_days_outstanding} days`}
-          icon="⏱️"
-          color="bg-blue-50 border-blue-200"
-        />
+      <div className="row g-3 mb-4">
+        <div className="col-md-3">
+          <SummaryCard
+            title="Total AR Outstanding"
+            value={formatCurrency(summary.total_ar_outstanding)}
+            icon="💰"
+            color="primary"
+          />
+        </div>
+        <div className="col-md-3">
+          <SummaryCard
+            title="Customers with Balance"
+            value={summary.total_customers_with_balance.toString()}
+            icon="👥"
+            color="info"
+          />
+        </div>
+        <div className="col-md-3">
+          <SummaryCard
+            title="Percentage Overdue"
+            value={formatPercent(summary.percentage_overdue)}
+            icon="⚠️"
+            color="warning"
+          />
+        </div>
+        <div className="col-md-3">
+          <SummaryCard
+            title="At Risk Amount"
+            value={formatCurrency(summary.at_risk_amount)}
+            icon="🚨"
+            color="danger"
+          />
+        </div>
       </div>
 
-      {/* Aging Buckets Breakdown */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Aging Analysis</h3>
-        <div className="space-y-4">
-          {agingBuckets.map((bucket, index) => (
-            <div key={index}>
-              <div className="flex justify-between items-center mb-2">
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-medium text-gray-700 min-w-[120px]">
-                    {bucket.bucket}
-                  </span>
-                  <span className="text-sm text-gray-500">
-                    {bucket.customer_count} customers
-                  </span>
-                </div>
-                <div className="text-right">
-                  <div className="text-lg font-semibold text-gray-900">
-                    {formatCurrency(bucket.amount)}
-                  </div>
-                  <div className="text-sm text-gray-500">
-                    {formatPercent(bucket.percentage)}
-                  </div>
-                </div>
+      {/* Aging Buckets Summary */}
+      <div className="card mb-4">
+        <div className="card-header bg-white">
+          <h5 className="mb-0">📅 Overall Aging Breakdown</h5>
+        </div>
+        <div className="card-body">
+          <div className="row g-3">
+            <div className="col">
+              <small className="text-muted d-block">Current</small>
+              <h6 className="mb-0 text-success">{formatCurrency(summary.aging_buckets.current)}</h6>
+            </div>
+            <div className="col">
+              <small className="text-muted d-block">1-30 Days</small>
+              <h6 className="mb-0">{formatCurrency(summary.aging_buckets['1_30_days'])}</h6>
+            </div>
+            <div className="col">
+              <small className="text-muted d-block">31-60 Days</small>
+              <h6 className="mb-0 text-warning">{formatCurrency(summary.aging_buckets['31_60_days'])}</h6>
+            </div>
+            <div className="col">
+              <small className="text-muted d-block">61-90 Days</small>
+              <h6 className="mb-0 text-danger">{formatCurrency(summary.aging_buckets['61_90_days'])}</h6>
+            </div>
+            <div className="col">
+              <small className="text-muted d-block">90+ Days</small>
+              <h6 className="mb-0 text-danger">{formatCurrency(summary.aging_buckets.over_90_days)}</h6>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Retail/Wholesale Breakdown */}
+      <div className="row mb-4">
+        {/* Retail Card */}
+        <div className="col-md-6">
+          <div className="card h-100">
+            <div className="card-header bg-primary text-white">
+              <h6 className="mb-0">🏪 Retail AR Aging</h6>
+            </div>
+            <div className="card-body">
+              <div className="mb-3">
+                <small className="text-muted d-block">AR Outstanding</small>
+                <h4 className="mb-0">{formatCurrency(summary.retail.ar_outstanding)}</h4>
+                <small className="text-muted">({formatPercent(summary.retail.percentage_of_total)} of total)</small>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className={`h-2 rounded-full ${
-                    index === 0
-                      ? 'bg-green-500'
-                      : index === 1
-                      ? 'bg-yellow-500'
-                      : index === 2
-                      ? 'bg-orange-500'
-                      : 'bg-red-500'
-                  }`}
-                  style={{ width: `${bucket.percentage}%` }}
-                />
+              <div className="row g-2">
+                <div className="col-6">
+                  <small className="text-muted d-block">Current</small>
+                  <h6 className="mb-0 text-success">{formatCurrency(summary.retail.aging_buckets.current)}</h6>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">1-30 Days</small>
+                  <h6 className="mb-0">{formatCurrency(summary.retail.aging_buckets['1_30_days'])}</h6>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">31-60 Days</small>
+                  <h6 className="mb-0 text-warning">{formatCurrency(summary.retail.aging_buckets['31_60_days'])}</h6>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">61-90 Days</small>
+                  <h6 className="mb-0 text-danger">{formatCurrency(summary.retail.aging_buckets['61_90_days'])}</h6>
+                </div>
+                <div className="col-12">
+                  <small className="text-muted d-block">90+ Days</small>
+                  <h6 className="mb-0 text-danger">{formatCurrency(summary.retail.aging_buckets.over_90_days)}</h6>
+                </div>
               </div>
             </div>
-          ))}
+          </div>
+        </div>
+
+        {/* Wholesale Card */}
+        <div className="col-md-6">
+          <div className="card h-100">
+            <div className="card-header bg-success text-white">
+              <h6 className="mb-0">🏭 Wholesale AR Aging</h6>
+            </div>
+            <div className="card-body">
+              <div className="mb-3">
+                <small className="text-muted d-block">AR Outstanding</small>
+                <h4 className="mb-0">{formatCurrency(summary.wholesale.ar_outstanding)}</h4>
+                <small className="text-muted">({formatPercent(summary.wholesale.percentage_of_total)} of total)</small>
+              </div>
+              <div className="row g-2">
+                <div className="col-6">
+                  <small className="text-muted d-block">Current</small>
+                  <h6 className="mb-0 text-success">{formatCurrency(summary.wholesale.aging_buckets.current)}</h6>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">1-30 Days</small>
+                  <h6 className="mb-0">{formatCurrency(summary.wholesale.aging_buckets['1_30_days'])}</h6>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">31-60 Days</small>
+                  <h6 className="mb-0 text-warning">{formatCurrency(summary.wholesale.aging_buckets['31_60_days'])}</h6>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">61-90 Days</small>
+                  <h6 className="mb-0 text-danger">{formatCurrency(summary.wholesale.aging_buckets['61_90_days'])}</h6>
+                </div>
+                <div className="col-12">
+                  <small className="text-muted d-block">90+ Days</small>
+                  <h6 className="mb-0 text-danger">{formatCurrency(summary.wholesale.aging_buckets.over_90_days)}</h6>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Customer Details Table */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">Customer Details</h3>
+      <div className="card">
+        <div className="card-header bg-white">
+          <h5 className="mb-0">👥 Customer Aging Details</h5>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Customer
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Total Outstanding
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Current
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  31-60 Days
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  61-90 Days
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  90+ Days
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Days Overdue
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Credit Usage
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {customers.map((customer) => (
-                <tr key={customer.customer_id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">
-                        {customer.customer_name}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        Last payment: {customer.last_payment_date || 'N/A'}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="text-sm font-semibold text-gray-900">
-                      {formatCurrency(customer.total_outstanding)}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-right text-sm text-gray-500">
-                    {formatCurrency(customer.current)}
-                  </td>
-                  <td className="px-6 py-4 text-right text-sm text-gray-500">
-                    {formatCurrency(customer.days_31_60)}
-                  </td>
-                  <td className="px-6 py-4 text-right text-sm text-gray-500">
-                    {formatCurrency(customer.days_61_90)}
-                  </td>
-                  <td className="px-6 py-4 text-right text-sm text-gray-500">
-                    {formatCurrency(customer.over_90_days)}
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <span
-                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                        customer.days_overdue > 60
-                          ? 'bg-red-100 text-red-800'
-                          : customer.days_overdue > 30
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-green-100 text-green-800'
-                      }`}
-                    >
-                      {customer.days_overdue} days
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col items-center gap-1">
-                      <span className="text-sm font-medium text-gray-900">
-                        {formatPercent(customer.credit_used_percentage)}
-                      </span>
-                      <div className="w-full bg-gray-200 rounded-full h-1.5">
-                        <div
-                          className={`h-1.5 rounded-full ${
-                            customer.credit_used_percentage > 80
-                              ? 'bg-red-500'
-                              : customer.credit_used_percentage > 60
-                              ? 'bg-yellow-500'
-                              : 'bg-green-500'
-                          }`}
-                          style={{ width: `${Math.min(customer.credit_used_percentage, 100)}%` }}
-                        />
-                      </div>
-                      <span className="text-xs text-gray-500">
-                        {formatCurrency(customer.total_outstanding)} / {formatCurrency(customer.credit_limit)}
-                      </span>
-                    </div>
-                  </td>
+        <div className="card-body">
+          <div className="table-responsive">
+            <table className="table table-hover">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Customer</th>
+                  <th className="text-end">Total Balance</th>
+                  <th className="text-end">Credit Limit</th>
+                  <th className="text-end">Utilization</th>
+                  <th className="text-end">Current</th>
+                  <th className="text-end">1-30 Days</th>
+                  <th className="text-end">31-60 Days</th>
+                  <th className="text-end">61-90 Days</th>
+                  <th className="text-end">90+ Days</th>
+                  <th className="text-center">Risk</th>
+                  <th className="text-end">Retail</th>
+                  <th className="text-end">Wholesale</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {results.map((customer) => (
+                  <tr key={customer.customer_id}>
+                    <td><strong>#{customer.rank}</strong></td>
+                    <td>
+                      <div>
+                        <strong>{customer.customer_name}</strong>
+                        <br />
+                        <small className="text-muted">{customer.customer_email}</small>
+                      </div>
+                    </td>
+                    <td className="text-end"><strong>{formatCurrency(customer.total_balance)}</strong></td>
+                    <td className="text-end">{formatCurrency(customer.credit_limit)}</td>
+                    <td className="text-end">{formatPercent(customer.credit_utilization)}</td>
+                    <td className="text-end text-success">{formatCurrency(customer.current)}</td>
+                    <td className="text-end">{formatCurrency(customer['1_30_days'])}</td>
+                    <td className="text-end text-warning">{formatCurrency(customer['31_60_days'])}</td>
+                    <td className="text-end text-danger">{formatCurrency(customer['61_90_days'])}</td>
+                    <td className="text-end text-danger">{formatCurrency(customer.over_90_days)}</td>
+                    <td className="text-center">
+                      <span className={`badge ${getRiskBadgeColor(customer.risk_level)}`}>
+                        {customer.risk_level.toUpperCase()}
+                      </span>
+                    </td>
+                    <td className="text-end text-primary">{formatCurrency(customer.retail_balance)}</td>
+                    <td className="text-end text-success">{formatCurrency(customer.wholesale_balance)}</td>
+                  </tr>
+                ))}
+                {results.length === 0 && (
+                  <tr>
+                    <td colSpan={13} className="text-center text-muted py-4">
+                      No customers with outstanding balances
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </ReportContainer>

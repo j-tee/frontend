@@ -22,7 +22,7 @@ const RevenueProfitPage: React.FC = () => {
     return new Date().toISOString().split('T')[0];
   });
 
-  const [breakdownBy, setBreakdownBy] = useState<'category' | 'storefront' | 'product' | 'time'>('category');
+  const [grouping, setGrouping] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
 
   const fetchData = async () => {
     setLoading(true);
@@ -32,13 +32,13 @@ const RevenueProfitPage: React.FC = () => {
       const result = await financialReportsService.getRevenueProfit({
         start_date: startDate,
         end_date: endDate,
-        breakdown_by: breakdownBy,
+        grouping: grouping,
       });
       
       if (result.success && result.data) {
         setData(result.data);
       } else {
-        throw new Error('Invalid response structure');
+        throw new Error(result.error || 'Invalid response structure');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load revenue & profit report');
@@ -51,14 +51,14 @@ const RevenueProfitPage: React.FC = () => {
   useEffect(() => {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, breakdownBy]);
+  }, [startDate, endDate, grouping]);
 
   const handleExport = async () => {
     try {
       await financialReportsService.exportRevenueProfitCSV({
         start_date: startDate,
         end_date: endDate,
-        breakdown_by: breakdownBy,
+        grouping: grouping,
       });
     } catch (err) {
       console.error('Export failed:', err);
@@ -81,17 +81,14 @@ const RevenueProfitPage: React.FC = () => {
 
   if (loading && !data) return <LoadingState message="Loading revenue & profit data..." />;
   if (error) return <ErrorState error={error} onRetry={fetchData} />;
-  if (!data || !data.summary || !data.breakdown || !data.expenses) return <EmptyState message="No revenue & profit data available" />;
+  if (!data || !data.summary || !data.results) return <EmptyState message="No revenue & profit data available" />;
 
-  const summary = data.summary;
-  const breakdown = data.breakdown;
-  const expenses = data.expenses;
+  const { summary, results } = data;
 
   return (
     <ReportContainer
-      title="Revenue & Profit Analysis"
-      subtitle={`${startDate} to ${endDate}`}
-      icon="💰"
+      title="💰 Revenue & Profit Analysis"
+      subtitle={`Period: ${startDate} to ${endDate}`}
       actions={
         <div className="d-flex gap-2">
           <button onClick={handleExport} className="btn btn-outline-primary">
@@ -105,33 +102,39 @@ const RevenueProfitPage: React.FC = () => {
         </div>
       }
     >
-      {/* Date Filter */}
-      <div className="mb-4">
-        <DateRangeFilter
-          startDate={startDate}
-          endDate={endDate}
-          onStartDateChange={setStartDate}
-          onEndDateChange={setEndDate}
-          showPresets={true}
-        />
+      {/* Date Filter & Grouping */}
+      <div className="row mb-4">
+        <div className="col-md-8">
+          <DateRangeFilter
+            startDate={startDate}
+            endDate={endDate}
+            onStartDateChange={setStartDate}
+            onEndDateChange={setEndDate}
+            showPresets={true}
+          />
+        </div>
+        <div className="col-md-4">
+          <label className="form-label">Group By</label>
+          <select 
+            className="form-select"
+            value={grouping}
+            onChange={(e) => setGrouping(e.target.value as 'daily' | 'weekly' | 'monthly')}
+          >
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
       </div>
 
       {/* Summary Cards */}
       <div className="row g-3 mb-4">
         <div className="col-md-3">
           <SummaryCard
-            title="Gross Revenue"
-            value={formatCurrency(summary.gross_revenue)}
+            title="Total Revenue"
+            value={formatCurrency(summary.total_revenue)}
             icon="💵"
             color="primary"
-          />
-        </div>
-        <div className="col-md-3">
-          <SummaryCard
-            title="Net Revenue"
-            value={formatCurrency(summary.net_revenue)}
-            icon="💰"
-            color="success"
           />
         </div>
         <div className="col-md-3">
@@ -139,258 +142,175 @@ const RevenueProfitPage: React.FC = () => {
             title="Gross Profit"
             value={formatCurrency(summary.gross_profit)}
             icon="📈"
+            color="success"
+          />
+        </div>
+        <div className="col-md-3">
+          <SummaryCard
+            title="Profit Margin"
+            value={formatPercent(summary.gross_margin)}
+            icon="📊"
             color="info"
           />
         </div>
         <div className="col-md-3">
           <SummaryCard
-            title="Net Profit"
-            value={formatCurrency(summary.net_profit)}
-            icon="🎯"
+            title="Total Sales"
+            value={summary.total_sales.toLocaleString()}
+            icon="🛒"
             color="warning"
           />
         </div>
       </div>
 
-      {/* Profit Margin Cards */}
-      <div className="row g-3 mb-4">
+      {/* Retail/Wholesale Breakdown */}
+      <div className="row mb-4">
+        {/* Retail Card */}
         <div className="col-md-6">
-          <div className="card border-success h-100">
+          <div className="card h-100">
+            <div className="card-header bg-primary text-white">
+              <h6 className="mb-0">🏪 Retail Breakdown</h6>
+            </div>
             <div className="card-body">
-              <h6 className="text-muted mb-2">Gross Profit Margin</h6>
-              <h2 className="text-success mb-0">{formatPercent(summary.gross_profit_margin)}</h2>
-              <small className="text-muted">
-                {formatCurrency(summary.gross_profit)} / {formatCurrency(summary.net_revenue)}
-              </small>
+              <div className="row g-3">
+                <div className="col-6">
+                  <small className="text-muted d-block">Revenue</small>
+                  <h5 className="mb-0">{formatCurrency(summary.retail.revenue)}</h5>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">Profit</small>
+                  <h5 className="mb-0">{formatCurrency(summary.retail.profit)}</h5>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">Margin</small>
+                  <h5 className="mb-0">{formatPercent(summary.retail.profit_margin)}</h5>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">Orders</small>
+                  <h5 className="mb-0">{summary.retail.orders.toLocaleString()}</h5>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">Cost</small>
+                  <h5 className="mb-0">{formatCurrency(summary.retail.cost)}</h5>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">Avg Order Value</small>
+                  <h5 className="mb-0">{formatCurrency(summary.retail.avg_order_value)}</h5>
+                </div>
+              </div>
             </div>
           </div>
         </div>
+
+        {/* Wholesale Card */}
         <div className="col-md-6">
-          <div className="card border-warning h-100">
+          <div className="card h-100">
+            <div className="card-header bg-success text-white">
+              <h6 className="mb-0">🏭 Wholesale Breakdown</h6>
+            </div>
             <div className="card-body">
-              <h6 className="text-muted mb-2">Net Profit Margin</h6>
-              <h2 className="text-warning mb-0">{formatPercent(summary.net_profit_margin)}</h2>
-              <small className="text-muted">
-                {formatCurrency(summary.net_profit)} / {formatCurrency(summary.net_revenue)}
-              </small>
+              <div className="row g-3">
+                <div className="col-6">
+                  <small className="text-muted d-block">Revenue</small>
+                  <h5 className="mb-0">{formatCurrency(summary.wholesale.revenue)}</h5>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">Profit</small>
+                  <h5 className="mb-0">{formatCurrency(summary.wholesale.profit)}</h5>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">Margin</small>
+                  <h5 className="mb-0">{formatPercent(summary.wholesale.profit_margin)}</h5>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">Orders</small>
+                  <h5 className="mb-0">{summary.wholesale.orders.toLocaleString()}</h5>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">Cost</small>
+                  <h5 className="mb-0">{formatCurrency(summary.wholesale.cost)}</h5>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">Avg Order Value</small>
+                  <h5 className="mb-0">{formatCurrency(summary.wholesale.avg_order_value)}</h5>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Revenue Deductions */}
+      {/* Trends Table */}
       <div className="card mb-4">
         <div className="card-header bg-white">
-          <h5 className="mb-0">Revenue Breakdown</h5>
+          <h5 className="mb-0">📈 Profit Trends ({grouping.charAt(0).toUpperCase() + grouping.slice(1)})</h5>
         </div>
         <div className="card-body">
-          <div className="row g-3">
-            <div className="col-md-4">
-              <div className="d-flex justify-content-between align-items-center mb-2">
-                <span className="text-muted">Gross Revenue</span>
-                <strong className="text-primary">{formatCurrency(summary.gross_revenue)}</strong>
-              </div>
-            </div>
-            <div className="col-md-4">
-              <div className="d-flex justify-content-between align-items-center mb-2">
-                <span className="text-muted">Less: Discounts</span>
-                <strong className="text-danger">({formatCurrency(summary.discounts)})</strong>
-              </div>
-            </div>
-            <div className="col-md-4">
-              <div className="d-flex justify-content-between align-items-center mb-2">
-                <span className="text-muted">Less: Refunds</span>
-                <strong className="text-danger">({formatCurrency(summary.refunds)})</strong>
-              </div>
-            </div>
-          </div>
-          <hr />
-          <div className="d-flex justify-content-between align-items-center">
-            <strong>Net Revenue</strong>
-            <h4 className="text-success mb-0">{formatCurrency(summary.net_revenue)}</h4>
-          </div>
-        </div>
-      </div>
-
-      {/* Profit Calculation */}
-      <div className="card mb-4">
-        <div className="card-header bg-white">
-          <h5 className="mb-0">Profit Calculation</h5>
-        </div>
-        <div className="card-body">
-          <div className="mb-3">
-            <div className="d-flex justify-content-between align-items-center mb-2">
-              <span className="text-muted">Net Revenue</span>
-              <strong>{formatCurrency(summary.net_revenue)}</strong>
-            </div>
-            <div className="d-flex justify-content-between align-items-center mb-2">
-              <span className="text-muted">Less: Cost of Goods Sold (COGS)</span>
-              <strong className="text-danger">({formatCurrency(summary.cost_of_goods_sold)})</strong>
-            </div>
-          </div>
-          <hr />
-          <div className="d-flex justify-content-between align-items-center mb-3">
-            <strong>Gross Profit</strong>
-            <h5 className="text-info mb-0">{formatCurrency(summary.gross_profit)}</h5>
-          </div>
-          <div className="mb-3">
-            <div className="d-flex justify-content-between align-items-center mb-2">
-              <span className="text-muted">Less: Operating Expenses</span>
-              <strong className="text-danger">({formatCurrency(summary.operating_expenses)})</strong>
-            </div>
-          </div>
-          <hr />
-          <div className="d-flex justify-content-between align-items-center">
-            <strong className="h5">Net Profit</strong>
-            <h4 className="text-warning mb-0">{formatCurrency(summary.net_profit)}</h4>
-          </div>
-        </div>
-      </div>
-
-      {/* Breakdown Selector */}
-      <div className="card mb-4">
-        <div className="card-body">
-          <label className="form-label fw-bold">Breakdown By</label>
-          <div className="btn-group w-100" role="group">
-            <button
-              type="button"
-              className={`btn ${breakdownBy === 'category' ? 'btn-primary' : 'btn-outline-primary'}`}
-              onClick={() => setBreakdownBy('category')}
-            >
-              Category
-            </button>
-            <button
-              type="button"
-              className={`btn ${breakdownBy === 'storefront' ? 'btn-primary' : 'btn-outline-primary'}`}
-              onClick={() => setBreakdownBy('storefront')}
-            >
-              Storefront
-            </button>
-            <button
-              type="button"
-              className={`btn ${breakdownBy === 'product' ? 'btn-primary' : 'btn-outline-primary'}`}
-              onClick={() => setBreakdownBy('product')}
-            >
-              Product
-            </button>
-            <button
-              type="button"
-              className={`btn ${breakdownBy === 'time' ? 'btn-primary' : 'btn-outline-primary'}`}
-              onClick={() => setBreakdownBy('time')}
-            >
-              Time Period
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Breakdown Table */}
-      {breakdown.length > 0 && (
-        <div className="card mb-4">
-          <div className="card-header bg-white">
-            <h5 className="mb-0">
-              Breakdown by {breakdownBy.charAt(0).toUpperCase() + breakdownBy.slice(1)} ({breakdown.length} items)
-            </h5>
-          </div>
-          <div className="card-body p-0">
-            <div className="table-responsive">
-              <table className="table table-hover mb-0">
-                <thead className="table-light">
-                  <tr>
-                    <th className="px-4">#</th>
-                    <th>{breakdownBy.charAt(0).toUpperCase() + breakdownBy.slice(1)}</th>
-                    <th className="text-end">Revenue</th>
-                    <th className="text-end">COGS</th>
-                    <th className="text-end">Profit</th>
-                    <th className="text-end">Margin %</th>
+          <div className="table-responsive">
+            <table className="table table-hover">
+              <thead>
+                <tr>
+                  <th>Period</th>
+                  <th className="text-end">Revenue</th>
+                  <th className="text-end">Cost</th>
+                  <th className="text-end">Profit</th>
+                  <th className="text-end">Margin</th>
+                  <th className="text-end">Orders</th>
+                  <th className="text-end">Retail Revenue</th>
+                  <th className="text-end">Wholesale Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {results.map((trend, index) => (
+                  <tr key={index}>
+                    <td><strong>{trend.period}</strong></td>
+                    <td className="text-end">{formatCurrency(trend.revenue)}</td>
+                    <td className="text-end text-danger">{formatCurrency(trend.cost)}</td>
+                    <td className="text-end text-success"><strong>{formatCurrency(trend.profit)}</strong></td>
+                    <td className="text-end">{formatPercent(trend.margin)}</td>
+                    <td className="text-end">{trend.order_count}</td>
+                    <td className="text-end text-primary">{formatCurrency(trend.retail.revenue)}</td>
+                    <td className="text-end text-success">{formatCurrency(trend.wholesale.revenue)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {breakdown.map((item, index) => (
-                    <tr key={index}>
-                      <td className="px-4 text-muted">{index + 1}</td>
-                      <td>
-                        <strong>{item.label}</strong>
-                      </td>
-                      <td className="text-end">
-                        <strong className="text-primary">{formatCurrency(item.revenue)}</strong>
-                      </td>
-                      <td className="text-end text-muted">
-                        {formatCurrency(item.cogs)}
-                      </td>
-                      <td className="text-end">
-                        <strong className="text-success">{formatCurrency(item.profit)}</strong>
-                      </td>
-                      <td className="text-end">
-                        <span className={`badge ${
-                          item.margin >= 30 ? 'bg-success' :
-                          item.margin >= 20 ? 'bg-warning' :
-                          item.margin >= 10 ? 'bg-info' : 'bg-danger'
-                        }`}>
-                          {formatPercent(item.margin)}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+                {results.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="text-center text-muted py-4">
+                      No trend data available for the selected period
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Operating Expenses */}
-      {expenses.length > 0 && (
-        <div className="card">
-          <div className="card-header bg-white">
-            <h5 className="mb-0">Operating Expenses ({expenses.length} categories)</h5>
-          </div>
-          <div className="card-body">
-            <div className="row g-3">
-              {expenses.map((expense, index) => {
-                const percentage = summary.operating_expenses > 0 
-                  ? (expense.amount / summary.operating_expenses) * 100 
-                  : 0;
-                return (
-                  <div key={index} className="col-md-6">
-                    <div className="card border">
-                      <div className="card-body">
-                        <div className="d-flex justify-content-between align-items-start mb-2">
-                          <div>
-                            <h6 className="mb-1">{expense.category}</h6>
-                            <p className="text-danger fw-bold mb-0">
-                              {formatCurrency(expense.amount)}
-                            </p>
-                          </div>
-                          <span className="badge bg-secondary">
-                            {formatPercent(percentage)}
-                          </span>
-                        </div>
-                        <div className="progress" style={{ height: '6px' }}>
-                          <div
-                            className="progress-bar bg-danger"
-                            role="progressbar"
-                            style={{ width: `${percentage}%` }}
-                            aria-valuenow={percentage}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                          ></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+      {/* Margin Analysis */}
+      <div className="row">
+        <div className="col-md-6">
+          <div className="card">
+            <div className="card-header bg-success text-white">
+              <h6 className="mb-0">🏆 Best Margin</h6>
             </div>
-            <div className="mt-3 pt-3 border-top">
-              <div className="d-flex justify-content-between align-items-center">
-                <strong>Total Operating Expenses</strong>
-                <h5 className="text-danger mb-0">{formatCurrency(summary.operating_expenses)}</h5>
-              </div>
+            <div className="card-body text-center">
+              <h2 className="text-success">{formatPercent(summary.best_margin)}</h2>
+              <p className="text-muted mb-0">Highest profit margin achieved</p>
             </div>
           </div>
         </div>
-      )}
+        <div className="col-md-6">
+          <div className="card">
+            <div className="card-header bg-warning text-dark">
+              <h6 className="mb-0">⚠️ Worst Margin</h6>
+            </div>
+            <div className="card-body text-center">
+              <h2 className="text-warning">{formatPercent(summary.worst_margin)}</h2>
+              <p className="text-muted mb-0">Lowest profit margin achieved</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </ReportContainer>
   );
 };

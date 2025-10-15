@@ -175,20 +175,38 @@ export interface CustomerAnalyticsResponse {
   data: {
     summary: {
       total_customers: number;
-      new_customers: number;
-      returning_customers: number;
-      customer_retention_rate: number;
-      average_customer_value: number;
-      customer_lifetime_value: number;
+      total_revenue: number;
+      total_orders: number;
+      average_revenue_per_customer: number;
+      average_orders_per_customer: number;
+      repeat_customer_rate: number;
+      retail?: {
+        customers: number;
+        revenue: number;
+        orders: number;
+        avg_revenue_per_customer: number;
+      };
+      wholesale?: {
+        customers: number;
+        revenue: number;
+        orders: number;
+        avg_revenue_per_customer: number;
+      };
+      // Legacy fields (for backward compatibility)
+      new_customers?: number;
+      returning_customers?: number;
+      customer_retention_rate?: number;
+      average_customer_value?: number;
+      customer_lifetime_value?: number;
     };
-    segments: {
+    segments?: {
       new: number;
       returning: number;
       vip: number;
       at_risk: number;
     };
-    top_customers: CustomerAnalytics[];
-    purchase_frequency: {
+    top_customers?: CustomerAnalytics[];
+    purchase_frequency?: {
       daily: number;
       weekly: number;
       monthly: number;
@@ -200,12 +218,31 @@ export interface RevenueTrend {
   period: string;
   revenue: number;
   profit: number;
-  transactions: number;
+  profit_margin: number;
+  order_count: number;
   average_order_value: number;
+  growth_rate?: number;
+  trend?: 'up' | 'down' | 'stable';
+  
+  // Retail/Wholesale breakdown per period
+  retail: {
+    revenue: number;
+    orders: number;
+    avg_order_value: number;
+  };
+  wholesale: {
+    revenue: number;
+    orders: number;
+    avg_order_value: number;
+  };
+  
+  // Payment methods breakdown
   payment_methods: {
     cash: number;
     card: number;
     credit: number;
+    gcash: number;
+    other: number;
   };
 }
 
@@ -220,13 +257,67 @@ export interface RevenueForecast {
 export interface RevenueTrendsResponse {
   success: boolean;
   data: {
-    trends: RevenueTrend[];
-    forecast?: RevenueForecast[];
-    patterns: {
-      peak_day: string;
-      peak_hour: number;
-      seasonal_trend: string;
-      volatility: 'low' | 'medium' | 'high';
+    summary: {
+      period_start: string;
+      period_end: string;
+      total_revenue: number;
+      total_profit: number;
+      profit_margin: number;
+      total_orders: number;
+      average_daily_revenue: number;
+      average_order_value: number;
+      peak_day: string | null;
+      peak_revenue: number;
+      
+      // Retail/Wholesale breakdown
+      retail: {
+        revenue: number;
+        profit: number;
+        profit_margin: number;
+        orders: number;
+        avg_order_value: number;
+      };
+      wholesale: {
+        revenue: number;
+        profit: number;
+        profit_margin: number;
+        orders: number;
+        avg_order_value: number;
+      };
+      
+      // Optional previous period comparison
+      previous_period?: {
+        start: string;
+        end: string;
+        revenue: number;
+        profit: number;
+        orders: number;
+      };
+      comparison?: {
+        revenue_growth: number;
+        order_growth: number;
+        profit_growth: number;
+        revenue_change: number;
+        order_change: number;
+      };
+    };
+    results: {
+      trends: RevenueTrend[];
+      patterns: {
+        peak_day: string | null;
+        peak_revenue: number;
+        lowest_day: string | null;
+        lowest_revenue: number;
+        volatility: 'low' | 'medium' | 'high';
+        overall_trend: 'upward' | 'downward' | 'stable';
+        growth_rate: number;
+      };
+    };
+    metadata: {
+      generated_at: string;
+      start_date: string;
+      end_date: string;
+      filters: Record<string, any>;
     };
   };
 }
@@ -389,170 +480,223 @@ export interface WarehouseAnalyticsResponse {
 // ========================================
 
 export interface RevenueProfitSummary {
-  gross_revenue: number;
-  discounts: number;
-  refunds: number;
-  net_revenue: number;
-  cost_of_goods_sold: number;
+  total_revenue: number;
+  total_cost: number;
   gross_profit: number;
-  gross_profit_margin: number;
-  operating_expenses: number;
+  gross_margin: number;
   net_profit: number;
-  net_profit_margin: number;
+  net_margin: number;
+  total_sales: number;
+  average_sale_value: number;
+  best_margin: number;
+  worst_margin: number;
+  retail: {
+    revenue: number;
+    cost: number;
+    profit: number;
+    profit_margin: number;
+    orders: number;
+    avg_order_value: number;
+  };
+  wholesale: {
+    revenue: number;
+    cost: number;
+    profit: number;
+    profit_margin: number;
+    orders: number;
+    avg_order_value: number;
+  };
 }
 
-export interface RevenueProfitBreakdown {
-  label: string;
+export interface RevenueProfitTrend {
+  period: string;
   revenue: number;
-  cogs: number;
+  cost: number;
   profit: number;
   margin: number;
-}
-
-export interface Expense {
-  category: string;
-  amount: number;
+  order_count: number;
+  average_order_value: number;
+  retail: {
+    revenue: number;
+    profit: number;
+    orders: number;
+    avg_order_value: number;
+  };
+  wholesale: {
+    revenue: number;
+    profit: number;
+    orders: number;
+    avg_order_value: number;
+  };
 }
 
 export interface RevenueProfitResponse {
   success: boolean;
   data: {
     summary: RevenueProfitSummary;
-    breakdown: RevenueProfitBreakdown[];
-    expenses: Expense[];
+    results: RevenueProfitTrend[];
+    metadata: ReportMetadata;
   };
+  error?: string;
+}
+
+export interface ARAgingBuckets {
+  current: number;
+  '1_30_days': number;
+  '31_60_days': number;
+  '61_90_days': number;
+  over_90_days: number;
+}
+
+export interface ARAgingSegment {
+  ar_outstanding: number;
+  percentage_of_total: number;
+  aging_buckets: ARAgingBuckets;
 }
 
 export interface ARAgingSummary {
-  total_outstanding: number;
-  current: number;
-  days_31_60: number;
-  days_61_90: number;
-  over_90_days: number;
-  total_customers: number;
-  average_days_outstanding: number;
-}
-
-export interface AgingBucket {
-  bucket: string;
-  amount: number;
-  percentage: number;
-  customer_count: number;
+  as_of_date: string;
+  total_ar_outstanding: number;
+  total_customers_with_balance: number;
+  aging_buckets: ARAgingBuckets;
+  percentage_overdue: number;
+  at_risk_amount: number;
+  retail: ARAgingSegment;
+  wholesale: ARAgingSegment;
 }
 
 export interface ARCustomer {
+  rank: number;
   customer_id: string;
   customer_name: string;
-  total_outstanding: number;
-  current: number;
-  days_31_60: number;
-  days_61_90: number;
-  over_90_days: number;
-  oldest_invoice_date: string;
-  days_overdue: number;
+  customer_email: string;
+  total_balance: number;
   credit_limit: number;
-  credit_used_percentage: number;
-  last_payment_date: string;
-  last_payment_amount: number;
+  credit_utilization: number;
+  current: number;
+  '1_30_days': number;
+  '31_60_days': number;
+  '61_90_days': number;
+  over_90_days: number;
+  risk_level: 'low' | 'medium' | 'high';
+  retail_balance: number;
+  wholesale_balance: number;
 }
 
 export interface ARAgingResponse {
   success: boolean;
   data: {
     summary: ARAgingSummary;
-    aging_buckets: AgingBucket[];
-    customers: ARCustomer[];
+    results: ARCustomer[];
+    metadata: ReportMetadata;
   };
+  error?: string;
+}
+
+export interface CollectionRatesSegment {
+  credit_sales_amount: number;
+  collected_amount: number;
+  collection_rate: number;
+  average_collection_period_days: number;
+  credit_sales_count: number;
 }
 
 export interface CollectionRatesSummary {
-  total_invoiced: number;
-  total_collected: number;
-  total_outstanding: number;
-  collection_rate: number;
-  average_collection_time: number;
-  on_time_collection_rate: number;
-}
-
-export interface PaymentMethodStats {
-  method: string;
-  amount_collected: number;
-  percentage: number;
-  transaction_count: number;
+  total_credit_sales_amount: string;
+  total_collected_amount: string;
+  outstanding_amount: string;
+  overall_collection_rate: number;
+  average_collection_period_days: number;
+  total_credit_sales_count: number;
+  collected_sales_count: number;
+  outstanding_sales_count: number;
+  retail: CollectionRatesSegment;
+  wholesale: CollectionRatesSegment;
 }
 
 export interface CollectionTrend {
   period: string;
-  invoiced: number;
-  collected: number;
+  period_start: string;
+  period_end: string;
+  credit_sales_amount: string;
+  collected_amount: string;
   collection_rate: number;
-}
-
-export interface DelinquentAccount {
-  customer_id: string;
-  customer_name: string;
-  amount_overdue: number;
-  days_overdue: number;
-  oldest_invoice: string;
+  average_days_to_collect: number;
+  retail: {
+    credit_sales_amount: number;
+    collected_amount: number;
+    collection_rate: number;
+  };
+  wholesale: {
+    credit_sales_amount: number;
+    collected_amount: number;
+    collection_rate: number;
+  };
 }
 
 export interface CollectionRatesResponse {
   success: boolean;
   data: {
     summary: CollectionRatesSummary;
-    by_payment_method: PaymentMethodStats[];
-    trends: CollectionTrend[];
-    delinquent_accounts: DelinquentAccount[];
+    results: CollectionTrend[];
+    metadata: ReportMetadata;
   };
+  error?: string;
+}
+
+export interface CashFlowSegment {
+  inflows: number;
+  transaction_count: number;
+  average_transaction: number;
 }
 
 export interface CashFlowSummary {
-  opening_balance: number;
-  total_inflows: number;
-  total_outflows: number;
-  net_cash_flow: number;
-  closing_balance: number;
-  cash_flow_health: 'positive' | 'neutral' | 'negative';
+  total_inflows: string;
+  total_outflows: string;
+  net_cash_flow: string;
+  opening_balance: string;
+  closing_balance: string;
+  inflow_by_method: {
+    CASH: string;
+    CARD: string;
+    BANK_TRANSFER: string;
+    MOBILE_MONEY: string;
+  };
+  inflow_by_type: {
+    cash_sales: string;
+    credit_payments: string;
+  };
+  retail: CashFlowSegment;
+  wholesale: CashFlowSegment;
 }
 
-export interface CashFlowInflows {
-  sales_revenue: number;
-  credit_collections: number;
-  other_income: number;
-}
-
-export interface CashFlowOutflows {
-  inventory_purchases: number;
-  salaries: number;
-  rent: number;
-  utilities: number;
-  other_expenses: number;
-}
-
-export interface CashFlowTimeline {
+export interface CashFlowTrend {
   period: string;
-  inflows: number;
-  outflows: number;
-  net_flow: number;
-  balance: number;
-}
-
-export interface CashFlowForecast {
-  period: string;
-  predicted_inflows: number;
-  predicted_outflows: number;
-  predicted_balance: number;
+  period_start: string;
+  period_end: string;
+  inflows: string;
+  outflows: string;
+  net_flow: string;
+  running_balance: string;
+  transaction_count: number;
+  retail: {
+    inflows: number;
+    count: number;
+  };
+  wholesale: {
+    inflows: number;
+    count: number;
+  };
 }
 
 export interface CashFlowResponse {
   success: boolean;
   data: {
     summary: CashFlowSummary;
-    inflows: CashFlowInflows;
-    outflows: CashFlowOutflows;
-    timeline: CashFlowTimeline[];
-    forecast?: CashFlowForecast[];
+    results: CashFlowTrend[];
+    metadata: ReportMetadata;
   };
+  error?: string;
 }
 
 // ========================================
@@ -714,6 +858,8 @@ export interface SegmentationResponse {
 export interface ReportFilters {
   start_date?: string;
   end_date?: string;
+  as_of_date?: string; // For AR Aging and point-in-time reports
+  grouping?: 'daily' | 'weekly' | 'monthly'; // For time-series reports
   storefront_id?: string;
   warehouse_id?: string;
   category_id?: string;

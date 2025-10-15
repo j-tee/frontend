@@ -377,40 +377,97 @@ const RevenueTrendsPage: React.FC = () => {
         </div>
       </div>
 
-
+      {/* Patterns Card - Remove Forecast Section */}
+      {patterns && (
+        <div className="card mb-4">
+          <div className="card-header bg-white">
+            <div className="d-flex justify-content-between align-items-center">
+              <h5 className="mb-0">📊 Revenue Forecast</h5>
+              <span className="badge bg-info">
+                Next {data.data.forecast.length} periods
+              </span>
+            </div>
+          </div>
+          <div className="card-body">
+            <div className="alert alert-info mb-4">
+              <i className="bi bi-lightbulb me-2"></i>
+              <strong>Forecast based on historical trends.</strong> Actual results may vary.
+            </div>
+            
+            <div className="table-responsive">
+              <table className="table table-hover">
+                <thead className="table-light">
+                  <tr>
+                    <th>Period</th>
+                    <th className="text-end">Forecasted Revenue</th>
+                    <th className="text-end">Lower Bound</th>
+                    <th className="text-end">Upper Bound</th>
+                    <th className="text-end">Confidence</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.data.forecast.map((forecast, index) => (
+                    <tr key={index}>
+                      <td>
+                        <strong>{formatDate(forecast.period)}</strong>
+                      </td>
+                      <td className="text-end">
+                        <strong className="text-primary">
+                          {formatCurrency(forecast.predicted_revenue)}
+                        </strong>
+                      </td>
+                      <td className="text-end text-muted">
+                        {formatCurrency(forecast.lower_bound)}
+                      </td>
+                      <td className="text-end text-muted">
+                        {formatCurrency(forecast.upper_bound)}
+                      </td>
+                      <td className="text-end">
+                        <span className={`badge ${
+                          forecast.confidence >= 0.8 ? 'bg-success' :
+                          forecast.confidence >= 0.6 ? 'bg-warning' : 'bg-danger'
+                        }`}>
+                          {(forecast.confidence * 100).toFixed(0)}%
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Patterns Card */}
-      {patterns && (
+      {data.data.patterns && (
         <div className="card">
           <div className="card-header bg-white">
-            <h5 className="mb-0">🔍 Revenue Patterns & Insights</h5>
+            <h5 className="mb-0">� Revenue Patterns</h5>
           </div>
           <div className="card-body">
             <div className="row g-3">
               <div className="col-md-3">
-                <div className="card border-success h-100">
+                <div className="card border-primary h-100">
                   <div className="card-body text-center">
                     <h6 className="text-muted mb-2">Peak Day</h6>
-                    <h4 className="text-success mb-0">{patterns.peak_day ? formatDate(patterns.peak_day) : 'N/A'}</h4>
-                    <small className="text-muted">{formatCurrency(patterns.peak_revenue)}</small>
+                    <h4 className="text-primary mb-0">{data.data.patterns.peak_day}</h4>
                   </div>
                 </div>
               </div>
               <div className="col-md-3">
-                <div className="card border-danger h-100">
+                <div className="card border-success h-100">
                   <div className="card-body text-center">
-                    <h6 className="text-muted mb-2">Lowest Day</h6>
-                    <h4 className="text-danger mb-0">{patterns.lowest_day ? formatDate(patterns.lowest_day) : 'N/A'}</h4>
-                    <small className="text-muted">{formatCurrency(patterns.lowest_revenue)}</small>
+                    <h6 className="text-muted mb-2">Peak Hour</h6>
+                    <h4 className="text-success mb-0">{data.data.patterns.peak_hour}:00</h4>
                   </div>
                 </div>
               </div>
               <div className="col-md-3">
                 <div className="card border-info h-100">
                   <div className="card-body text-center">
-                    <h6 className="text-muted mb-2">Overall Trend</h6>
-                    <h4 className="text-info mb-0 text-capitalize">{patterns.overall_trend}</h4>
-                    <small className="text-muted">{patterns.growth_rate.toFixed(1)}% growth</small>
+                    <h6 className="text-muted mb-2">Seasonal Trend</h6>
+                    <h4 className="text-info mb-0">{data.data.patterns.seasonal_trend}</h4>
                   </div>
                 </div>
               </div>
@@ -418,8 +475,7 @@ const RevenueTrendsPage: React.FC = () => {
                 <div className="card border-warning h-100">
                   <div className="card-body text-center">
                     <h6 className="text-muted mb-2">Volatility</h6>
-                    <h4 className="text-warning mb-0 text-capitalize">{patterns.volatility}</h4>
-                    <small className="text-muted">Revenue stability</small>
+                    <h4 className="text-warning mb-0 text-capitalize">{data.data.patterns.volatility}</h4>
                   </div>
                 </div>
               </div>

@@ -1,381 +1,323 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Download, RefreshCw, TrendingUp, TrendingDown, Activity } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import { financialReportsService } from '../../../services/reportsService';
 import type { CashFlowResponse } from '../../../types/reports';
 import { ReportContainer } from '../components/ReportContainer';
 import { SummaryCard } from '../components/SummaryCard';
 import { DateRangeFilter } from '../components/DateRangeFilter';
 import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates';
-import { useCurrency } from '../../../hooks/useCurrency';
 
-const CashFlowPage = () => {
-  const navigate = useNavigate();
-  const { formatCurrency } = useCurrency();
+const CashFlowPage: React.FC = () => {
   const [data, setData] = useState<CashFlowResponse['data'] | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   // Default to last 30 days
-  const [startDate, setStartDate] = useState<string>(
-    new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-  );
-  const [endDate, setEndDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
-  );
-  const [interval, setInterval] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  const [startDate, setStartDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 30);
+    return date.toISOString().split('T')[0];
+  });
+  
+  const [endDate, setEndDate] = useState(() => {
+    return new Date().toISOString().split('T')[0];
+  });
 
-  const fetchData = useCallback(async () => {
+  const [grouping, setGrouping] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    
     try {
-      setLoading(true);
-      setError(null);
-      const response = await financialReportsService.getCashFlow({
+      const result = await financialReportsService.getCashFlow({
         start_date: startDate,
         end_date: endDate,
-        interval,
+        grouping: grouping,
       });
-      if (response.success && response.data) {
-        setData(response.data);
+      
+      if (result.success && result.data) {
+        setData(result.data);
       } else {
-        throw new Error('Invalid response structure');
+        throw new Error(result.error || 'Invalid response structure');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load report');
+      setError(err instanceof Error ? err.message : 'Failed to load cash flow report');
+      console.error('Error fetching cash flow:', err);
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate, interval]);
+  };
 
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startDate, endDate, grouping]);
 
   const handleExport = async () => {
     try {
       await financialReportsService.exportCashFlowCSV({
         start_date: startDate,
         end_date: endDate,
-        interval,
+        grouping: grouping,
       });
     } catch (err) {
       console.error('Export failed:', err);
+      alert('Failed to export report. Please try again.');
     }
   };
 
-  const getCashFlowHealth = (health: string | null | undefined) => {
-    if (!health) {
-      return { color: 'text-gray-600', bg: 'bg-gray-50', label: 'Neutral' };
-    }
-    switch (health.toLowerCase()) {
-      case 'positive':
-        return { color: 'text-green-600', bg: 'bg-green-50', label: 'Positive' };
-      case 'negative':
-        return { color: 'text-red-600', bg: 'bg-red-50', label: 'Negative' };
-      default:
-        return { color: 'text-gray-600', bg: 'bg-gray-50', label: 'Neutral' };
-    }
+  const formatCurrency = (value: number | string | null | undefined): string => {
+    if (value === null || value === undefined) return '₱0.00';
+    const num = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(num)) return '₱0.00';
+    return new Intl.NumberFormat('en-PH', {
+      style: 'currency',
+      currency: 'PHP',
+    }).format(num);
   };
 
-  if (loading) return <LoadingState />;
+  if (loading && !data) return <LoadingState message="Loading cash flow data..." />;
   if (error) return <ErrorState error={error} onRetry={fetchData} />;
-  if (!data || !data.summary || !data.inflows || !data.outflows) return <EmptyState />;
+  if (!data || !data.summary || !data.results) return <EmptyState message="No cash flow data available" />;
 
-  const summary = data.summary;
-  const inflows = data.inflows;
-  const outflows = data.outflows;
-  const timeline = data.timeline || [];
-  const forecast = data.forecast || [];
-
-  const healthStatus = getCashFlowHealth(summary.cash_flow_health);
+  const { summary, results } = data;
 
   return (
     <ReportContainer
-      title="Cash Flow Analysis"
-      subtitle="Monitor cash inflows and outflows over time"
+      title="💵 Cash Flow Analysis"
+      subtitle={`Period: ${startDate} to ${endDate}`}
       actions={
-        <>
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
-            <Download className="w-4 h-4" />
+        <div className="d-flex gap-2">
+          <button onClick={handleExport} className="btn btn-outline-primary">
+            <i className="bi bi-download me-2"></i>
             Export CSV
           </button>
-          <button
-            onClick={fetchData}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            <RefreshCw className="w-4 h-4" />
+          <button onClick={fetchData} className="btn btn-outline-secondary">
+            <i className="bi bi-arrow-clockwise me-2"></i>
             Refresh
           </button>
-        </>
+        </div>
       }
     >
-      {/* Back Button */}
-      <button
-        onClick={() => navigate('/app/reports/financial')}
-        className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Back to Financial Reports
-      </button>
-
-      {/* Filters */}
-      <div className="mb-6 flex flex-col sm:flex-row gap-4">
-        <DateRangeFilter
-          startDate={startDate}
-          endDate={endDate}
-          onStartDateChange={setStartDate}
-          onEndDateChange={setEndDate}
-        />
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-gray-700">Interval:</label>
-          <div className="flex gap-2">
-            {(['daily', 'weekly', 'monthly'] as const).map((int) => (
-              <button
-                key={int}
-                onClick={() => setInterval(int)}
-                className={`px-3 py-2 text-sm font-medium rounded-lg ${
-                  interval === int
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                {int.charAt(0).toUpperCase() + int.slice(1)}
-              </button>
-            ))}
-          </div>
+      {/* Date Filter & Grouping */}
+      <div className="row mb-4">
+        <div className="col-md-8">
+          <DateRangeFilter
+            startDate={startDate}
+            endDate={endDate}
+            onStartDateChange={setStartDate}
+            onEndDateChange={setEndDate}
+            showPresets={true}
+          />
+        </div>
+        <div className="col-md-4">
+          <label className="form-label">Group By</label>
+          <select 
+            className="form-select"
+            value={grouping}
+            onChange={(e) => setGrouping(e.target.value as 'daily' | 'weekly' | 'monthly')}
+          >
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
         </div>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-        <SummaryCard
-          title="Opening Balance"
-          value={formatCurrency(summary.opening_balance)}
-          icon="💰"
-          color="bg-gray-50 border-gray-200"
-        />
-        <SummaryCard
-          title="Total Inflows"
-          value={formatCurrency(summary.total_inflows)}
-          icon="📈"
-          color="bg-green-50 border-green-200"
-        />
-        <SummaryCard
-          title="Total Outflows"
-          value={formatCurrency(summary.total_outflows)}
-          icon="📉"
-          color="bg-red-50 border-red-200"
-        />
-        <SummaryCard
-          title="Net Cash Flow"
-          value={formatCurrency(summary.net_cash_flow)}
-          icon="💵"
-          color={parseFloat(summary.net_cash_flow.toString()) >= 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}
-          subtitle={healthStatus.label}
-        />
-        <SummaryCard
-          title="Closing Balance"
-          value={formatCurrency(summary.closing_balance)}
-          icon="🏦"
-          color="bg-blue-50 border-blue-200"
-        />
+      <div className="row g-3 mb-4">
+        <div className="col-md-3">
+          <SummaryCard
+            title="Total Inflows"
+            value={formatCurrency(summary.total_inflows)}
+            icon="💰"
+            color="success"
+          />
+        </div>
+        <div className="col-md-3">
+          <SummaryCard
+            title="Total Outflows"
+            value={formatCurrency(summary.total_outflows)}
+            icon="📤"
+            color="danger"
+          />
+        </div>
+        <div className="col-md-3">
+          <SummaryCard
+            title="Net Cash Flow"
+            value={formatCurrency(summary.net_cash_flow)}
+            icon="📊"
+            color="primary"
+          />
+        </div>
+        <div className="col-md-3">
+          <SummaryCard
+            title="Closing Balance"
+            value={formatCurrency(summary.closing_balance)}
+            icon="🏦"
+            color="info"
+          />
+        </div>
       </div>
 
-      {/* Inflows & Outflows Breakdown */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Inflows */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <TrendingUp className="w-5 h-5 text-green-600" />
-            <h3 className="text-lg font-semibold text-gray-900">Cash Inflows</h3>
-          </div>
-          <div className="space-y-4">
-            <div className="flex justify-between items-center pb-3 border-b border-gray-200">
-              <span className="text-sm text-gray-600">Sales Revenue</span>
-              <span className="text-lg font-semibold text-green-600">
-                {formatCurrency(inflows.sales_revenue)}
-              </span>
+      {/* Inflow Breakdown Cards */}
+      <div className="row mb-4">
+        <div className="col-md-6">
+          <div className="card">
+            <div className="card-header bg-white">
+              <h6 className="mb-0">💳 Inflows by Payment Method</h6>
             </div>
-            <div className="flex justify-between items-center pb-3 border-b border-gray-200">
-              <span className="text-sm text-gray-600">Credit Collections</span>
-              <span className="text-lg font-semibold text-green-600">
-                {formatCurrency(inflows.credit_collections)}
-              </span>
-            </div>
-            <div className="flex justify-between items-center pb-3 border-b border-gray-200">
-              <span className="text-sm text-gray-600">Other Income</span>
-              <span className="text-lg font-semibold text-green-600">
-                {formatCurrency(inflows.other_income)}
-              </span>
-            </div>
-            <div className="flex justify-between items-center pt-2">
-              <span className="text-sm font-semibold text-gray-900">Total Inflows</span>
-              <span className="text-xl font-bold text-green-600">
-                {formatCurrency(summary.total_inflows)}
-              </span>
+            <div className="card-body">
+              <div className="row g-2">
+                <div className="col-6">
+                  <small className="text-muted d-block">Cash</small>
+                  <h6 className="mb-0">{formatCurrency(summary.inflow_by_method.CASH)}</h6>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">Card</small>
+                  <h6 className="mb-0">{formatCurrency(summary.inflow_by_method.CARD)}</h6>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">Bank Transfer</small>
+                  <h6 className="mb-0">{formatCurrency(summary.inflow_by_method.BANK_TRANSFER)}</h6>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">Mobile Money</small>
+                  <h6 className="mb-0">{formatCurrency(summary.inflow_by_method.MOBILE_MONEY)}</h6>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-
-        {/* Outflows */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <TrendingDown className="w-5 h-5 text-red-600" />
-            <h3 className="text-lg font-semibold text-gray-900">Cash Outflows</h3>
-          </div>
-          <div className="space-y-4">
-            <div className="flex justify-between items-center pb-3 border-b border-gray-200">
-              <span className="text-sm text-gray-600">Inventory Purchases</span>
-              <span className="text-lg font-semibold text-red-600">
-                {formatCurrency(outflows.inventory_purchases)}
-              </span>
+        <div className="col-md-6">
+          <div className="card">
+            <div className="card-header bg-white">
+              <h6 className="mb-0">🔄 Inflows by Type</h6>
             </div>
-            <div className="flex justify-between items-center pb-3 border-b border-gray-200">
-              <span className="text-sm text-gray-600">Salaries</span>
-              <span className="text-lg font-semibold text-red-600">
-                {formatCurrency(outflows.salaries)}
-              </span>
-            </div>
-            <div className="flex justify-between items-center pb-3 border-b border-gray-200">
-              <span className="text-sm text-gray-600">Rent</span>
-              <span className="text-lg font-semibold text-red-600">
-                {formatCurrency(outflows.rent)}
-              </span>
-            </div>
-            <div className="flex justify-between items-center pb-3 border-b border-gray-200">
-              <span className="text-sm text-gray-600">Utilities</span>
-              <span className="text-lg font-semibold text-red-600">
-                {formatCurrency(outflows.utilities)}
-              </span>
-            </div>
-            <div className="flex justify-between items-center pb-3 border-b border-gray-200">
-              <span className="text-sm text-gray-600">Other Expenses</span>
-              <span className="text-lg font-semibold text-red-600">
-                {formatCurrency(outflows.other_expenses)}
-              </span>
-            </div>
-            <div className="flex justify-between items-center pt-2">
-              <span className="text-sm font-semibold text-gray-900">Total Outflows</span>
-              <span className="text-xl font-bold text-red-600">
-                {formatCurrency(summary.total_outflows)}
-              </span>
+            <div className="card-body">
+              <div className="row g-3">
+                <div className="col-6">
+                  <small className="text-muted d-block">Cash Sales</small>
+                  <h5 className="mb-0 text-success">{formatCurrency(summary.inflow_by_type.cash_sales)}</h5>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">Credit Payments</small>
+                  <h5 className="mb-0 text-primary">{formatCurrency(summary.inflow_by_type.credit_payments)}</h5>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Cash Flow Timeline */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Cash Flow Timeline</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Period
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Inflows
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Outflows
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Net Flow
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Balance
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {timeline.map((period, index) => {
-                const netFlow = parseFloat(period.net_flow.toString());
-                return (
-                  <tr key={index} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {period.period}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 text-right">
-                      {formatCurrency(period.inflows)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 text-right">
-                      {formatCurrency(period.outflows)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <span
-                        className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                          netFlow >= 0
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}
-                      >
-                        {formatCurrency(period.net_flow)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 text-right">
-                      {formatCurrency(period.balance)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+      {/* Retail/Wholesale Breakdown */}
+      <div className="row mb-4">
+        {/* Retail Card */}
+        <div className="col-md-6">
+          <div className="card h-100">
+            <div className="card-header bg-primary text-white">
+              <h6 className="mb-0">🏪 Retail Cash Inflows</h6>
+            </div>
+            <div className="card-body">
+              <div className="row g-3">
+                <div className="col-12">
+                  <small className="text-muted d-block">Total Inflows</small>
+                  <h4 className="mb-0">{formatCurrency(summary.retail.inflows)}</h4>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">Transactions</small>
+                  <h5 className="mb-0">{summary.retail.transaction_count.toLocaleString()}</h5>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">Avg Transaction</small>
+                  <h5 className="mb-0">{formatCurrency(summary.retail.average_transaction)}</h5>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Wholesale Card */}
+        <div className="col-md-6">
+          <div className="card h-100">
+            <div className="card-header bg-success text-white">
+              <h6 className="mb-0">🏭 Wholesale Cash Inflows</h6>
+            </div>
+            <div className="card-body">
+              <div className="row g-3">
+                <div className="col-12">
+                  <small className="text-muted d-block">Total Inflows</small>
+                  <h4 className="mb-0">{formatCurrency(summary.wholesale.inflows)}</h4>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">Transactions</small>
+                  <h5 className="mb-0">{summary.wholesale.transaction_count.toLocaleString()}</h5>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">Avg Transaction</small>
+                  <h5 className="mb-0">{formatCurrency(summary.wholesale.average_transaction)}</h5>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Forecast */}
-      {forecast.length > 0 && (
-        <div className="bg-blue-50 rounded-lg border border-blue-200 p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Activity className="w-5 h-5 text-blue-600" />
-            <h3 className="text-lg font-semibold text-blue-900">Cash Flow Forecast</h3>
-          </div>
-          <p className="text-sm text-blue-700 mb-4">
-            Projected cash flow based on historical trends
-          </p>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-blue-100">
+      {/* Cash Flow Trends Table */}
+      <div className="card mb-4">
+        <div className="card-header bg-white">
+          <h5 className="mb-0">📈 Cash Flow Trends ({grouping.charAt(0).toUpperCase() + grouping.slice(1)})</h5>
+        </div>
+        <div className="card-body">
+          <div className="table-responsive">
+            <table className="table table-hover">
+              <thead>
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-blue-900 uppercase tracking-wider">
-                    Period
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-blue-900 uppercase tracking-wider">
-                    Predicted Inflows
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-blue-900 uppercase tracking-wider">
-                    Predicted Outflows
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-blue-900 uppercase tracking-wider">
-                    Predicted Balance
-                  </th>
+                  <th>Period</th>
+                  <th className="text-end">Inflows</th>
+                  <th className="text-end">Outflows</th>
+                  <th className="text-end">Net Flow</th>
+                  <th className="text-end">Balance</th>
+                  <th className="text-end">Transactions</th>
+                  <th className="text-end">Retail</th>
+                  <th className="text-end">Wholesale</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-blue-200">
-                {forecast.map((prediction, index) => (
-                  <tr key={index} className="hover:bg-blue-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {prediction.period}
+              <tbody>
+                {results.map((trend, index) => (
+                  <tr key={index}>
+                    <td><strong>{trend.period}</strong></td>
+                    <td className="text-end text-success">{formatCurrency(trend.inflows)}</td>
+                    <td className="text-end text-danger">{formatCurrency(trend.outflows)}</td>
+                    <td className="text-end">
+                      <strong className={parseFloat(trend.net_flow) >= 0 ? 'text-success' : 'text-danger'}>
+                        {formatCurrency(trend.net_flow)}
+                      </strong>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 text-right">
-                      {formatCurrency(prediction.predicted_inflows)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 text-right">
-                      {formatCurrency(prediction.predicted_outflows)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-blue-900 text-right">
-                      {formatCurrency(prediction.predicted_balance)}
-                    </td>
+                    <td className="text-end">{formatCurrency(trend.running_balance)}</td>
+                    <td className="text-end">{trend.transaction_count}</td>
+                    <td className="text-end text-primary">{formatCurrency(trend.retail.inflows)}</td>
+                    <td className="text-end text-success">{formatCurrency(trend.wholesale.inflows)}</td>
                   </tr>
                 ))}
+                {results.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="text-center text-muted py-4">
+                      No cash flow data available for the selected period
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
         </div>
-      )}
+      </div>
+
+      {/* Note about Tier 1 */}
+      <div className="alert alert-info">
+        <i className="bi bi-info-circle me-2"></i>
+        <strong>Note:</strong> This is Tier 1 implementation - currently tracking inflows (payments) only. Outflow tracking (expenses, inventory purchases, etc.) will be added in future updates.
+      </div>
     </ReportContainer>
   );
 };

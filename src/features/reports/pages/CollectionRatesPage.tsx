@@ -1,6 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Download, RefreshCw, CreditCard, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import { financialReportsService } from '../../../services/reportsService';
 import type { CollectionRatesResponse } from '../../../types/reports';
 import { ReportContainer } from '../components/ReportContainer';
@@ -8,307 +6,383 @@ import { SummaryCard } from '../components/SummaryCard';
 import { DateRangeFilter } from '../components/DateRangeFilter';
 import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates';
 
-const CollectionRatesPage = () => {
-  const navigate = useNavigate();
+const CollectionRatesPage: React.FC = () => {
   const [data, setData] = useState<CollectionRatesResponse['data'] | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Default to last 30 days
-  const [startDate, setStartDate] = useState<string>(
-    new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-  );
-  const [endDate, setEndDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
-  );
+  // Default to last 90 days
+  const [startDate, setStartDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 90);
+    return date.toISOString().split('T')[0];
+  });
+  
+  const [endDate, setEndDate] = useState(() => {
+    return new Date().toISOString().split('T')[0];
+  });
 
-  const fetchData = useCallback(async () => {
+  const [grouping, setGrouping] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
+
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    
     try {
-      setLoading(true);
-      setError(null);
-      const response = await financialReportsService.getCollectionRates({
+      const result = await financialReportsService.getCollectionRates({
         start_date: startDate,
         end_date: endDate,
+        grouping: grouping,
       });
-      if (response.success && response.data) {
-        setData(response.data);
+      
+      if (result.success && result.data) {
+        setData(result.data);
       } else {
-        throw new Error('Invalid response structure');
+        throw new Error(result.error || 'Invalid response structure');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load report');
+      setError(err instanceof Error ? err.message : 'Failed to load collection rates report');
+      console.error('Error fetching collection rates:', err);
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate]);
+  };
 
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startDate, endDate, grouping]);
 
   const handleExport = async () => {
     try {
       await financialReportsService.exportCollectionRatesCSV({
         start_date: startDate,
         end_date: endDate,
+        grouping: grouping,
       });
     } catch (err) {
       console.error('Export failed:', err);
+      alert('Failed to export report. Please try again.');
     }
   };
 
-  const formatCurrency = (value: number | string | null | undefined) => {
-    if (value === null || value === undefined) return '$0.00';
+  const formatCurrency = (value: number | string | null | undefined): string => {
+    if (value === null || value === undefined) return '₱0.00';
     const num = typeof value === 'string' ? parseFloat(value) : value;
-    if (isNaN(num)) return '$0.00';
-    return new Intl.NumberFormat('en-US', {
+    if (isNaN(num)) return '₱0.00';
+    return new Intl.NumberFormat('en-PH', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'PHP',
     }).format(num);
   };
 
-  const formatPercent = (value: number | null | undefined) => {
-    if (value === null || value === undefined || isNaN(value)) return '0.0%';
-    return `${value.toFixed(1)}%`;
+  const formatPercent = (value: number | null | undefined): string => {
+    if (value === null || value === undefined || isNaN(value)) return '0.00%';
+    return `${value.toFixed(2)}%`;
   };
 
-  if (loading) return <LoadingState />;
-  if (error) return <ErrorState error={error} onRetry={fetchData} />;
-  if (!data || !data.summary || !data.by_payment_method || !data.trends || !data.delinquent_accounts) return <EmptyState />;
+  const formatDays = (value: number | null | undefined): string => {
+    if (value === null || value === undefined || isNaN(value)) return '0.0 days';
+    return `${value.toFixed(1)} days`;
+  };
 
-  const summary = data.summary;
-  const paymentMethods = data.by_payment_method;
-  const trends = data.trends;
-  const delinquentAccounts = data.delinquent_accounts;
+  if (loading && !data) return <LoadingState message="Loading collection rates data..." />;
+  if (error) return <ErrorState error={error} onRetry={fetchData} />;
+  if (!data || !data.summary || !data.results) return <EmptyState message="No collection rates data available" />;
+
+  const { summary, results } = data;
 
   return (
     <ReportContainer
-      title="Payment Collection Rates"
-      subtitle="Payment collection efficiency and trends"
+      title="💳 Collection Rates Analysis"
+      subtitle={`Period: ${startDate} to ${endDate}`}
       actions={
-        <>
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
-            <Download className="w-4 h-4" />
+        <div className="d-flex gap-2">
+          <button onClick={handleExport} className="btn btn-outline-primary">
+            <i className="bi bi-download me-2"></i>
             Export CSV
           </button>
-          <button
-            onClick={fetchData}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            <RefreshCw className="w-4 h-4" />
+          <button onClick={fetchData} className="btn btn-outline-secondary">
+            <i className="bi bi-arrow-clockwise me-2"></i>
             Refresh
           </button>
-        </>
+        </div>
       }
     >
-      {/* Back Button */}
-      <button
-        onClick={() => navigate('/app/reports/financial')}
-        className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Back to Financial Reports
-      </button>
-
-      {/* Date Range Filter */}
-      <DateRangeFilter
-        startDate={startDate}
-        endDate={endDate}
-        onStartDateChange={setStartDate}
-        onEndDateChange={setEndDate}
-      />
+      {/* Date Filter & Grouping */}
+      <div className="row mb-4">
+        <div className="col-md-8">
+          <DateRangeFilter
+            startDate={startDate}
+            endDate={endDate}
+            onStartDateChange={setStartDate}
+            onEndDateChange={setEndDate}
+            showPresets={true}
+          />
+        </div>
+        <div className="col-md-4">
+          <label className="form-label">Group By</label>
+          <select 
+            className="form-select"
+            value={grouping}
+            onChange={(e) => setGrouping(e.target.value as 'daily' | 'weekly' | 'monthly')}
+          >
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
+      </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <SummaryCard
-          title="Collection Rate"
-          value={formatPercent(summary.collection_rate)}
-          icon="📊"
-          color="bg-green-50 border-green-200"
-          change={summary.collection_rate >= 90 ? 5 : -5}
-          changeLabel={`${formatCurrency(summary.total_collected)} collected`}
-        />
-        <SummaryCard
-          title="Total Collected"
-          value={formatCurrency(summary.total_collected)}
-          icon="💰"
-          color="bg-blue-50 border-blue-200"
-        />
-        <SummaryCard
-          title="Outstanding"
-          value={formatCurrency(summary.total_outstanding)}
-          icon="⚠️"
-          color="bg-red-50 border-red-200"
-        />
-        <SummaryCard
-          title="Avg Collection Time"
-          value={`${summary.average_collection_time} days`}
-          icon="⏱️"
-          color="bg-purple-50 border-purple-200"
-          subtitle={`${formatPercent(summary.on_time_collection_rate)} on-time`}
-        />
-      </div>
-
-      {/* Payment Methods Breakdown */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-        <h3 className="text-lg font-semibold text-gray-900 mb-6">Collections by Payment Method</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {paymentMethods.map((method, index) => (
-            <div key={index} className="border border-gray-200 rounded-lg p-4">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="p-2 bg-blue-50 rounded-lg">
-                  <CreditCard className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-gray-500 capitalize">
-                    {method.method}
-                  </div>
-                  <div className="text-xs text-gray-400">
-                    {method.transaction_count} transactions
-                  </div>
-                </div>
-              </div>
-              <div className="text-2xl font-bold text-gray-900 mb-1">
-                {formatCurrency(method.amount_collected)}
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500">
-                  {formatPercent(method.percentage)} of total
-                </span>
-              </div>
-              <div className="mt-3 w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-blue-500 h-2 rounded-full"
-                  style={{ width: `${method.percentage}%` }}
-                />
-              </div>
-            </div>
-          ))}
+      <div className="row g-3 mb-4">
+        <div className="col-md-3">
+          <SummaryCard
+            title="Credit Sales"
+            value={formatCurrency(summary.total_credit_sales_amount)}
+            icon="💰"
+            color="primary"
+          />
+        </div>
+        <div className="col-md-3">
+          <SummaryCard
+            title="Amount Collected"
+            value={formatCurrency(summary.total_collected_amount)}
+            icon="✅"
+            color="success"
+          />
+        </div>
+        <div className="col-md-3">
+          <SummaryCard
+            title="Collection Rate"
+            value={formatPercent(summary.overall_collection_rate)}
+            icon="📊"
+            color="info"
+          />
+        </div>
+        <div className="col-md-3">
+          <SummaryCard
+            title="Avg Collection Period"
+            value={formatDays(summary.average_collection_period_days)}
+            icon="⏱️"
+            color="warning"
+          />
         </div>
       </div>
 
-      {/* Collection Trends */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Collection Trends</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Period
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Invoiced
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Collected
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Collection Rate
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {trends.map((trend, index) => (
-                <tr key={index} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {trend.period}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
-                    {formatCurrency(trend.invoiced)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
-                    {formatCurrency(trend.collected)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <span
-                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                        trend.collection_rate >= 90
-                          ? 'bg-green-100 text-green-800'
-                          : trend.collection_rate >= 70
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}
-                    >
-                      {formatPercent(trend.collection_rate)}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Delinquent Accounts */}
-      {delinquentAccounts.length > 0 && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          <div className="px-6 py-4 bg-red-50 border-b border-red-200">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-red-600" />
-              <h3 className="text-lg font-semibold text-red-900">
-                Delinquent Accounts ({delinquentAccounts.length})
-              </h3>
+      {/* Outstanding Summary */}
+      <div className="row g-3 mb-4">
+        <div className="col-md-4">
+          <div className="card">
+            <div className="card-body text-center">
+              <small className="text-muted d-block">Outstanding Amount</small>
+              <h4 className="mb-0 text-danger">{formatCurrency(summary.outstanding_amount)}</h4>
             </div>
-            <p className="text-sm text-red-700 mt-1">
-              Accounts with payments overdue by 30+ days
-            </p>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
+        </div>
+        <div className="col-md-4">
+          <div className="card">
+            <div className="card-body text-center">
+              <small className="text-muted d-block">Collected Sales</small>
+              <h4 className="mb-0 text-success">{summary.collected_sales_count} / {summary.total_credit_sales_count}</h4>
+            </div>
+          </div>
+        </div>
+        <div className="col-md-4">
+          <div className="card">
+            <div className="card-body text-center">
+              <small className="text-muted d-block">Outstanding Sales</small>
+              <h4 className="mb-0 text-warning">{summary.outstanding_sales_count}</h4>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Retail/Wholesale Breakdown */}
+      <div className="row mb-4">
+        {/* Retail Card */}
+        <div className="col-md-6">
+          <div className="card h-100">
+            <div className="card-header bg-primary text-white">
+              <h6 className="mb-0">🏪 Retail Collection Rates</h6>
+            </div>
+            <div className="card-body">
+              <div className="row g-3">
+                <div className="col-6">
+                  <small className="text-muted d-block">Credit Sales</small>
+                  <h5 className="mb-0">{formatCurrency(summary.retail.credit_sales_amount)}</h5>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">Collected</small>
+                  <h5 className="mb-0 text-success">{formatCurrency(summary.retail.collected_amount)}</h5>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">Collection Rate</small>
+                  <h5 className="mb-0">{formatPercent(summary.retail.collection_rate)}</h5>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">Avg Period</small>
+                  <h5 className="mb-0">{formatDays(summary.retail.average_collection_period_days)}</h5>
+                </div>
+                <div className="col-12">
+                  <small className="text-muted d-block">Credit Sales Count</small>
+                  <h5 className="mb-0">{summary.retail.credit_sales_count}</h5>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Wholesale Card */}
+        <div className="col-md-6">
+          <div className="card h-100">
+            <div className="card-header bg-success text-white">
+              <h6 className="mb-0">🏭 Wholesale Collection Rates</h6>
+            </div>
+            <div className="card-body">
+              <div className="row g-3">
+                <div className="col-6">
+                  <small className="text-muted d-block">Credit Sales</small>
+                  <h5 className="mb-0">{formatCurrency(summary.wholesale.credit_sales_amount)}</h5>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">Collected</small>
+                  <h5 className="mb-0 text-success">{formatCurrency(summary.wholesale.collected_amount)}</h5>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">Collection Rate</small>
+                  <h5 className="mb-0">{formatPercent(summary.wholesale.collection_rate)}</h5>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">Avg Period</small>
+                  <h5 className="mb-0">{formatDays(summary.wholesale.average_collection_period_days)}</h5>
+                </div>
+                <div className="col-12">
+                  <small className="text-muted d-block">Credit Sales Count</small>
+                  <h5 className="mb-0">{summary.wholesale.credit_sales_count}</h5>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Collection Trends Table */}
+      <div className="card mb-4">
+        <div className="card-header bg-white">
+          <h5 className="mb-0">📈 Collection Trends ({grouping.charAt(0).toUpperCase() + grouping.slice(1)})</h5>
+        </div>
+        <div className="card-body">
+          <div className="table-responsive">
+            <table className="table table-hover">
+              <thead>
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Customer
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Amount Overdue
-                  </th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Days Overdue
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Oldest Invoice
-                  </th>
+                  <th>Period</th>
+                  <th className="text-end">Credit Sales</th>
+                  <th className="text-end">Collected</th>
+                  <th className="text-end">Rate</th>
+                  <th className="text-end">Avg Days</th>
+                  <th className="text-end">Retail Rate</th>
+                  <th className="text-end">Wholesale Rate</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {delinquentAccounts.map((account) => (
-                  <tr key={account.customer_id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {account.customer_name}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-red-600 text-right">
-                      {formatCurrency(account.amount_overdue)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <span
-                        className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${
-                          account.days_overdue > 90
-                            ? 'bg-red-100 text-red-800'
-                            : account.days_overdue > 60
-                            ? 'bg-orange-100 text-orange-800'
-                            : 'bg-yellow-100 text-yellow-800'
-                        }`}
-                      >
-                        {account.days_overdue} days
+              <tbody>
+                {results.map((trend, index) => (
+                  <tr key={index}>
+                    <td><strong>{trend.period}</strong></td>
+                    <td className="text-end">{formatCurrency(trend.credit_sales_amount)}</td>
+                    <td className="text-end text-success">{formatCurrency(trend.collected_amount)}</td>
+                    <td className="text-end">
+                      <span className={`badge ${
+                        trend.collection_rate >= 80 ? 'bg-success' : 
+                        trend.collection_rate >= 60 ? 'bg-warning' : 
+                        'bg-danger'
+                      }`}>
+                        {formatPercent(trend.collection_rate)}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {account.oldest_invoice}
-                    </td>
+                    <td className="text-end">{formatDays(trend.average_days_to_collect)}</td>
+                    <td className="text-end text-primary">{formatPercent(trend.retail.collection_rate)}</td>
+                    <td className="text-end text-success">{formatPercent(trend.wholesale.collection_rate)}</td>
                   </tr>
                 ))}
+                {results.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="text-center text-muted py-4">
+                      No collection data available for the selected period
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
         </div>
-      )}
+      </div>
+
+      {/* Performance Indicators */}
+      <div className="row">
+        <div className="col-md-6">
+          <div className="card">
+            <div className="card-header bg-info text-white">
+              <h6 className="mb-0">💡 Collection Efficiency</h6>
+            </div>
+            <div className="card-body">
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <span>Overall Performance</span>
+                <span className={`badge ${
+                  summary.overall_collection_rate >= 80 ? 'bg-success' : 
+                  summary.overall_collection_rate >= 60 ? 'bg-warning' : 
+                  'bg-danger'
+                }`}>
+                  {summary.overall_collection_rate >= 80 ? 'Excellent' : 
+                   summary.overall_collection_rate >= 60 ? 'Good' : 
+                   'Needs Improvement'}
+                </span>
+              </div>
+              <div className="progress mb-2" style={{height: '25px'}}>
+                <div 
+                  className={`progress-bar ${
+                    summary.overall_collection_rate >= 80 ? 'bg-success' : 
+                    summary.overall_collection_rate >= 60 ? 'bg-warning' : 
+                    'bg-danger'
+                  }`}
+                  role="progressbar"
+                  style={{width: `${summary.overall_collection_rate}%`}}
+                  aria-valuenow={summary.overall_collection_rate}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                >
+                  {formatPercent(summary.overall_collection_rate)}
+                </div>
+              </div>
+              <small className="text-muted">
+                {summary.collected_sales_count} of {summary.total_credit_sales_count} credit sales collected
+              </small>
+            </div>
+          </div>
+        </div>
+        <div className="col-md-6">
+          <div className="card">
+            <div className="card-header bg-warning text-dark">
+              <h6 className="mb-0">⏰ Collection Speed</h6>
+            </div>
+            <div className="card-body text-center">
+              <h2 className="mb-2">{formatDays(summary.average_collection_period_days)}</h2>
+              <p className="text-muted mb-3">Average time to collect payment</p>
+              <div className="row">
+                <div className="col-6">
+                  <small className="text-muted d-block">Retail</small>
+                  <strong>{formatDays(summary.retail.average_collection_period_days)}</strong>
+                </div>
+                <div className="col-6">
+                  <small className="text-muted d-block">Wholesale</small>
+                  <strong>{formatDays(summary.wholesale.average_collection_period_days)}</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </ReportContainer>
   );
 };

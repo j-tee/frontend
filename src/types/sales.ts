@@ -82,6 +82,56 @@ export interface Payment {
   }
 }
 
+// Accounts Receivable (AR) - New dedicated AR tracking system
+export interface AccountsReceivable {
+  id: UUID
+  sale: UUID
+  customer: UUID
+  
+  // Amounts
+  original_amount: number
+  amount_paid: number
+  amount_outstanding: number
+  
+  // Status and aging
+  status: 'PENDING' | 'PARTIAL' | 'OVERDUE' | 'PAID'
+  due_date: string | null
+  days_outstanding: number
+  aging_category: 'CURRENT' | '1-30_DAYS' | '31-60_DAYS' | '61-90_DAYS' | 'OVER_90_DAYS'
+  
+  // Computed properties
+  is_overdue: boolean
+  payment_percentage: number
+  days_overdue: number | null
+  
+  // Reminder tracking
+  last_reminder_sent: string | null
+  reminder_count: number
+  
+  // Assignment
+  assigned_to: UUID | null
+  assigned_to_name: string | null
+  
+  // Metadata
+  created_at: string
+  updated_at: string
+}
+
+// AR Payment - Payments against AR (separate from Payment model)
+export interface ARPayment {
+  id: UUID
+  accounts_receivable: UUID
+  amount: number
+  payment_method: 'CASH' | 'MOMO' | 'CARD' | 'BANK_TRANSFER' | 'CHECK' // No CREDIT option
+  payment_date: string
+  transaction_id: string | null
+  notes: string | null
+  received_by: UUID | null
+  received_by_name: string | null
+  created_at: string
+  updated_at: string
+}
+
 // Sale
 export interface Sale {
   id: UUID
@@ -108,9 +158,14 @@ export interface Sale {
   
   // Payment
   payment_type: PaymentType
+  is_credit_sale: boolean // NEW: Flag to route to payment vs credit flow
   payments: Payment[]
   payment_status: 'unpaid' | 'partial' | 'paid' // NEW: Computed payment status
   payment_completion_percentage: number // NEW: 0-100 payment completion
+  
+  // Accounts Receivable (for credit sales)
+  accounts_receivable?: AccountsReceivable // Only present if is_credit_sale=true
+  ar_payments?: ARPayment[] // AR payment history for credit sales
   
   // Metadata
   notes: string | null
