@@ -575,22 +575,17 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
         return
       }
 
-      // In multi-storefront mode, determine which storefront this product is from
+      // In multi-storefront mode, use the current storefront (not the first one with stock)
       let preferredStorefrontId: UUID | undefined
-      if (multiStorefront) {
+      if (multiStorefront && storefrontId) {
+        preferredStorefrontId = storefrontId
         const product = catalog.find((item) => item.id === productId)
-        if (product && product.locations && product.locations.length > 0) {
-          // Use the first storefront that has this product
-          const primaryLocation = product.locations.find(loc => loc.available_quantity > 0)
-          if (primaryLocation) {
-            preferredStorefrontId = primaryLocation.storefront_id
-            console.log(`🏪 Creating cart for storefront: ${primaryLocation.storefront_name}`, {
-              productId,
-              productName: product.name,
-              storefrontId: preferredStorefrontId,
-              storefrontName: primaryLocation.storefront_name
-            })
-          }
+        if (product) {
+          console.log(`🏪 Creating cart for current storefront`, {
+            productId,
+            productName: product.name,
+            storefrontId: preferredStorefrontId
+          })
         }
       }
 

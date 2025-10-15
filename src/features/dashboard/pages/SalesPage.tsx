@@ -440,6 +440,14 @@ export default function SalesPage() {
     // Use preferred storefront if provided (multi-storefront mode), otherwise use current location
     const targetStorefront = preferredStorefrontId || currentLocation?.id
     
+    console.log('🔍 startFreshSaleSession called:', {
+      preferredStorefrontId,
+      currentLocationId: currentLocation?.id,
+      currentLocationName: storefronts.find(s => s.id === currentLocation?.id)?.name,
+      targetStorefront,
+      targetStorefrontName: storefronts.find(s => s.id === targetStorefront)?.name
+    })
+    
     if (!targetStorefront) {
       setCustomerError('Please select a storefront before starting a sale.')
       return null
@@ -462,8 +470,10 @@ export default function SalesPage() {
     try {
       console.log('🛒 Creating sale with storefront:', {
         targetStorefront,
+        targetStorefrontName: storefronts.find(s => s.id === targetStorefront)?.name,
         preferredStorefrontId,
         currentLocationId: currentLocation?.id,
+        currentLocationName: storefronts.find(s => s.id === currentLocation?.id)?.name,
         saleType,
         customerId
       })
@@ -494,7 +504,7 @@ export default function SalesPage() {
       setCustomerError('Unable to start a new sale. Please try again.')
       return null
     }
-  }, [currentLocation, customerOptions, dispatch, getOrCreateWalkInCustomer, saleType, selectedCustomer])
+  }, [currentLocation, customerOptions, dispatch, getOrCreateWalkInCustomer, saleType, selectedCustomer, storefronts])
 
   const prepareFreshSale = useCallback(async (options?: { startNewDraft?: boolean; clearCustomer?: boolean }) => {
     if (initializingSaleRef.current) {

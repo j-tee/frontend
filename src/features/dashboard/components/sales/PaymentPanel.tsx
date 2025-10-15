@@ -62,16 +62,19 @@ export function PaymentPanel({ cart, onComplete, onCancel, customerId }: Payment
 
     setProcessing(true)
     
+    // For credit sales, don't send any payments (backend handles AR creation)
+    const paymentData = isCredit ? [] : [
+      {
+        paymentMethod: paymentMethod,
+        amountPaid: paymentAmount,
+      },
+    ]
+    
     const result = await dispatch(
       completeSale({
         saleId: cart.id,
         paymentType: paymentMethod,
-        payments: [
-          {
-            paymentMethod: paymentMethod,
-            amountPaid: paymentAmount,
-          },
-        ],
+        payments: paymentData,
         customerId: checkoutCustomerId ?? undefined,
       })
     )
