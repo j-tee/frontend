@@ -370,6 +370,8 @@ export default function SalesPage() {
   }, [currentCartRef, dispatch])
 
   const getOrCreateWalkInCustomer = useCallback(async () => {
+    const WALK_IN_PHONE = '+233000000000'
+    
     const setWalkInState = (option: { id: UUID; name: string }) => {
       setSelectedCustomer(option.id)
       setCheckoutCustomerId(option.id)
@@ -385,8 +387,9 @@ export default function SalesPage() {
       return setWalkInState(existingOption)
     }
 
+    // Try to find walk-in customer by name first
     try {
-      const response = await listCustomers({ search: WALK_IN_NAME, page_size: 1 })
+      const response = await listCustomers({ search: WALK_IN_NAME, page_size: 10 })
       const match = response.results.find(
         (customer) => normalizeCustomerName(customer.name) === WALK_IN_NAME_NORMALIZED,
       )
@@ -397,13 +400,29 @@ export default function SalesPage() {
         return setWalkInState(option)
       }
     } catch (searchError) {
-      console.warn('Failed to search for walk-in customer', searchError)
+      console.warn('Failed to search for walk-in customer by name', searchError)
     }
 
+    // Try to find by phone number (unique constraint is business + phone)
+    try {
+      const phoneResponse = await listCustomers({ search: WALK_IN_PHONE, page_size: 10 })
+      const phoneMatch = phoneResponse.results.find((customer) => customer.phone === WALK_IN_PHONE)
+
+      if (phoneMatch) {
+        console.log('Found existing walk-in customer by phone:', phoneMatch)
+        const option = { id: phoneMatch.id, name: phoneMatch.name }
+        upsertCustomerOption(option)
+        return setWalkInState(option)
+      }
+    } catch (phoneSearchError) {
+      console.warn('Failed to search for walk-in customer by phone', phoneSearchError)
+    }
+
+    // If not found, try to create new walk-in customer
     try {
       const customer = await createCustomerService({
         name: WALK_IN_NAME,
-        phone: '+233000000000',
+        phone: WALK_IN_PHONE,
         type: 'RETAIL',
         notes: 'Auto-generated walk-in customer',
         business: currentBusiness?.id,
@@ -413,15 +432,32 @@ export default function SalesPage() {
       upsertCustomerOption(option)
       return setWalkInState(option)
     } catch (err) {
-      console.error('Failed to prepare walk-in customer', err)
+      console.error('Failed to create walk-in customer', err)
 
+      // If creation failed (likely due to unique constraint), search one more time
       if (isAxiosError(err) && err.response?.status === 400) {
+        const errorData = err.response?.data
+        console.log('Walk-in customer creation failed, searching again...', errorData)
+        
         try {
-          const retry = await listCustomers({ search: WALK_IN_NAME, page_size: 1 })
-          const match = retry.results.find(
+          // Search by both name and phone
+          const [nameResults, phoneResults] = await Promise.all([
+            listCustomers({ search: WALK_IN_NAME, page_size: 10 }).catch(() => ({ results: [] })),
+            listCustomers({ search: WALK_IN_PHONE, page_size: 10 }).catch(() => ({ results: [] })),
+          ])
+          
+          // Try to find by name first
+          let match = nameResults.results.find(
             (customer) => normalizeCustomerName(customer.name) === WALK_IN_NAME_NORMALIZED,
           )
+          
+          // If not found by name, try by phone
+          if (!match) {
+            match = phoneResults.results.find((customer) => customer.phone === WALK_IN_PHONE)
+          }
+          
           if (match) {
+            console.log('Found existing walk-in customer on retry:', match)
             const option = { id: match.id, name: match.name }
             upsertCustomerOption(option)
             return setWalkInState(option)
