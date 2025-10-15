@@ -5,12 +5,13 @@ import { ReportContainer } from '../components/ReportContainer';
 import { SummaryCard } from '../components/SummaryCard';
 import { DateRangeFilter } from '../components/DateRangeFilter';
 import { ReportStates } from '../components/ReportStates';
-import { useBusinessContext } from '../../../contexts/BusinessContext';
+import { useCurrency } from '../../../hooks/useCurrency';
 
 const ProductPerformancePage: React.FC = () => {
-  const { currentBusiness } = useBusinessContext();
+  const { formatCurrency } = useCurrency();
+  
   const [data, setData] = useState<ProductPerformanceResponse | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
   const [startDate, setStartDate] = useState(() => {
@@ -27,14 +28,11 @@ const ProductPerformancePage: React.FC = () => {
   const [saleType, setSaleType] = useState<string>('');
 
   const fetchData = async () => {
-    if (!currentBusiness?.id) return;
-    
     setLoading(true);
     setError(null);
     
     try {
       const filters: ReportFilters = {
-        business_id: currentBusiness.id,
         start_date: startDate,
         end_date: endDate,
       };
@@ -54,14 +52,12 @@ const ProductPerformancePage: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, [startDate, endDate, category, saleType, currentBusiness?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startDate, endDate, category, saleType]);
 
   const handleExportCSV = async () => {
-    if (!currentBusiness?.id) return;
-    
     try {
       const filters: ReportFilters = {
-        business_id: currentBusiness.id,
         start_date: startDate,
         end_date: endDate,
       };
@@ -77,11 +73,8 @@ const ProductPerformancePage: React.FC = () => {
   };
 
   const handleExportPDF = async () => {
-    if (!currentBusiness?.id) return;
-    
     try {
       const filters: ReportFilters = {
-        business_id: currentBusiness.id,
         start_date: startDate,
         end_date: endDate,
       };
@@ -94,13 +87,6 @@ const ProductPerformancePage: React.FC = () => {
       console.error('PDF export failed:', err);
       alert('Failed to export PDF. Please try again.');
     }
-  };
-
-  const formatCurrency = (value: number): string => {
-    return new Intl.NumberFormat('en-PH', {
-      style: 'currency',
-      currency: 'PHP',
-    }).format(value);
   };
 
   const formatNumber = (value: number): string => {
