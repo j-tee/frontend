@@ -630,44 +630,46 @@ export default function SalesPage() {
     void prepareFreshSale()
   }, [activeTab, currentCart, currentLocation, prepareFreshSale])
 
+  // Load customers and ensure walk-in customer exists as default
   useEffect(() => {
     let isMounted = true
 
-    const loadCustomers = async () => {
+    const loadCustomersAndInitializeWalkIn = async () => {
       setCustomersLoading(true)
       setCustomerError(null)
       try {
+        // First, load existing customers
         const response = await listCustomers({ page_size: 50 })
         if (!isMounted) return
+        
         const mapped: CustomerOption[] = response.results.map((customer) => ({
           id: customer.id,
           name: customer.name,
         }))
         setCustomerOptions(mapped)
+        
+        // Check if walk-in customer exists in the list
         const walkInOption = mapped.find(
           (option) => normalizeCustomerName(option.name) === WALK_IN_NAME_NORMALIZED
         )
+        
         if (walkInOption) {
-          let assigned = false
+          // Walk-in customer exists, set it as default
+          console.log('✅ Found existing walk-in customer:', walkInOption)
           setSelectedCustomer((prev) => {
-            if (prev) {
-              return prev
-            }
-            assigned = true
+            if (prev) return prev // Don't override user selection
             return walkInOption.id
           })
-
-          let checkoutAssigned = false
           setCheckoutCustomerId((prev) => {
-            if (prev) {
-              return prev
-            }
-            checkoutAssigned = true
+            if (prev) return prev
             return walkInOption.id
           })
-
-          if (assigned || checkoutAssigned) {
-            dispatch(setCurrentCartCustomer({ customerId: walkInOption.id, customerName: walkInOption.name }))
+        } else {
+          // Walk-in customer doesn't exist, create it
+          console.log('🚀 Walk-in customer not found, creating...')
+          const walkInCustomer = await getOrCreateWalkInCustomer()
+          if (walkInCustomer && isMounted) {
+            console.log('✅ Walk-in customer created and set as default:', walkInCustomer)
           }
         }
       } catch (err) {
@@ -682,12 +684,12 @@ export default function SalesPage() {
       }
     }
 
-    void loadCustomers()
+    void loadCustomersAndInitializeWalkIn()
 
     return () => {
       isMounted = false
     }
-  }, [dispatch])
+  }, [dispatch, getOrCreateWalkInCustomer])
 
   // Sync selected customer TO cart when cart is created (user selected customer before adding products)
   useEffect(() => {
