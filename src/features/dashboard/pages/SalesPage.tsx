@@ -501,6 +501,13 @@ export default function SalesPage() {
       const walkIn = await getOrCreateWalkInCustomer()
       customerId = walkIn?.id
       customerName = walkIn?.name ?? null
+      
+      // If walk-in customer creation failed, don't proceed
+      if (!customerId) {
+        console.error('❌ Cannot create sale: Walk-in customer creation failed')
+        setCustomerError('Unable to prepare a walk-in customer. Please try again or create a customer manually.')
+        return null
+      }
     }
 
     try {
