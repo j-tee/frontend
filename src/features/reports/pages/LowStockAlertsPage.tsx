@@ -1,29 +1,43 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Download, RefreshCw, AlertTriangle, Package, Clock, ArrowLeft } from 'lucide-react';
+import { Download, RefreshCw, AlertTriangle, Package, Clock, ArrowLeft, Search, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { inventoryReportsService } from '../../../services/reportsService';
 import type { LowStockAlertsResponse, LowStockAlert } from '../../../types/reports';
+import { useCurrency } from '../../../hooks/useCurrency';
 import { ReportContainer } from '../components/ReportContainer';
 import { SummaryCard } from '../components/SummaryCard';
 import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates';
 
 const LowStockAlertsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { formatCurrency } = useCurrency();
   const [data, setData] = useState<LowStockAlertsResponse['data'] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Filters
-  const [warehouseId] = useState<string>('');
-  const [categoryId] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [warehouseId, setWarehouseId] = useState<string>('');
+  const [categoryId, setCategoryId] = useState<string>('');
   const [urgency, setUrgency] = useState<'critical' | 'warning' | 'watch' | ''>('');
   const [sortBy, setSortBy] = useState<'urgency' | 'days_remaining' | 'value'>('urgency');
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const params: Record<string, unknown> = { sort_by: sortBy };
+      const params: Record<string, unknown> = { 
+        sort_by: sortBy,
+        page: currentPage,
+        page_size: pageSize
+      };
+      if (searchTerm) params.search = searchTerm;
       if (warehouseId) params.warehouse_id = warehouseId;
       if (categoryId) params.category_id = categoryId;
       if (urgency) params.urgency = urgency;
@@ -33,6 +47,11 @@ const LowStockAlertsPage: React.FC = () => {
       // Handle nested API response structure
       if (response.success && response.data) {
         setData(response.data);
+        // Update pagination metadata
+        if (response.meta?.pagination) {
+          setTotalPages(response.meta.pagination.total_pages);
+          setTotalCount(response.meta.pagination.total_count);
+        }
       } else {
         throw new Error('Invalid response structure');
       }
@@ -41,17 +60,23 @@ const LowStockAlertsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [warehouseId, categoryId, urgency, sortBy]);
+  }, [searchTerm, warehouseId, categoryId, urgency, sortBy, currentPage, pageSize]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, warehouseId, categoryId, urgency, sortBy]);
+
   const handleExport = async () => {
     try {
       await inventoryReportsService.exportLowStockAlertsCSV({
-        warehouse_id: warehouseId,
-        category_id: categoryId,
+        search: searchTerm || undefined,
+        warehouse_id: warehouseId || undefined,
+        category_id: categoryId || undefined,
         urgency: urgency || undefined,
         sort_by: sortBy
       });
@@ -60,12 +85,67 @@ const LowStockAlertsPage: React.FC = () => {
     }
   };
 
-  const formatCurrency = (amount: number | null | undefined) => {
-    if (amount === null || amount === undefined || isNaN(amount)) return '$0.00';
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setWarehouseId('');
+    setCategoryId('');
+    setUrgency('');
+    setSortBy('urgency');
+    setCurrentPage(1);
+  };
+
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handlePageSizeChange = (newPageSize: number) => {
+    setPageSize(newPageSize);
+    setCurrentPage(1); // Reset to first page
+  };
+
+  // Generate page numbers for pagination
+  const getPageNumbers = () => {
+    const pages: number[] = [];
+    const maxPagesToShow = 5;
+    
+    if (totalPages <= maxPagesToShow) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      // Always show first page
+      pages.push(1);
+      
+      // Calculate range around current page
+      let start = Math.max(2, currentPage - 1);
+      let end = Math.min(totalPages - 1, currentPage + 1);
+      
+      // Adjust if near the start or end
+      if (currentPage <= 3) {
+        end = Math.min(4, totalPages - 1);
+      } else if (currentPage >= totalPages - 2) {
+        start = Math.max(2, totalPages - 3);
+      }
+      
+      // Add ellipsis or pages
+      if (start > 2) {
+        pages.push(-1); // Ellipsis
+      }
+      
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+      
+      if (end < totalPages - 1) {
+        pages.push(-1); // Ellipsis
+      }
+      
+      // Always show last page
+      pages.push(totalPages);
+    }
+    
+    return pages;
   };
 
   const formatNumber = (value: number | null | undefined): string => {
@@ -174,8 +254,78 @@ const LowStockAlertsPage: React.FC = () => {
 
       {/* Filters */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Filters</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-2">
+            <Filter className="w-5 h-5 text-gray-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Filters</h3>
+          </div>
+          <button
+            onClick={handleClearFilters}
+            className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+          >
+            Clear All
+          </button>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Search */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Search
+            </label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Product name or SKU..."
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          {/* Warehouse Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Warehouse
+            </label>
+            <select
+              value={warehouseId}
+              onChange={(e) => setWarehouseId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">All Warehouses</option>
+              {/* Warehouses will be populated from data if available */}
+              {data?.by_warehouse && Object.entries(data.by_warehouse).map(([id, warehouse]) => (
+                <option key={`low-stock-warehouse-${id}`} value={id}>
+                  {warehouse.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Category Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Category
+            </label>
+            <select
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">All Categories</option>
+              {/* Categories will be populated from data if available */}
+              {data?.by_category && Object.entries(data.by_category).map(([id, category]) => (
+                <option key={`low-stock-category-${id}`} value={id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          
+          {/* Urgency Level */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Urgency Level
@@ -186,25 +336,30 @@ const LowStockAlertsPage: React.FC = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">All Levels</option>
-              <option value="critical">Critical</option>
-              <option value="warning">Warning</option>
-              <option value="watch">Watch</option>
+              <option value="critical">🔴 Critical</option>
+              <option value="warning">🟠 Warning</option>
+              <option value="watch">🟡 Watch</option>
             </select>
           </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Sort By
-            </label>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as 'urgency' | 'days_remaining' | 'value')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="urgency">Urgency</option>
-              <option value="days_remaining">Days Remaining</option>
-              <option value="value">Restock Value</option>
-            </select>
+        </div>
+
+        {/* Sort By */}
+        <div className="mt-4 pt-4 border-t border-gray-200">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Sort By
+              </label>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as 'urgency' | 'days_remaining' | 'value')}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="urgency">Urgency (High to Low)</option>
+                <option value="days_remaining">Days Remaining (Low to High)</option>
+                <option value="value">Restock Value (High to Low)</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -212,9 +367,15 @@ const LowStockAlertsPage: React.FC = () => {
       {/* Alerts Table */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-          <h3 className="text-lg font-semibold text-gray-900">
-            Low Stock Alerts ({alerts.length})
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-900">
+              Low Stock Alerts ({formatNumber(totalCount)})
+            </h3>
+            <div className="text-sm text-gray-600">
+              Showing {alerts.length === 0 ? 0 : (currentPage - 1) * pageSize + 1} to{' '}
+              {Math.min(currentPage * pageSize, totalCount)} of {formatNumber(totalCount)} alerts
+            </div>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -248,8 +409,8 @@ const LowStockAlertsPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {alerts.map((alert: LowStockAlert) => (
-                <tr key={`${alert.product_id}-${alert.warehouse_id}`} className="hover:bg-gray-50">
+              {alerts.map((alert: LowStockAlert, index: number) => (
+                <tr key={`alert-${alert.product_id}-${alert.warehouse_id}-${index}`} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border-2 ${getUrgencyColor(alert.urgency)}`}>
                       {getUrgencyIcon(alert.urgency)} {alert.urgency.toUpperCase()}
@@ -304,6 +465,99 @@ const LowStockAlertsPage: React.FC = () => {
             <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500">No low stock alerts</p>
             <p className="text-sm text-gray-400 mt-2">All items are well-stocked!</p>
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {alerts.length > 0 && totalPages > 1 && (
+          <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+            <div className="flex flex-col sm:flex-row items-center justify-between space-y-3 sm:space-y-0">
+              {/* Page Size Selector */}
+              <div className="flex items-center space-x-2">
+                <label className="text-sm text-gray-700">Items per page:</label>
+                <select
+                  value={pageSize}
+                  onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                  className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+
+              {/* Page Navigation */}
+              <div className="flex items-center space-x-2">
+                {/* First Page */}
+                <button
+                  onClick={() => handlePageChange(1)}
+                  disabled={currentPage === 1}
+                  className="p-2 border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="First page"
+                >
+                  <ChevronsLeft className="w-4 h-4" />
+                </button>
+
+                {/* Previous Page */}
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="p-2 border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Previous page"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+
+                {/* Page Numbers */}
+                <div className="hidden sm:flex items-center space-x-1">
+                  {getPageNumbers().map((page, index) => (
+                    page === -1 ? (
+                      <span key={`low-stock-ellipsis-${index}`} className="px-3 py-1 text-gray-500">
+                        ...
+                      </span>
+                    ) : (
+                      <button
+                        key={`low-stock-page-${page}`}
+                        onClick={() => handlePageChange(page)}
+                        className={`px-3 py-1 rounded-lg text-sm font-medium ${
+                          currentPage === page
+                            ? 'bg-blue-600 text-white'
+                            : 'text-gray-700 hover:bg-gray-100'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    )
+                  ))}
+                </div>
+
+                {/* Mobile: Current Page Display */}
+                <div className="sm:hidden px-3 py-1 text-sm text-gray-700">
+                  Page {currentPage} of {totalPages}
+                </div>
+
+                {/* Next Page */}
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="p-2 border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Next page"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+
+                {/* Last Page */}
+                <button
+                  onClick={() => handlePageChange(totalPages)}
+                  disabled={currentPage === totalPages}
+                  className="p-2 border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Last page"
+                >
+                  <ChevronsRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

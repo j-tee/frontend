@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Download, RefreshCw, Activity, TrendingUp, TrendingDown, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Download, RefreshCw, Activity, TrendingUp, TrendingDown, ArrowRight, ArrowLeft, Search, Filter, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { inventoryReportsService } from '../../../services/reportsService';
 import type { StockMovementsResponse, StockMovement } from '../../../types/reports';
@@ -7,10 +7,13 @@ import { ReportContainer } from '../components/ReportContainer';
 import { SummaryCard } from '../components/SummaryCard';
 import { DateRangeFilter } from '../components/DateRangeFilter';
 import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates';
+import { useCurrency } from '../../../hooks/useCurrency';
 
 const StockMovementsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { formatCurrency } = useCurrency();
   const [data, setData] = useState<StockMovementsResponse['data'] | null>(null);
+  const [meta, setMeta] = useState<StockMovementsResponse['meta'] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,11 +26,22 @@ const StockMovementsPage: React.FC = () => {
   const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
 
   // Filters
-  const [productId] = useState<string>('');
-  const [warehouseId] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [warehouseId, setWarehouseId] = useState<string>('');
+  const [categoryId, setCategoryId] = useState<string>('');
   const [movementType, setMovementType] = useState<'in' | 'out' | 'adjustment' | 'transfer' | ''>('');
+  const [referenceType, setReferenceType] = useState<'purchase_order' | 'sale' | 'transfer' | 'adjustment' | ''>('');
+  
+  // Pagination
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(50);
+  const [pageSize, setPageSize] = useState(20);
+
+  // Sort
+  const [sortBy, setSortBy] = useState<'date' | 'quantity' | 'product' | 'type'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  // UI State
+  const [showFilters, setShowFilters] = useState(true);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -37,15 +51,20 @@ const StockMovementsPage: React.FC = () => {
         start_date: startDate,
         end_date: endDate,
         page,
-        page_size: pageSize
+        page_size: pageSize,
+        sort_by: sortBy,
+        sort_order: sortOrder
       };
-      if (productId) params.product_id = productId;
+      if (searchQuery.trim()) params.search = searchQuery.trim();
       if (warehouseId) params.warehouse_id = warehouseId;
+      if (categoryId) params.category_id = categoryId;
       if (movementType) params.movement_type = movementType;
+      if (referenceType) params.reference_type = referenceType;
 
       const response = await inventoryReportsService.getStockMovements(params);
       if (response.success && response.data) {
         setData(response.data);
+        setMeta(response.meta || null);
       } else {
         throw new Error('Invalid response structure');
       }
@@ -54,7 +73,7 @@ const StockMovementsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate, productId, warehouseId, movementType, page, pageSize]);
+  }, [startDate, endDate, searchQuery, warehouseId, categoryId, movementType, referenceType, page, pageSize, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchData();
@@ -65,14 +84,29 @@ const StockMovementsPage: React.FC = () => {
       await inventoryReportsService.exportStockMovementsCSV({
         start_date: startDate,
         end_date: endDate,
-        product_id: productId,
-        warehouse_id: warehouseId,
-        movement_type: movementType || undefined
+        search: searchQuery.trim() || undefined,
+        warehouse_id: warehouseId || undefined,
+        category_id: categoryId || undefined,
+        movement_type: movementType || undefined,
+        reference_type: referenceType || undefined
       });
     } catch (err) {
       alert('Export failed: ' + (err as Error).message);
     }
   };
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setWarehouseId('');
+    setCategoryId('');
+    setMovementType('');
+    setReferenceType('');
+    setPage(1);
+  };
+
+  const hasActiveFilters = Boolean(
+    searchQuery || warehouseId || categoryId || movementType || referenceType
+  );
 
   const getMovementIcon = (type: string) => {
     switch (type) {
@@ -111,11 +145,62 @@ const StockMovementsPage: React.FC = () => {
 
   if (loading && !data) return <LoadingState />;
   if (error) return <ErrorState error={error} onRetry={fetchData} />;
-  if (!data || !data.summary || !data.movements || !data.pagination) return <EmptyState />;
+  
+  // Support both old and new pagination formats
+  const pagination = meta?.pagination || (data as any)?.pagination;
+  if (!data || !data.summary || !data.movements || !pagination) return <EmptyState />;
 
   const summary = data.summary;
   const movements = data.movements;
-  const pagination = data.pagination;
+
+  // Build warehouse options from by_warehouse grouping
+  const warehouseOptions = data.by_warehouse
+    ? Object.entries(data.by_warehouse).map(([id, info]) => ({
+        id,
+        name: info.name,
+        movements: info.movements
+      }))
+    : [];
+
+  // Build category options from by_category grouping
+  const categoryOptions = data.by_category
+    ? Object.entries(data.by_category).map(([id, info]) => ({
+        id,
+        name: info.name,
+        movements: info.movements
+      }))
+    : [];
+
+  // Pagination helpers
+  const totalPages = pagination.total_pages || 0;
+  const totalCount = pagination.total_count || pagination.total || 0;
+  const currentPage = pagination.page || page;
+
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    const maxVisible = 5;
+
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 4; i++) pages.push(i);
+        pages.push('...');
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1);
+        pages.push('...');
+        for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+      } else {
+        pages.push(1);
+        pages.push('...');
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
+        pages.push('...');
+        pages.push(totalPages);
+      }
+    }
+    return pages;
+  };
 
   return (
     <ReportContainer
@@ -199,28 +284,210 @@ const StockMovementsPage: React.FC = () => {
 
       {/* Filters */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Filters</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Movement Type
-            </label>
-            <select
-              value={movementType}
-              onChange={(e) => {
-                setMovementType(e.target.value as '' | 'in' | 'out' | 'adjustment' | 'transfer');
-                setPage(1);
-              }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-2">
+            <Filter className="w-5 h-5 text-gray-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Filters</h3>
+            {hasActiveFilters && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                Active
+              </span>
+            )}
+          </div>
+          <div className="flex items-center space-x-2">
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="inline-flex items-center px-3 py-1.5 text-sm text-red-700 hover:text-red-800"
+              >
+                <X className="w-4 h-4 mr-1" />
+                Clear All
+              </button>
+            )}
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="inline-flex items-center px-3 py-1.5 text-sm text-gray-700 hover:text-gray-900"
             >
-              <option value="">All Types</option>
-              <option value="in">Stock In</option>
-              <option value="out">Stock Out</option>
-              <option value="adjustment">Adjustment</option>
-              <option value="transfer">Transfer</option>
-            </select>
+              {showFilters ? (
+                <>
+                  <ChevronUp className="w-4 h-4 mr-1" />
+                  Hide
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="w-4 h-4 mr-1" />
+                  Show
+                </>
+              )}
+            </button>
           </div>
         </div>
+
+        {showFilters && (
+          <div className="space-y-4">
+            {/* Search */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Search Product
+              </label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      setPage(1);
+                      fetchData();
+                    }
+                  }}
+                  placeholder="Search by product name or SKU..."
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => {
+                      setSearchQuery('');
+                      setPage(1);
+                    }}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Filter Dropdowns */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Warehouse Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Warehouse
+                </label>
+                <select
+                  value={warehouseId}
+                  onChange={(e) => {
+                    setWarehouseId(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Warehouses</option>
+                  {warehouseOptions.map((warehouse) => (
+                    <option key={`warehouse-${warehouse.id}`} value={warehouse.id}>
+                      {warehouse.name} ({warehouse.movements})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Category Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Category
+                </label>
+                <select
+                  value={categoryId}
+                  onChange={(e) => {
+                    setCategoryId(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Categories</option>
+                  {categoryOptions.map((category) => (
+                    <option key={`category-${category.id}`} value={category.id}>
+                      {category.name} ({category.movements})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Movement Type Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Movement Type
+                </label>
+                <select
+                  value={movementType}
+                  onChange={(e) => {
+                    setMovementType(e.target.value as '' | 'in' | 'out' | 'adjustment' | 'transfer');
+                    setPage(1);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Types</option>
+                  <option value="in">Stock In</option>
+                  <option value="out">Stock Out</option>
+                  <option value="adjustment">Adjustment</option>
+                  <option value="transfer">Transfer</option>
+                </select>
+              </div>
+
+              {/* Reference Type Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Reference Type
+                </label>
+                <select
+                  value={referenceType}
+                  onChange={(e) => {
+                    setReferenceType(e.target.value as '' | 'purchase_order' | 'sale' | 'transfer' | 'adjustment');
+                    setPage(1);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All References</option>
+                  <option value="purchase_order">Purchase Order</option>
+                  <option value="sale">Sale</option>
+                  <option value="transfer">Transfer</option>
+                  <option value="adjustment">Adjustment</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Sort Options */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-gray-200">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Sort By
+                </label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => {
+                    setSortBy(e.target.value as 'date' | 'quantity' | 'product' | 'type');
+                    setPage(1);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="date">Date</option>
+                  <option value="quantity">Quantity</option>
+                  <option value="product">Product Name</option>
+                  <option value="type">Movement Type</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Sort Order
+                </label>
+                <select
+                  value={sortOrder}
+                  onChange={(e) => {
+                    setSortOrder(e.target.value as 'asc' | 'desc');
+                    setPage(1);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="desc">Descending</option>
+                  <option value="asc">Ascending</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Movements Table */}
@@ -341,30 +608,86 @@ const StockMovementsPage: React.FC = () => {
       </div>
 
       {/* Pagination */}
-      {pagination.total_pages > 1 && (
-        <div className="mt-6 flex items-center justify-between">
-          <div className="text-sm text-gray-700">
-            Showing {((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, pagination.total)} of{' '}
-            {formatNumber(pagination.total)} movements
-          </div>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setPage(Math.max(1, page - 1))}
-              disabled={page === 1}
-              className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Previous
-            </button>
-            <span className="text-sm text-gray-700">
-              Page {page} of {pagination.total_pages}
-            </span>
-            <button
-              onClick={() => setPage(Math.min(pagination.total_pages, page + 1))}
-              disabled={page === pagination.total_pages}
-              className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Next
-            </button>
+      {totalPages > 1 && (
+        <div className="mt-6 bg-white rounded-lg border border-gray-200 p-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            {/* Page Size Selector */}
+            <div className="flex items-center space-x-2">
+              <label className="text-sm text-gray-700">Items per page:</label>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+
+            {/* Page Info */}
+            <div className="text-sm text-gray-700">
+              Showing {Math.min(((currentPage - 1) * pageSize) + 1, totalCount)} to{' '}
+              {Math.min(currentPage * pageSize, totalCount)} of {formatNumber(totalCount)} movements
+            </div>
+
+            {/* Page Navigation */}
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setPage(1)}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                First
+              </button>
+              <button
+                onClick={() => setPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+
+              {/* Page Numbers */}
+              <div className="hidden sm:flex items-center space-x-1">
+                {getPageNumbers().map((pageNum, idx) => (
+                  pageNum === '...' ? (
+                    <span key={`ellipsis-${idx}`} className="px-2 text-gray-500">...</span>
+                  ) : (
+                    <button
+                      key={`page-${pageNum}`}
+                      onClick={() => setPage(pageNum as number)}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                        currentPage === pageNum
+                          ? 'bg-blue-600 text-white'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  )
+                ))}
+              </div>
+
+              <button
+                onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+              <button
+                onClick={() => setPage(totalPages)}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Last
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -3,6 +3,7 @@ import { Download, RefreshCw, Warehouse, TrendingUp, Package, AlertCircle, Arrow
 import { useNavigate } from 'react-router-dom';
 import { inventoryReportsService } from '../../../services/reportsService';
 import type { WarehouseAnalyticsResponse, WarehouseAnalytics } from '../../../types/reports';
+import { useCurrency } from '../../../hooks/useCurrency';
 import { ReportContainer } from '../components/ReportContainer';
 import { SummaryCard } from '../components/SummaryCard';
 import { DateRangeFilter } from '../components/DateRangeFilter';
@@ -10,6 +11,7 @@ import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates
 
 const WarehouseAnalyticsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { formatCurrency } = useCurrency();
   const [data, setData] = useState<WarehouseAnalyticsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,13 +61,6 @@ const WarehouseAnalyticsPage: React.FC = () => {
     } catch (err) {
       alert('Export failed: ' + (err as Error).message);
     }
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
   };
 
   const formatPercentage = (value: number) => {

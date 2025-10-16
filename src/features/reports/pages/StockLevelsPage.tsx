@@ -1,24 +1,34 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Download, RefreshCw, Package, ArrowLeft } from 'lucide-react';
+import { Download, RefreshCw, Package, ArrowLeft, Search, Filter, ChevronDown, ChevronUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { inventoryReportsService } from '../../../services/reportsService';
 import type { StockLevelsResponse, StockLevel } from '../../../types/reports';
+import { useCurrency } from '../../../hooks/useCurrency';
 import { ReportContainer } from '../components/ReportContainer';
 import { SummaryCard } from '../components/SummaryCard';
 import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates';
 
 const StockLevelsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { formatCurrency } = useCurrency();
   const [data, setData] = useState<StockLevelsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
 
   // Filters
-  const [warehouseId] = useState<string>('');
-  const [categoryId] = useState<string>('');
+  const [warehouseId, setWarehouseId] = useState<string>('');
+  const [categoryId, setCategoryId] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [stockStatus, setStockStatus] = useState<'in_stock' | 'low_stock' | 'out_of_stock' | 'overstock' | ''>('');
   const [includeValuation, setIncludeValuation] = useState(true);
   const [sortBy, setSortBy] = useState<'quantity' | 'value' | 'name'>('quantity');
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -26,14 +36,23 @@ const StockLevelsPage: React.FC = () => {
     try {
       const params: Record<string, unknown> = {
         include_valuation: includeValuation,
-        sort_by: sortBy
+        sort_by: sortBy,
+        page: currentPage,
+        page_size: pageSize
       };
       if (warehouseId) params.warehouse_id = warehouseId;
       if (categoryId) params.category_id = categoryId;
+      if (searchQuery) params.search = searchQuery;
       if (stockStatus) params.stock_status = stockStatus;
 
       const response = await inventoryReportsService.getStockLevels(params);
       setData(response);
+      
+      // Update pagination info from response metadata
+      if (response.meta?.pagination) {
+        setTotalPages(response.meta.pagination.total_pages || 1);
+        setTotalCount(response.meta.pagination.total_count || 0);
+      }
     } catch (err) {
       // Check for specific backend errors
       const error = err as { response?: { status?: number; data?: string }; message?: string };
@@ -55,17 +74,23 @@ const StockLevelsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [warehouseId, categoryId, stockStatus, includeValuation, sortBy]);
+  }, [warehouseId, categoryId, searchQuery, stockStatus, includeValuation, sortBy, currentPage, pageSize]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [warehouseId, categoryId, searchQuery, stockStatus]);
 
   const handleExport = async () => {
     try {
       await inventoryReportsService.exportStockLevelsCSV({
         warehouse_id: warehouseId,
         category_id: categoryId,
+        search: searchQuery || undefined,
         stock_status: stockStatus || undefined,
         include_valuation: includeValuation,
         sort_by: sortBy
@@ -73,14 +98,6 @@ const StockLevelsPage: React.FC = () => {
     } catch (err) {
       alert('Export failed: ' + (err as Error).message);
     }
-  };
-
-  const formatCurrency = (amount: number | null | undefined) => {
-    if (amount === null || amount === undefined || isNaN(amount)) return '$0.00';
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
   };
 
   const formatNumber = (value: number | null | undefined): string => {
@@ -107,6 +124,18 @@ const StockLevelsPage: React.FC = () => {
     return status.split('_').map(word => 
       word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ');
+  };
+
+  const toggleProductExpansion = (productId: string) => {
+    setExpandedProducts(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(productId)) {
+        newSet.delete(productId);
+      } else {
+        newSet.add(productId);
+      }
+      return newSet;
+    });
   };
 
   if (loading) return <LoadingState />;
@@ -172,8 +201,105 @@ const StockLevelsPage: React.FC = () => {
         </div>
       }
     >
+      {/* Filters Section */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-gray-900 flex items-center">
+            <Filter className="w-4 h-4 mr-2" />
+            Filters
+          </h3>
+          <button
+            onClick={() => {
+              setWarehouseId('');
+              setCategoryId('');
+              setSearchQuery('');
+              setStockStatus('');
+              setCurrentPage(1); // Reset to first page
+            }}
+            className="text-sm text-blue-600 hover:text-blue-800"
+          >
+            Clear All
+          </button>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Search Input */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Search Products
+            </label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Product name or SKU..."
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          {/* Warehouse Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Warehouse
+            </label>
+            <select
+              value={warehouseId}
+              onChange={(e) => setWarehouseId(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Warehouses</option>
+              {data?.data?.by_warehouse && Object.entries(data.data.by_warehouse).map(([id, warehouseData]) => (
+                <option key={`warehouse-${id}`} value={id}>
+                  {warehouseData.name} ({warehouseData.products} products)
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Category Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Category
+            </label>
+            <select
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Categories</option>
+              {data?.data?.by_category && Object.entries(data.data.by_category).map(([id, categoryData]) => (
+                <option key={`category-${id}`} value={id}>
+                  {categoryData.name} ({categoryData.products} products)
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Stock Status Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Stock Status
+            </label>
+            <select
+              value={stockStatus}
+              onChange={(e) => setStockStatus(e.target.value as 'in_stock' | 'low_stock' | 'out_of_stock' | 'overstock' | '')}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Status</option>
+              <option value="in_stock">In Stock</option>
+              <option value="low_stock">Low Stock</option>
+              <option value="out_of_stock">Out of Stock</option>
+              <option value="overstock">Overstock</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <SummaryCard
           title="Total Products"
           value={formatNumber(summary.total_products)}
@@ -190,21 +316,125 @@ const StockLevelsPage: React.FC = () => {
           changeLabel="of total"
         />
         <SummaryCard
-          title="Low Stock Items"
+          title="Low Stock"
           value={formatNumber(summary.low_stock)}
           icon="⚠️"
           color="bg-amber-50 border-amber-200"
-          subtitle={`${formatNumber(summary.out_of_stock)} out of stock`}
+          subtitle="Need attention"
+        />
+        <SummaryCard
+          title="Out of Stock"
+          value={formatNumber(summary.out_of_stock)}
+          icon="🚫"
+          color="bg-red-50 border-red-200"
+          subtitle="Immediate action"
         />
         {includeValuation && (
           <SummaryCard
-            title="Total Stock Value"
+            title="Total Value"
             value={formatCurrency(summary.total_stock_value)}
             icon="💰"
             color="bg-purple-50 border-purple-200"
             subtitle={`${formatNumber(summary.warehouses_count)} locations`}
           />
         )}
+      </div>
+
+      {/* Stock Health Overview */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Stock Status Distribution */}
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <Package className="w-5 h-5 mr-2 text-blue-600" />
+            Stock Status Distribution
+          </h3>
+          <div className="space-y-3">
+            <div>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-gray-600">In Stock</span>
+                <span className="font-semibold text-green-600">
+                  {formatNumber(summary.in_stock)} ({summary.total_products ? ((summary.in_stock / summary.total_products) * 100).toFixed(1) : 0}%)
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-green-500 h-2 rounded-full transition-all duration-300" 
+                  style={{ width: `${summary.total_products ? (summary.in_stock / summary.total_products) * 100 : 0}%` }}
+                ></div>
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-gray-600">Low Stock</span>
+                <span className="font-semibold text-amber-600">
+                  {formatNumber(summary.low_stock)} ({summary.total_products ? ((summary.low_stock / summary.total_products) * 100).toFixed(1) : 0}%)
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-amber-500 h-2 rounded-full transition-all duration-300" 
+                  style={{ width: `${summary.total_products ? (summary.low_stock / summary.total_products) * 100 : 0}%` }}
+                ></div>
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-gray-600">Out of Stock</span>
+                <span className="font-semibold text-red-600">
+                  {formatNumber(summary.out_of_stock)} ({summary.total_products ? ((summary.out_of_stock / summary.total_products) * 100).toFixed(1) : 0}%)
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-red-500 h-2 rounded-full transition-all duration-300" 
+                  style={{ width: `${summary.total_products ? (summary.out_of_stock / summary.total_products) * 100 : 0}%` }}
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Insights */}
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Insights</h3>
+          <div className="space-y-4">
+            <div className="flex items-start">
+              <div className="flex-shrink-0 w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                <span className="text-green-600 text-lg">✓</span>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium text-gray-900">Stock Health</p>
+                <p className="text-sm text-gray-600">
+                  {summary.in_stock > summary.low_stock + summary.out_of_stock 
+                    ? 'Healthy - Most products well stocked' 
+                    : 'Needs Attention - Many products low or out'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start">
+              <div className="flex-shrink-0 w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                <span className="text-purple-600 text-lg">💎</span>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium text-gray-900">Inventory Value</p>
+                <p className="text-sm text-gray-600">
+                  {includeValuation ? formatCurrency(summary.total_stock_value) : 'Enable valuation to see'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start">
+              <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <span className="text-blue-600 text-lg">📍</span>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium text-gray-900">Coverage</p>
+                <p className="text-sm text-gray-600">
+                  Stock across {formatNumber(summary.warehouses_count)} {summary.warehouses_count === 1 ? 'location' : 'locations'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Filters */}
@@ -261,10 +491,24 @@ const StockLevelsPage: React.FC = () => {
 
       {/* Stock Items Table */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-          <h3 className="text-lg font-semibold text-gray-900">
-            Stock Items ({items.length})
-          </h3>
+        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">
+              Stock Items ({items.length})
+            </h3>
+            {items.length > 0 && (
+              <p className="text-sm text-gray-600 mt-1">
+                Showing detailed stock levels for each product across all locations
+              </p>
+            )}
+          </div>
+          {summary.low_stock + summary.out_of_stock > 0 && (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-amber-600 font-medium">
+                ⚠️ {formatNumber(summary.low_stock + summary.out_of_stock)} items need restocking
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="overflow-x-auto">
@@ -277,15 +521,21 @@ const StockLevelsPage: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Category
                 </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Total Qty
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Available
                 </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Reserved
+                </th>
                 {includeValuation && (
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Value
+                    Total Value
                   </th>
                 )}
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -297,89 +547,298 @@ const StockLevelsPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {items.map((item: StockLevel) => (
-                <React.Fragment key={item.product_id}>
-                  <tr className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {item.product_name}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          SKU: {item.sku}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {item.category}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-gray-900">
-                      {formatNumber(item.total_quantity)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
-                      {formatNumber(item.total_available)}
-                    </td>
-                    {includeValuation && (
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-gray-900">
-                        {formatCurrency(item.total_value)}
-                      </td>
-                    )}
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        {item.locations.length} {item.locations.length === 1 ? 'location' : 'locations'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500">
-                      {item.last_restocked ? new Date(item.last_restocked).toLocaleDateString() : 'N/A'}
-                    </td>
-                  </tr>
-                  
-                  {/* Location Details */}
-                  {item.locations.map((location) => (
-                    <tr key={`${item.product_id}-${location.warehouse_id}`} className="bg-gray-50">
-                      <td className="px-6 py-2 pl-12" colSpan={2}>
-                        <div className="text-sm text-gray-600">
-                          📍 {location.warehouse_name}
+              {items.map((item: StockLevel, index: number) => {
+                const totalReserved = item.locations.reduce((sum, loc) => sum + (loc.reserved || 0), 0);
+                const overallStatus = item.total_available === 0 ? 'out_of_stock' 
+                  : item.locations.some(loc => loc.status === 'low_stock') ? 'low_stock'
+                  : 'in_stock';
+                const isExpanded = expandedProducts.has(item.product_id);
+                
+                return (
+                  <React.Fragment key={`product-${item.product_id}-${index}`}>
+                    <tr 
+                      className={`hover:bg-gray-50 cursor-pointer transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}
+                      onClick={() => toggleProductExpansion(item.product_id)}
+                    >
+                      <td className="px-6 py-4">
+                        <div className="flex items-start">
+                          <button
+                            className="flex-shrink-0 w-6 h-6 flex items-center justify-center mr-2 text-gray-400 hover:text-gray-600 transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleProductExpansion(item.product_id);
+                            }}
+                          >
+                            {isExpanded ? (
+                              <ChevronUp className="w-5 h-5" />
+                            ) : (
+                              <ChevronDown className="w-5 h-5" />
+                            )}
+                          </button>
+                          <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                            <Package className="w-5 h-5 text-blue-600" />
+                          </div>
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {item.product_name}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              SKU: {item.sku}
+                            </div>
+                          </div>
                         </div>
                       </td>
-                      <td className="px-6 py-2 text-sm text-right text-gray-700">
-                        {formatNumber(location.quantity)}
-                      </td>
-                      <td className="px-6 py-2 text-sm text-right">
-                        <span className="text-gray-700">
-                          {formatNumber(location.available)}
-                        </span>
-                        {location.reserved > 0 && (
-                          <span className="text-amber-600 text-xs ml-1">
-                            ({formatNumber(location.reserved)} reserved)
-                          </span>
-                        )}
-                      </td>
-                      {includeValuation && <td></td>}
-                      <td className="px-6 py-2 text-center">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(location.status)}`}>
-                          {getStatusLabel(location.status)}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                          {item.category || 'Uncategorized'}
                         </span>
                       </td>
-                      <td className="px-6 py-2 text-sm text-center text-gray-600">
-                        {location.reorder_point && (
-                          <span className="text-xs">
-                            Reorder: {location.reorder_point}
-                          </span>
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(overallStatus)}`}>
+                          {getStatusLabel(overallStatus)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                        <div className="text-sm font-semibold text-gray-900">
+                          {formatNumber(item.total_quantity)}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          units
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                        <div className="text-sm font-medium text-green-600">
+                          {formatNumber(item.total_available)}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          units
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                        <div className={`text-sm ${totalReserved > 0 ? 'font-medium text-amber-600' : 'text-gray-400'}`}>
+                          {formatNumber(totalReserved)}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          units
+                        </div>
+                      </td>
+                      {includeValuation && (
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <div className="text-sm font-semibold text-purple-600">
+                            {formatCurrency(item.total_value)}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            total value
+                          </div>
+                        </td>
+                      )}
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleProductExpansion(item.product_id);
+                          }}
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors"
+                        >
+                          📍 {item.locations.length}
+                          {isExpanded ? (
+                            <ChevronUp className="ml-1 w-3 h-3" />
+                          ) : (
+                            <ChevronDown className="ml-1 w-3 h-3" />
+                          )}
+                        </button>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <div className="text-sm text-gray-900">
+                          {item.last_restocked ? new Date(item.last_restocked).toLocaleDateString() : '-'}
+                        </div>
+                        {item.last_restocked && (
+                          <div className="text-xs text-gray-500">
+                            {Math.floor((Date.now() - new Date(item.last_restocked).getTime()) / (1000 * 60 * 60 * 24))} days ago
+                          </div>
                         )}
                       </td>
                     </tr>
-                  ))}
-                </React.Fragment>
-              ))}
+                    
+                    {/* Location Details - Accordion Expandable */}
+                    {isExpanded && item.locations.map((location, locIdx) => (
+                      <tr key={`product-${item.product_id}-location-${location.warehouse_id}-${locIdx}`} className="bg-gray-50 border-l-4 border-blue-200 animate-fadeIn">
+                        <td className="px-6 py-3 pl-16" colSpan={2}>
+                          <div className="flex items-center">
+                            <span className="text-sm font-medium text-gray-700 mr-2">📍</span>
+                            <span className="text-sm font-medium text-gray-900">{location.warehouse_name}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-3 text-center">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getStatusColor(location.status)}`}>
+                            {getStatusLabel(location.status)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-3 text-right">
+                          <span className="text-sm text-gray-700 font-medium">
+                            {formatNumber(location.quantity)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-3 text-right">
+                          <span className="text-sm text-green-600 font-medium">
+                            {formatNumber(location.available)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-3 text-right">
+                          <span className={`text-sm ${location.reserved > 0 ? 'text-amber-600 font-medium' : 'text-gray-400'}`}>
+                            {formatNumber(location.reserved)}
+                          </span>
+                        </td>
+                        {includeValuation && <td></td>}
+                        <td className="px-6 py-3 text-center">
+                          {location.reorder_point && (
+                            <span className="text-xs text-gray-600">
+                              Reorder at: <span className="font-medium">{location.reorder_point}</span>
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-3"></td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
 
+        {/* Pagination Controls */}
+        {items.length > 0 && (
+          <div className="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 flex justify-between sm:hidden">
+                {/* Mobile Pagination */}
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+              <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm text-gray-700">
+                    Showing <span className="font-medium">{(currentPage - 1) * pageSize + 1}</span> to{' '}
+                    <span className="font-medium">{Math.min(currentPage * pageSize, totalCount)}</span> of{' '}
+                    <span className="font-medium">{totalCount}</span> products
+                  </p>
+                </div>
+                <div className="flex items-center space-x-2">
+                  {/* Page Size Selector */}
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1); // Reset to first page
+                    }}
+                    className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value={10}>10 per page</option>
+                    <option value={20}>20 per page</option>
+                    <option value={50}>50 per page</option>
+                    <option value={100}>100 per page</option>
+                  </select>
+
+                  {/* Desktop Pagination */}
+                  <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                    <button
+                      onClick={() => setCurrentPage(1)}
+                      disabled={currentPage === 1}
+                      className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <span className="sr-only">First</span>
+                      ««
+                    </button>
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <span className="sr-only">Previous</span>
+                      ‹
+                    </button>
+                    
+                    {/* Page Numbers */}
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                            currentPage === pageNum
+                              ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                              : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                    
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <span className="sr-only">Next</span>
+                      ›
+                    </button>
+                    <button
+                      onClick={() => setCurrentPage(totalPages)}
+                      disabled={currentPage === totalPages}
+                      className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <span className="sr-only">Last</span>
+                      »»
+                    </button>
+                  </nav>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {items.length === 0 && (
-          <div className="text-center py-12">
-            <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500">No stock items found</p>
+          <div className="text-center py-16">
+            <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Stock Items Found</h3>
+            <p className="text-gray-500 mb-4">
+              {stockStatus 
+                ? `No items with "${getStatusLabel(stockStatus)}" status` 
+                : 'Try adjusting your filters or add products to your inventory'}
+            </p>
+            {stockStatus && (
+              <button
+                onClick={() => setStockStatus('')}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+              >
+                Clear Filters
+              </button>
+            )}
           </div>
         )}
       </div>

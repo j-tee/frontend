@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { financialReportsService } from '../../../services/reportsService';
 import type { CashFlowResponse } from '../../../types/reports';
+import { useCurrency } from '../../../hooks/useCurrency';
 import { ReportContainer } from '../components/ReportContainer';
 import { SummaryCard } from '../components/SummaryCard';
 import { DateRangeFilter } from '../components/DateRangeFilter';
 import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates';
 
 const CashFlowPage: React.FC = () => {
+  const { formatCurrency } = useCurrency();
   const [data, setData] = useState<CashFlowResponse['data'] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,16 +66,6 @@ const CashFlowPage: React.FC = () => {
       console.error('Export failed:', err);
       alert('Failed to export report. Please try again.');
     }
-  };
-
-  const formatCurrency = (value: number | string | null | undefined): string => {
-    if (value === null || value === undefined) return '₱0.00';
-    const num = typeof value === 'string' ? parseFloat(value) : value;
-    if (isNaN(num)) return '₱0.00';
-    return new Intl.NumberFormat('en-PH', {
-      style: 'currency',
-      currency: 'PHP',
-    }).format(num);
   };
 
   if (loading && !data) return <LoadingState message="Loading cash flow data..." />;

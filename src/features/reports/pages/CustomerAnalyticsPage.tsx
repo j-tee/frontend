@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { salesReportsService } from '../../../services/reportsService';
 import type { CustomerAnalyticsResponse } from '../../../types/reports';
+import { useCurrency } from '../../../hooks/useCurrency';
 import { ReportContainer } from '../components/ReportContainer';
 import { SummaryCard } from '../components/SummaryCard';
 import { DateRangeFilter } from '../components/DateRangeFilter';
 import { ReportStates } from '../components/ReportStates';
 
 const CustomerAnalyticsPage: React.FC = () => {
+  const { formatCurrency } = useCurrency();
   const [data, setData] = useState<CustomerAnalyticsResponse['data'] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,14 +67,6 @@ const CustomerAnalyticsPage: React.FC = () => {
       console.error('Export failed:', err);
       alert('Failed to export report. Please try again.');
     }
-  };
-
-  const formatCurrency = (value: number | null | undefined): string => {
-    if (value === null || value === undefined || isNaN(value)) return 'PHP 0.00';
-    return new Intl.NumberFormat('en-PH', {
-      style: 'currency',
-      currency: 'PHP',
-    }).format(value);
   };
 
   const formatNumber = (value: number | null | undefined): string => {

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Card, Table, Button, Badge, Form, InputGroup, Spinner } from 'react-bootstrap'
 import { useAppDispatch } from '../../../../hooks'
+import { useCurrency } from '../../../../hooks/useCurrency'
 import { updateCartItem, removeCartItem } from '../../../../store/slices/salesSlice'
 import { calculateSaleTotals } from '../../../../utils/salesTotals'
 import type { Sale } from '../../../../types/sales'
@@ -13,16 +14,10 @@ interface SaleCartProps {
   checkoutLoading?: boolean
 }
 
-// Helper function to safely format prices (handles both strings and numbers)
-const formatPrice = (price: number | string | undefined): string => {
-  if (price === undefined || price === null) return '0.00'
-  const numPrice = typeof price === 'string' ? parseFloat(price) : price
-  return isNaN(numPrice) ? '0.00' : numPrice.toFixed(2)
-}
-
 export function SaleCart({ cart, onCheckout, disabled, checkoutLoading }: SaleCartProps) {
   const saleId = cart?.id
   const dispatch = useAppDispatch()
+  const { formatCurrency } = useCurrency()
   const [editingItem, setEditingItem] = useState<UUID | null>(null)
   const [updatingItem, setUpdatingItem] = useState<UUID | null>(null)
   const [removingItem, setRemovingItem] = useState<UUID | null>(null)
@@ -171,7 +166,7 @@ export function SaleCart({ cart, onCheckout, disabled, checkoutLoading }: SaleCa
                             </Button>
                           )}
                         </td>
-                        <td>GH₵ {formatPrice(item.unit_price)}</td>
+                        <td>{formatCurrency(parseFloat(item.unit_price?.toString() || '0'))}</td>
                         <td>
                           <InputGroup size="sm">
                             <Form.Control
@@ -187,12 +182,12 @@ export function SaleCart({ cart, onCheckout, disabled, checkoutLoading }: SaleCa
                           </InputGroup>
                         </td>
                         <td className="text-end">
-                          <strong>GH₵ {formatPrice(item.total_price)}</strong>
+                          <strong>{formatCurrency(parseFloat(item.total_price?.toString() || '0'))}</strong>
                           {item.discount_amount > 0 && (
                             <>
                               <br />
                               <small className="text-success">
-                                -GH₵ {formatPrice(item.discount_amount)}
+                                -{formatCurrency(parseFloat(item.discount_amount?.toString() || '0'))}
                               </small>
                             </>
                           )}
@@ -218,23 +213,23 @@ export function SaleCart({ cart, onCheckout, disabled, checkoutLoading }: SaleCa
             <div className="border-top p-3 bg-light">
               <div className="d-flex justify-content-between mb-2">
                 <span>Subtotal:</span>
-                <strong>GH₵ {formatPrice(totals.subtotal)}</strong>
+                <strong>{formatCurrency(totals.subtotal)}</strong>
               </div>
               {totals.discount > 0 && (
                 <div className="d-flex justify-content-between mb-2 text-success">
                   <span>Discount:</span>
-                  <strong>-GH₵ {formatPrice(totals.discount)}</strong>
+                  <strong>-{formatCurrency(totals.discount)}</strong>
                 </div>
               )}
               {totals.tax > 0 && (
                 <div className="d-flex justify-content-between mb-2">
                   <span>Tax:</span>
-                  <strong>GH₵ {formatPrice(totals.tax)}</strong>
+                  <strong>{formatCurrency(totals.tax)}</strong>
                 </div>
               )}
               <div className="d-flex justify-content-between border-top pt-2 fs-5">
                 <strong>Total:</strong>
-                <strong>GH₵ {formatPrice(totals.total)}</strong>
+                <strong>{formatCurrency(totals.total)}</strong>
               </div>
             </div>
 

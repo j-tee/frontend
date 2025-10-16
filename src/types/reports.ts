@@ -363,6 +363,26 @@ export interface StockLevelsResponse {
       warehouses_count: number;
     };
     items: StockLevel[];
+    by_warehouse?: Record<string, {
+      name: string;
+      products: number;
+      total_quantity: number;
+      total_value: number;
+    }>;
+    by_category?: Record<string, {
+      name: string;
+      products: number;
+      total_quantity: number;
+      total_value: number;
+    }>;
+  };
+  meta?: {
+    pagination?: {
+      page: number;
+      page_size: number;
+      total_count: number;
+      total_pages: number;
+    };
   };
 }
 
@@ -395,6 +415,24 @@ export interface LowStockAlertsResponse {
     };
     alerts: LowStockAlert[];
     total_restock_cost: number;
+    by_warehouse?: Record<string, {
+      name: string;
+      alerts: number;
+      restock_cost: number;
+    }>;
+    by_category?: Record<string, {
+      name: string;
+      alerts: number;
+      restock_cost: number;
+    }>;
+  };
+  meta?: {
+    pagination?: {
+      page: number;
+      page_size: number;
+      total_count: number;
+      total_pages: number;
+    };
   };
 }
 
@@ -428,8 +466,27 @@ export interface StockMovementsResponse {
       total_transfers: number;
     };
     movements: StockMovement[];
-    pagination: PaginationInfo;
+    by_warehouse?: Record<string, {
+      name: string;
+      movements: number;
+      net_change: number;
+    }>;
+    by_category?: Record<string, {
+      name: string;
+      movements: number;
+      net_change: number;
+    }>;
   };
+  meta?: {
+    pagination?: {
+      page: number;
+      page_size: number;
+      total_count: number;
+      total_pages: number;
+    };
+  };
+  // Deprecated - keeping for backwards compatibility
+  pagination?: PaginationInfo;
 }
 
 export interface WarehouseAnalytics {
@@ -874,6 +931,7 @@ export interface ReportFilters {
   limit?: number;
   page?: number;
   page_size?: number;
+  search?: string;
   include_forecast?: boolean;
   include_valuation?: boolean;
   compare_previous?: boolean;

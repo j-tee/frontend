@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { salesReportsService } from '../../../services/reportsService';
 import type { RevenueTrendsResponse } from '../../../types/reports';
+import { useCurrency } from '../../../hooks/useCurrency';
 import { ReportContainer } from '../components/ReportContainer';
 import { SummaryCard } from '../components/SummaryCard';
 import { DateRangeFilter } from '../components/DateRangeFilter';
 import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates';
 
 const RevenueTrendsPage: React.FC = () => {
+  const { formatCurrency } = useCurrency();
   const [data, setData] = useState<RevenueTrendsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,13 +62,6 @@ const RevenueTrendsPage: React.FC = () => {
       console.error('Export failed:', err);
       alert('Failed to export report. Please try again.');
     }
-  };
-
-  const formatCurrency = (value: number): string => {
-    return new Intl.NumberFormat('en-PH', {
-      style: 'currency',
-      currency: 'PHP',
-    }).format(value);
   };
 
   const formatNumber = (value: number): string => {
