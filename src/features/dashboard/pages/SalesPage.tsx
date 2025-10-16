@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { isAxiosError } from 'axios'
 import { Container, Row, Col, Card, Button, Tab, Tabs, Alert, Modal, Badge } from 'react-bootstrap'
 import { useAppDispatch, useAppSelector, useCurrency } from '../../../hooks'
 import {
@@ -30,7 +29,6 @@ import type { Customer, Sale } from '../../../types/sales'
 import type { CustomerOption } from '../components/sales/CustomerSelectPanel'
 import {
   listCustomers,
-  createCustomer as createCustomerService,
   getSalesSummary,
   getTodaysSalesStats,
   updateSaleCustomer,
@@ -90,7 +88,6 @@ export default function SalesPage() {
   const [customersLoading, setCustomersLoading] = useState(false)
   const [customerError, setCustomerError] = useState<string | null>(null)
   const [showCreateCustomerModal, setShowCreateCustomerModal] = useState(false)
-  const [ensuringCustomer, setEnsuringCustomer] = useState(false)
   const [checkoutCustomerId, setCheckoutCustomerId] = useState<UUID | null>(null)
   const [todayStats, setTodayStats] = useState(DEFAULT_TODAY_STATS)
   const [statsLoading, setStatsLoading] = useState(false)
@@ -369,108 +366,22 @@ export default function SalesPage() {
     }
   }, [currentCartRef, dispatch])
 
-  const getOrCreateWalkInCustomer = useCallback(async () => {
-    const WALK_IN_PHONE = '+233000000000'
+  // Walk-in customer is now guaranteed to exist (backend creates it when business is created)
+  // and backend auto-assigns it when no customer is provided
+  const getWalkInCustomer = useCallback(() => {
+    const walkInOption = customerOptions.find(
+      (option) => normalizeCustomerName(option.name) === WALK_IN_NAME_NORMALIZED
+    )
     
-    const setWalkInState = (option: { id: UUID; name: string }) => {
-      setSelectedCustomer(option.id)
-      setCheckoutCustomerId(option.id)
+    if (walkInOption) {
+      setSelectedCustomer(walkInOption.id)
+      setCheckoutCustomerId(walkInOption.id)
       setCustomerError(null)
-      return option
+      return walkInOption
     }
-
-    const findInOptions = () =>
-      customerOptions.find((option) => normalizeCustomerName(option.name) === WALK_IN_NAME_NORMALIZED)
-
-    const existingOption = findInOptions()
-    if (existingOption) {
-      return setWalkInState(existingOption)
-    }
-
-    // Try to find walk-in customer by name first
-    try {
-      const response = await listCustomers({ search: WALK_IN_NAME, page_size: 10 })
-      const match = response.results.find(
-        (customer) => normalizeCustomerName(customer.name) === WALK_IN_NAME_NORMALIZED,
-      )
-
-      if (match) {
-        const option = { id: match.id, name: match.name }
-        upsertCustomerOption(option)
-        return setWalkInState(option)
-      }
-    } catch (searchError) {
-      console.warn('Failed to search for walk-in customer by name', searchError)
-    }
-
-    // Try to find by phone number (unique constraint is business + phone)
-    try {
-      const phoneResponse = await listCustomers({ search: WALK_IN_PHONE, page_size: 10 })
-      const phoneMatch = phoneResponse.results.find((customer) => customer.phone === WALK_IN_PHONE)
-
-      if (phoneMatch) {
-        console.log('Found existing walk-in customer by phone:', phoneMatch)
-        const option = { id: phoneMatch.id, name: phoneMatch.name }
-        upsertCustomerOption(option)
-        return setWalkInState(option)
-      }
-    } catch (phoneSearchError) {
-      console.warn('Failed to search for walk-in customer by phone', phoneSearchError)
-    }
-
-    // If not found, try to create new walk-in customer
-    try {
-      const customer = await createCustomerService({
-        name: WALK_IN_NAME,
-        phone: WALK_IN_PHONE,
-        type: 'RETAIL',
-        notes: 'Auto-generated walk-in customer',
-        business: currentBusiness?.id,
-      })
-
-      const option = { id: customer.id, name: customer.name }
-      upsertCustomerOption(option)
-      return setWalkInState(option)
-    } catch (err) {
-      console.error('Failed to create walk-in customer', err)
-
-      // If creation failed (likely due to unique constraint), search one more time
-      if (isAxiosError(err) && err.response?.status === 400) {
-        const errorData = err.response?.data
-        console.log('Walk-in customer creation failed, searching again...', errorData)
-        
-        try {
-          // Search by both name and phone
-          const [nameResults, phoneResults] = await Promise.all([
-            listCustomers({ search: WALK_IN_NAME, page_size: 10 }).catch(() => ({ results: [] })),
-            listCustomers({ search: WALK_IN_PHONE, page_size: 10 }).catch(() => ({ results: [] })),
-          ])
-          
-          // Try to find by name first
-          let match = nameResults.results.find(
-            (customer) => normalizeCustomerName(customer.name) === WALK_IN_NAME_NORMALIZED,
-          )
-          
-          // If not found by name, try by phone
-          if (!match) {
-            match = phoneResults.results.find((customer) => customer.phone === WALK_IN_PHONE)
-          }
-          
-          if (match) {
-            console.log('Found existing walk-in customer on retry:', match)
-            const option = { id: match.id, name: match.name }
-            upsertCustomerOption(option)
-            return setWalkInState(option)
-          }
-        } catch (retryError) {
-          console.warn('Retry search for walk-in customer failed', retryError)
-        }
-      }
-
-      setCustomerError('Unable to prepare a walk-in customer automatically. Please add one manually.')
-      return null
-    }
-  }, [customerOptions, upsertCustomerOption, currentBusiness?.id])
+    
+    return null
+  }, [customerOptions])
 
   const startFreshSaleSession = useCallback(async (preferredStorefrontId?: UUID): Promise<Sale | null> => {
     // Use preferred storefront if provided (multi-storefront mode), otherwise use current location
@@ -490,24 +401,18 @@ export default function SalesPage() {
     }
 
     let customerId: UUID | undefined
-    let customerName: string | null = null
 
-    // Customer is optional for both retail and wholesale
+    // Customer is optional - if none selected, try to use walk-in customer
+    // Backend will auto-assign walk-in customer if no customer is provided
     if (selectedCustomer) {
       customerId = selectedCustomer
-      customerName = customerOptions.find((option) => option.id === selectedCustomer)?.name ?? null
     } else {
-      // Use walk-in customer if no customer selected
-      const walkIn = await getOrCreateWalkInCustomer()
+      // Try to use walk-in customer if available
+      const walkIn = getWalkInCustomer()
       customerId = walkIn?.id
-      customerName = walkIn?.name ?? null
       
-      // If walk-in customer creation failed, don't proceed
-      if (!customerId) {
-        console.error('❌ Cannot create sale: Walk-in customer creation failed')
-        setCustomerError('Unable to prepare a walk-in customer. Please try again or create a customer manually.')
-        return null
-      }
+      // If walk-in customer not found in options, backend will auto-assign it
+      // So we can proceed without a customer ID
     }
 
     try {
@@ -531,11 +436,11 @@ export default function SalesPage() {
 
       currentCartRef.current = sale
 
-      if (customerId) {
+      if (sale.customer) {
         dispatch(
           setCurrentCartCustomer({
-            customerId,
-            customerName: customerName ?? sale.customer_name ?? null,
+            customerId: sale.customer,
+            customerName: sale.customer_name ?? null,
           })
         )
       }
@@ -547,7 +452,7 @@ export default function SalesPage() {
       setCustomerError('Unable to start a new sale. Please try again.')
       return null
     }
-  }, [currentLocation, customerOptions, dispatch, getOrCreateWalkInCustomer, saleType, selectedCustomer, storefronts])
+  }, [currentLocation, dispatch, getWalkInCustomer, saleType, selectedCustomer, storefronts])
 
   const prepareFreshSale = useCallback(async (options?: { startNewDraft?: boolean; clearCustomer?: boolean }) => {
     if (initializingSaleRef.current) {
@@ -560,7 +465,6 @@ export default function SalesPage() {
     // Don't reset saleType - preserve user's preference (RETAIL/WHOLESALE)
     // setSaleType('RETAIL')  // Removed: This was causing toggle to reset
     setCustomerError(null)
-    setEnsuringCustomer(false)
     
     // Only reset customer selection if explicitly requested (e.g., after completing a sale)
     // Default is to preserve user's customer selection
@@ -637,7 +541,7 @@ export default function SalesPage() {
     void prepareFreshSale()
   }, [activeTab, currentCart, currentLocation, prepareFreshSale])
 
-  // Load customers and ensure walk-in customer exists as default
+  // Load customers list (walk-in customer is guaranteed to exist from backend)
   useEffect(() => {
     let isMounted = true
 
@@ -647,11 +551,11 @@ export default function SalesPage() {
       return
     }
 
-    const loadCustomersAndInitializeWalkIn = async () => {
+    const loadCustomersAndSetWalkIn = async () => {
       setCustomersLoading(true)
       setCustomerError(null)
       try {
-        // First, load existing customers
+        // Load existing customers (walk-in customer should always be in this list)
         const response = await listCustomers({ page_size: 50 })
         if (!isMounted) return
         
@@ -661,14 +565,13 @@ export default function SalesPage() {
         }))
         setCustomerOptions(mapped)
         
-        // Check if walk-in customer exists in the list
+        // Find and set walk-in customer as default
         const walkInOption = mapped.find(
           (option) => normalizeCustomerName(option.name) === WALK_IN_NAME_NORMALIZED
         )
         
         if (walkInOption) {
-          // Walk-in customer exists, set it as default
-          console.log('✅ Found existing walk-in customer:', walkInOption)
+          console.log('✅ Found walk-in customer:', walkInOption)
           setSelectedCustomer((prev) => {
             if (prev) return prev // Don't override user selection
             return walkInOption.id
@@ -678,51 +581,8 @@ export default function SalesPage() {
             return walkInOption.id
           })
         } else {
-          // Walk-in customer doesn't exist, create it
-          console.log('🚀 Walk-in customer not found, creating with business:', currentBusiness.id)
-          try {
-            const WALK_IN_PHONE = '+233000000000'
-            const customer = await createCustomerService({
-              name: WALK_IN_NAME,
-              phone: WALK_IN_PHONE,
-              type: 'RETAIL',
-              notes: 'Auto-generated walk-in customer',
-              business: currentBusiness.id,
-            })
-            
-            if (isMounted) {
-              const newOption = { id: customer.id, name: customer.name }
-              setCustomerOptions(prev => [...prev, newOption])
-              setSelectedCustomer(newOption.id)
-              setCheckoutCustomerId(newOption.id)
-              console.log('✅ Walk-in customer created and set as default:', newOption)
-            }
-          } catch (createErr) {
-            console.error('Failed to create walk-in customer:', createErr)
-            // If creation fails (unique constraint), search by phone to find existing customer
-            if (isAxiosError(createErr) && createErr.response?.status === 400) {
-              try {
-                const WALK_IN_PHONE = '+233000000000'
-                // Search by phone number since that's the unique constraint
-                const phoneResponse = await listCustomers({ search: WALK_IN_PHONE, page_size: 10 })
-                const match = phoneResponse.results.find((customer) => customer.phone === WALK_IN_PHONE)
-                
-                if (match && isMounted) {
-                  const option = { id: match.id, name: match.name }
-                  setCustomerOptions(prev => {
-                    // Check if already exists
-                    if (prev.find(opt => opt.id === option.id)) return prev
-                    return [...prev, option]
-                  })
-                  setSelectedCustomer(option.id)
-                  setCheckoutCustomerId(option.id)
-                  console.log('✅ Found existing walk-in customer by phone:', option)
-                }
-              } catch (retryErr) {
-                console.warn('Failed to find walk-in customer by phone', retryErr)
-              }
-            }
-          }
+          // This should never happen since backend creates walk-in customer when business is created
+          console.warn('⚠️ Walk-in customer not found in customer list. Backend should have created it.')
         }
       } catch (err) {
         console.error('Failed to load customers', err)
@@ -736,7 +596,7 @@ export default function SalesPage() {
       }
     }
 
-    void loadCustomersAndInitializeWalkIn()
+    void loadCustomersAndSetWalkIn()
 
     return () => {
       isMounted = false
@@ -979,64 +839,21 @@ export default function SalesPage() {
     }
   }
 
-  const ensureCustomerForSale = useCallback(async (): Promise<UUID | null> => {
-    if (selectedCustomer) {
-      if (checkoutCustomerId !== selectedCustomer) {
-        setCheckoutCustomerId(selectedCustomer)
-      }
-      return selectedCustomer
-    }
-
-    if (saleType === 'WHOLESALE') {
+  const handleCheckout = useCallback(() => {
+    // Backend auto-assigns walk-in customer if none is selected
+    // Wholesale sales should have a customer selected
+    if (saleType === 'WHOLESALE' && !selectedCustomer) {
       setCustomerError('Please select a customer before completing a wholesale sale.')
-      return null
-    }
-
-    try {
-      setEnsuringCustomer(true)
-
-      const existingWalkIn = customerOptions.find(
-        (option) => normalizeCustomerName(option.name) === WALK_IN_NAME_NORMALIZED
-      )
-
-      if (existingWalkIn) {
-        setSelectedCustomer(existingWalkIn.id)
-        setCheckoutCustomerId(existingWalkIn.id)
-        dispatch(setCurrentCartCustomer({ customerId: existingWalkIn.id, customerName: existingWalkIn.name }))
-        setCustomerError(null)
-        return existingWalkIn.id
-      }
-
-      const customer = await createCustomerService({
-        name: WALK_IN_NAME,
-        phone: WALK_IN_NAME,
-        type: 'RETAIL',
-        notes: 'Auto-generated walk-in customer',
-      })
-
-      upsertCustomerOption({ id: customer.id, name: customer.name })
-      setSelectedCustomer(customer.id)
-      setCheckoutCustomerId(customer.id)
-      dispatch(setCurrentCartCustomer({ customerId: customer.id, customerName: customer.name }))
-      setCustomerError(null)
-      return customer.id
-    } catch (err) {
-      console.error('Failed to auto-create walk-in customer', err)
-      setCustomerError('Could not create a walk-in customer automatically. Please add a customer manually.')
-      return null
-    } finally {
-      setEnsuringCustomer(false)
-    }
-  }, [selectedCustomer, saleType, customerOptions, checkoutCustomerId, upsertCustomerOption, dispatch])
-
-  const handleCheckout = useCallback(async () => {
-    const customerId = await ensureCustomerForSale()
-    if (!customerId) {
       return
     }
-    setCheckoutCustomerId(customerId)
+
+    if (selectedCustomer) {
+      setCheckoutCustomerId(selectedCustomer)
+    }
+    
+    setCustomerError(null)
     setShowPayment(true)
-  }, [ensureCustomerForSale])
+  }, [saleType, selectedCustomer])
 
   const handlePaymentComplete = (completedSale: Sale) => {
     currentCartRef.current = completedSale
@@ -1253,8 +1070,8 @@ export default function SalesPage() {
                       <SaleCart
                         cart={currentCart}
                         onCheckout={handleCheckout}
-                        disabled={mutations.checkout === 'loading' || ensuringCustomer}
-                        checkoutLoading={mutations.checkout === 'loading' || ensuringCustomer}
+                        disabled={mutations.checkout === 'loading'}
+                        checkoutLoading={mutations.checkout === 'loading'}
                       />
                     </div>
                   </Card.Body>
@@ -1277,7 +1094,7 @@ export default function SalesPage() {
                       loading={customersLoading}
                       errorMessage={customerError}
                       onAddCustomer={() => setShowCreateCustomerModal(true)}
-                      disabled={mutations.createSale === 'loading' || ensuringCustomer}
+                      disabled={mutations.createSale === 'loading'}
                     />
                   </Card.Body>
                 </Card>
