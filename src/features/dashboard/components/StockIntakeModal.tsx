@@ -5,6 +5,7 @@ import Form from 'react-bootstrap/Form'
 import Modal from 'react-bootstrap/Modal'
 import Spinner from 'react-bootstrap/Spinner'
 import Table from 'react-bootstrap/Table'
+import { useCurrency } from '../../../hooks'
 import type {
   Product,
   StockBatch,
@@ -95,16 +96,6 @@ const initialSupplierForm: SupplierFormState = {
   notes: '',
 }
 
-const formatCurrency = (value?: string | null) => {
-  if (!value) return '—'
-  const parsed = Number(value)
-  if (Number.isNaN(parsed)) return value
-  return parsed.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
-
 const StockIntakeModal = ({
   show,
   onClose,
@@ -126,6 +117,7 @@ const StockIntakeModal = ({
   supplierError,
   onComplete,
 }: StockIntakeModalProps) => {
+  const { formatCurrency } = useCurrency()
   const [batchForm, setBatchForm] = useState<BatchFormState>(initialBatchForm)
   const [lineItemForm, setLineItemForm] = useState<LineItemFormState>(initialLineItemForm)
   const [createdBatch, setCreatedBatch] = useState<StockBatch | null>(null)
@@ -750,11 +742,11 @@ const StockIntakeModal = ({
                       <tr key={item.id}>
                         <td>{item.product_name ?? '—'}</td>
                         <td>{item.quantity.toLocaleString()}</td>
-                        <td className="text-end">{formatCurrency(item.unit_cost)}</td>
-                        <td className="text-end">{formatCurrency(item.retail_price)}</td>
-                        <td className="text-end">{formatCurrency(item.wholesale_price)}</td>
-                        <td className="text-end">{formatCurrency(item.landed_unit_cost)}</td>
-                        <td className="text-end">{formatCurrency(item.total_landed_cost)}</td>
+                        <td className="text-end">{formatCurrency(item.unit_cost ?? 0)}</td>
+                        <td className="text-end">{formatCurrency(item.retail_price ?? 0)}</td>
+                        <td className="text-end">{formatCurrency(item.wholesale_price ?? 0)}</td>
+                        <td className="text-end">{formatCurrency(item.landed_unit_cost ?? 0)}</td>
+                        <td className="text-end">{formatCurrency(item.total_landed_cost ?? 0)}</td>
                       </tr>
                     ))
                   )}

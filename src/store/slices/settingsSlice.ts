@@ -5,9 +5,9 @@ import settingsService from '../../services/settingsService.js'
 // Default settings
 const getDefaultCurrency = (): Currency => {
   return {
-    code: 'USD',
-    symbol: '$',
-    name: 'US Dollar',
+    code: 'GHS',
+    symbol: '₵',
+    name: 'Ghanaian Cedi',
     position: 'before',
     decimalPlaces: 2,
   }

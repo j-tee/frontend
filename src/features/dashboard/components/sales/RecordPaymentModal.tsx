@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Alert, Button, Form, InputGroup, Modal } from 'react-bootstrap'
+import { useCurrency } from '../../../../hooks'
 import CreditService from '../../../../services/creditService'
 import type { Sale } from '../../../../types/sales'
 
@@ -19,12 +20,8 @@ const paymentMethods: Array<{ label: string; value: 'CASH' | 'CARD' | 'MOBILE' |
   { label: 'Other', value: 'OTHER' },
 ]
 
-const currencyFormatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-})
-
 export function RecordPaymentModal({ show, sale, onHide, onPaymentRecorded }: RecordPaymentModalProps) {
+  const { formatCurrency, currency } = useCurrency()
   const [amount, setAmount] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<typeof paymentMethods[number]['value']>('CASH')
   const [referenceNumber, setReferenceNumber] = useState('')
@@ -101,7 +98,7 @@ export function RecordPaymentModal({ show, sale, onHide, onPaymentRecorded }: Re
               <div className="mb-3">
                 <small className="text-muted d-block">Outstanding Balance</small>
                 <strong className="text-danger">
-                  {currencyFormatter.format(sale.amount_due || 0)}
+                  {formatCurrency(sale.amount_due || 0)}
                 </strong>
               </div>
 
@@ -114,7 +111,7 @@ export function RecordPaymentModal({ show, sale, onHide, onPaymentRecorded }: Re
               <Form.Group controlId="payment-amount" className="mb-3">
                 <Form.Label>Amount Received</Form.Label>
                 <InputGroup>
-                  <InputGroup.Text>₵</InputGroup.Text>
+                  <InputGroup.Text>{currency.symbol}</InputGroup.Text>
                   <Form.Control
                     type="number"
                     step="0.01"
@@ -125,7 +122,7 @@ export function RecordPaymentModal({ show, sale, onHide, onPaymentRecorded }: Re
                   />
                 </InputGroup>
                 <Form.Text className={remainingBalance < 0 ? 'text-danger' : 'text-muted'}>
-                  Remaining balance: {currencyFormatter.format(remainingBalance)}
+                  Remaining balance: {formatCurrency(remainingBalance)}
                 </Form.Text>
               </Form.Group>
 

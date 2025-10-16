@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Alert, Badge, Modal, Spinner, Table } from 'react-bootstrap'
+import { useCurrency } from '../../../../hooks'
 import CreditService from '../../../../services/creditService'
 import type { Payment, Sale } from '../../../../types/sales'
 
@@ -9,24 +10,13 @@ interface PaymentHistoryModalProps {
   onHide: () => void
 }
 
-const currencyFormatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-})
-
-const formatCurrency = (value: number | undefined | null) => {
-  if (value === null || value === undefined) {
-    return currencyFormatter.format(0)
-  }
-  return currencyFormatter.format(value)
-}
-
 const formatDate = (value: string | null | undefined) => {
   if (!value) return '-'
   return new Date(value).toLocaleString()
 }
 
 export function PaymentHistoryModal({ show, sale, onHide }: PaymentHistoryModalProps) {
+  const { formatCurrency } = useCurrency()
   const [payments, setPayments] = useState<Payment[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)

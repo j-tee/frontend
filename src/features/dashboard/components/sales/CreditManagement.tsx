@@ -14,7 +14,7 @@ import {
   Spinner,
   Table,
 } from 'react-bootstrap'
-import { useAppSelector } from '../../../../hooks'
+import { useAppSelector, useCurrency } from '../../../../hooks'
 import { selectActiveLocation } from '../../../../store/slices/locationSlice'
 import CreditService from '../../../../services/creditService'
 import { fetchCustomers } from '../../../../services/customerMngtService'
@@ -32,24 +32,6 @@ interface AppliedFilters {
 }
 
 type StatusFilter = 'all' | 'unpaid' | 'partial' | 'overdue'
-
-const currencyFormatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-})
-
-const formatCurrency = (value: number | string | null | undefined) => {
-  if (value === null || value === undefined || value === '') {
-    return currencyFormatter.format(0)
-  }
-
-  const numericValue = typeof value === 'string' ? Number(value) : value
-  if (Number.isNaN(numericValue)) {
-    return currencyFormatter.format(0)
-  }
-
-  return currencyFormatter.format(numericValue)
-}
 
 const formatDateTime = (value: string | null | undefined) => {
   if (!value) return '-'
@@ -80,6 +62,7 @@ const formatPercentage = (value: number) => `${Math.round(value)}%`
 
 export function CreditManagement() {
   const activeLocation = useAppSelector(selectActiveLocation)
+  const { formatCurrency, currency } = useCurrency()
   const storefrontId = activeLocation?.id
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
@@ -342,7 +325,7 @@ export function CreditManagement() {
               <Col md={2} sm={6}>
                 <Form.Label className="small text-muted">Min Amount Due</Form.Label>
                 <InputGroup size="sm">
-                  <InputGroup.Text>₵</InputGroup.Text>
+                  <InputGroup.Text>{currency.symbol}</InputGroup.Text>
                   <Form.Control
                     type="number"
                     min="0"
@@ -358,7 +341,7 @@ export function CreditManagement() {
               <Col md={2} sm={6}>
                 <Form.Label className="small text-muted">Max Amount Due</Form.Label>
                 <InputGroup size="sm">
-                  <InputGroup.Text>₵</InputGroup.Text>
+                  <InputGroup.Text>{currency.symbol}</InputGroup.Text>
                   <Form.Control
                     type="number"
                     min="0"
@@ -423,7 +406,7 @@ export function CreditManagement() {
             <Card.Body>
               <p className="text-muted mb-1 small">Total Profit</p>
               <h5 className="mb-0 text-success">
-                {summaryLoading ? '—' : formatCurrency(summary?.total_profit)}
+                {summaryLoading ? '—' : formatCurrency(summary?.total_profit ?? 0)}
               </h5>
               <small className="text-muted">Across all sales</small>
             </Card.Body>
@@ -434,7 +417,7 @@ export function CreditManagement() {
             <Card.Body>
               <p className="text-muted mb-1 small">Outstanding Credit</p>
               <h5 className="mb-0 text-danger">
-                {summaryLoading ? '—' : formatCurrency(summary?.outstanding_credit)}
+                {summaryLoading ? '—' : formatCurrency(summary?.outstanding_credit ?? 0)}
               </h5>
               <small className="text-muted">
                 {summaryLoading ? '' : `${summary?.unpaid_credit_count ?? 0} credit accounts`}
@@ -447,7 +430,7 @@ export function CreditManagement() {
             <Card.Body>
               <p className="text-muted mb-1 small">Cash on Hand</p>
               <h5 className="mb-0 text-primary">
-                {summaryLoading ? '—' : formatCurrency(summary?.cash_on_hand)}
+                {summaryLoading ? '—' : formatCurrency(summary?.cash_on_hand ?? 0)}
               </h5>
               <small className="text-muted">Profit minus outstanding credit</small>
             </Card.Body>
@@ -458,7 +441,7 @@ export function CreditManagement() {
             <Card.Body>
               <p className="text-muted mb-1 small">Total Credit Due</p>
               <h5 className="mb-0 text-warning">
-                {summaryLoading ? '—' : formatCurrency(summary?.total_credit_sales)}
+                {summaryLoading ? '—' : formatCurrency(summary?.total_credit_sales ?? 0)}
               </h5>
               <small className="text-muted">Amount still owed</small>
             </Card.Body>

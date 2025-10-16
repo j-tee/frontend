@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Form, InputGroup, Card, Row, Col, Button, Badge, Spinner, Alert } from 'react-bootstrap'
-import { useAppDispatch } from '../../../../hooks'
+import { useAppDispatch, useCurrency } from '../../../../hooks'
 import { addItemToCart } from '../../../../store/slices/salesSlice'
 import { fetchSaleCatalog, fetchMultiStorefrontCatalog } from '../../../../services/inventoryService'
 import httpClient from '../../../../services/httpClient'
@@ -46,6 +46,7 @@ interface ProductSearchPanelProps {
 
 export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, ensureSaleSession, multiStorefront = false }: ProductSearchPanelProps) {
   const dispatch = useAppDispatch()
+  const { formatCurrency } = useCurrency()
   
   const [searchQuery, setSearchQuery] = useState('')
   const [barcodeInput, setBarcodeInput] = useState('')
@@ -894,7 +895,7 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
                         </div>
                       </Col>
                       <Col xs={2} className="text-end">
-                        <div className="fs-5 fw-bold">GH₵ {price.toFixed(2)}</div>
+                        <div className="fs-5 fw-bold">{formatCurrency(price)}</div>
                         <small className="text-muted">per {product.unit}</small>
                       </Col>
                       <Col xs={3}>
