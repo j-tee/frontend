@@ -686,13 +686,14 @@ export default function SalesPage() {
             }
           } catch (createErr) {
             console.error('Failed to create walk-in customer:', createErr)
-            // If creation fails, try to search again (might exist due to race condition)
+            // If creation fails (unique constraint), search by phone to find existing customer
             if (isAxiosError(createErr) && createErr.response?.status === 400) {
               try {
-                const retryResponse = await listCustomers({ search: WALK_IN_NAME, page_size: 10 })
-                const match = retryResponse.results.find(
-                  (customer) => normalizeCustomerName(customer.name) === WALK_IN_NAME_NORMALIZED
-                )
+                const WALK_IN_PHONE = '+233000000000'
+                // Search by phone number since that's the unique constraint
+                const phoneResponse = await listCustomers({ search: WALK_IN_PHONE, page_size: 10 })
+                const match = phoneResponse.results.find((customer) => customer.phone === WALK_IN_PHONE)
+                
                 if (match && isMounted) {
                   const option = { id: match.id, name: match.name }
                   setCustomerOptions(prev => {
@@ -702,10 +703,10 @@ export default function SalesPage() {
                   })
                   setSelectedCustomer(option.id)
                   setCheckoutCustomerId(option.id)
-                  console.log('✅ Found walk-in customer on retry:', option)
+                  console.log('✅ Found existing walk-in customer by phone:', option)
                 }
               } catch (retryErr) {
-                console.warn('Retry search for walk-in customer failed', retryErr)
+                console.warn('Failed to find walk-in customer by phone', retryErr)
               }
             }
           }
