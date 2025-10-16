@@ -634,6 +634,12 @@ export default function SalesPage() {
   useEffect(() => {
     let isMounted = true
 
+    // Don't run if business isn't loaded yet
+    if (!currentBusiness?.id) {
+      console.log('⏳ Waiting for business context to load...')
+      return
+    }
+
     const loadCustomersAndInitializeWalkIn = async () => {
       setCustomersLoading(true)
       setCustomerError(null)
@@ -666,7 +672,7 @@ export default function SalesPage() {
           })
         } else {
           // Walk-in customer doesn't exist, create it
-          console.log('🚀 Walk-in customer not found, creating...')
+          console.log('🚀 Walk-in customer not found, creating with business:', currentBusiness.id)
           try {
             const WALK_IN_PHONE = '+233000000000'
             const customer = await createCustomerService({
@@ -674,7 +680,7 @@ export default function SalesPage() {
               phone: WALK_IN_PHONE,
               type: 'RETAIL',
               notes: 'Auto-generated walk-in customer',
-              business: currentBusiness?.id,
+              business: currentBusiness.id,
             })
             
             if (isMounted) {
@@ -728,8 +734,7 @@ export default function SalesPage() {
     return () => {
       isMounted = false
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Only run once on mount
+  }, [currentBusiness?.id]) // Run when business is loaded
 
   // Sync selected customer TO cart when cart is created (user selected customer before adding products)
   useEffect(() => {
