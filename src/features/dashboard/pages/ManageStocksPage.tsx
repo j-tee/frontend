@@ -107,7 +107,7 @@ import {
   selectDeleteAdjustmentStatus,
   selectDeleteAdjustmentError,
 } from '../../../store/slices/stockAdjustmentSlice'
-import { getAdjustmentIcon, getAdjustmentColor, formatAdjustmentType } from '../../../utils/stockAdjustmentHelpers.js'
+import { getAdjustmentIcon, getAdjustmentColor, formatAdjustmentType, formatQuantityWithSign } from '../../../utils/stockAdjustmentHelpers.js'
 import type { AdjustmentType } from '../../../types/stockAdjustments.js'
 import type { Product, StockProduct, StockProductPayload, Storefront, SupplierPayload, TransferRequest, TransferRequestCreatePayload } from '../../../types/inventory.js'
 import type { StockAdjustmentCreatePayload, StockAdjustment } from '../../../types/stockAdjustments.js'
@@ -290,6 +290,8 @@ const ManageStocksPage = () => {
   const [editingAdjustment, setEditingAdjustment] = useState<StockAdjustment | null>(null)
   const [adjustmentToDelete, setAdjustmentToDelete] = useState<StockAdjustment | null>(null)
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
+  // Toggle to show dedicated transfers view in adjustments tab
+  const [showTransfersOnly, setShowTransfersOnly] = useState(false)
   
   // Adjustments filters
   const [adjustmentSearchTerm, setAdjustmentSearchTerm] = useState('')
@@ -1178,72 +1180,85 @@ const ManageStocksPage = () => {
                 <th>Reference #</th>
                 <th>Date</th>
                 <th>Type</th>
-                <th>Source</th>
-                <th>Destination</th>
+                <th>Source (deducted from)</th>
+                <th>Destination (added to)</th>
                 <th>Products</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {adjustments
-                .filter(a => a.adjustment_type === 'TRANSFER_OUT' || a.adjustment_type === 'TRANSFER_IN')
-                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                .slice(0, 10)
-                .map((a) => (
-                            <tr key={a.id}>
-                              <td>{a.reference_number || '—'}</td>
-                              <td>{new Date(a.created_at).toLocaleString()}</td>
-                              <td>
-                                <Badge bg={a.adjustment_type === 'TRANSFER_OUT' ? 'danger' : 'info'}>
-                                  {a.adjustment_type.replace('TRANSFER_', '').replace('_', ' ')}
-                                </Badge>
-                              </td>
-                              {
-                                // Some backend responses embed additional fields for transfer adjustments
-                                // (source_warehouse_name, destination_warehouse_name, products list). Use a
-                                // small local typed view to render them when present.
-                              }
-                              {(() => {
-                                type TransferView = {
-                                  source_warehouse_name?: string
-                                  destination_warehouse_name?: string
-                                  products?: Array<{ name: string; quantity: number }>
-                                }
-                                const extra = a as unknown as TransferView
-                                return (
-                                  <>
-                                    <td>{extra.source_warehouse_name || '—'}</td>
-                                    <td>{extra.destination_warehouse_name || '—'}</td>
-                                    <td>
-                                      {extra.products && extra.products.length > 0
-                                        ? extra.products.map((p) => `${p.name} (${p.quantity})`).join(', ')
-                                        : a.stock_product_details?.product_name || '—'}
-                                    </td>
-                                  </>
-                                )
-                              })()}
-                              <td>
-                                <Badge bg={a.status === 'COMPLETED' ? 'success' : a.status === 'APPROVED' ? 'info' : a.status === 'REJECTED' ? 'danger' : 'warning'}>
-                                  {a.status}
-                                </Badge>
-                              </td>
-                              <td>
-                                <div className="d-flex gap-1">
-                                  <Button variant="link" size="sm" onClick={() => handleViewAdjustment(a)}>
-                                    View
-                                  </Button>
-                                  <Button variant="outline-primary" size="sm" onClick={() => handleEditAdjustment(a)}>
-                                    Edit
-                                  </Button>
-                                  <Button variant="outline-danger" size="sm" onClick={() => handleDeleteAdjustment(a)}>
-                                    Delete
-                                  </Button>
-                                  {/* TODO: Add audit/implication modal or link here if needed */}
-                                </div>
-                              </td>
-                            </tr>
-                ))}
+              {
+                // Build grouped transfer entries (pair TRANSFER_OUT and TRANSFER_IN by reference)
+              }
+              {(() => {
+                type Group = {
+                  reference: string
+                  date: string
+                  out?: StockAdjustment
+                  in?: StockAdjustment
+                  products: Array<{ name: string; quantity: number; type: AdjustmentType }>
+                  status?: string
+                }
+
+                const groups: Record<string, Group> = {}
+                adjustments
+                  .filter(a => a.adjustment_type === 'TRANSFER_OUT' || a.adjustment_type === 'TRANSFER_IN')
+                  .forEach((a) => {
+                    const key = a.reference_number || a.related_transfer || a.id
+                    if (!groups[key]) {
+                      groups[key] = { reference: key, date: a.created_at, products: [], status: a.status }
+                    }
+                    const g = groups[key]
+                    if (a.adjustment_type === 'TRANSFER_OUT') g.out = a
+                    if (a.adjustment_type === 'TRANSFER_IN') g.in = a
+                    const prodName = a.stock_product_details?.product_name || stockProducts.find(sp => sp.id === a.stock_product)?.product_name || '—'
+                    g.products.push({ name: prodName, quantity: a.quantity, type: a.adjustment_type })
+                  })
+
+                const rows = Object.values(groups)
+                  .sort((x, y) => new Date(y.date).getTime() - new Date(x.date).getTime())
+                  .slice(0, 10)
+
+                return rows.map((g) => {
+                  const sourceName = g.out ? (g.out.stock_product_details?.warehouse || stockProducts.find(sp => sp.id === g.out!.stock_product)?.warehouse_name) : '—'
+                  const destName = g.in ? (g.in.stock_product_details?.warehouse || stockProducts.find(sp => sp.id === g.in!.stock_product)?.warehouse_name) : '—'
+                  return (
+                    <tr key={g.reference}>
+                      <td>{g.reference || '—'}</td>
+                      <td>{new Date(g.date).toLocaleString()}</td>
+                      <td>
+                        <Badge bg={(g.out && !g.in) ? 'danger' : (g.in && !g.out) ? 'info' : 'secondary'}>
+                          {g.out && g.in ? 'Paired Transfer' : g.out ? 'Transfer Out — deducted from source' : 'Transfer In — added to destination'}
+                        </Badge>
+                      </td>
+                      <td>{sourceName || '—'}</td>
+                      <td>{destName || '—'}</td>
+                      <td>
+                        {g.products.length > 0 ? g.products.map(p => `${p.name} (${formatQuantityWithSign(p.quantity, p.type)})`).join(', ') : '—'}
+                      </td>
+                      <td>
+                        <Badge bg={g.status === 'COMPLETED' ? 'success' : g.status === 'APPROVED' ? 'info' : g.status === 'REJECTED' ? 'danger' : 'warning'}>
+                          {g.status}
+                        </Badge>
+                      </td>
+                      <td>
+                        <div className="d-flex gap-1">
+                          <Button variant="link" size="sm" onClick={() => handleViewAdjustment(g.out ?? g.in!)}>
+                            View
+                          </Button>
+                          <Button variant="outline-primary" size="sm" onClick={() => handleEditAdjustment(g.out ?? g.in!)}>
+                            Edit
+                          </Button>
+                          <Button variant="outline-danger" size="sm" onClick={() => handleDeleteAdjustment(g.out ?? g.in!)}>
+                            Delete
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              })()}
             </tbody>
           </Table>
           <div className="text-xs text-slate-500 mt-2">
@@ -1347,6 +1362,16 @@ const ManageStocksPage = () => {
               </div>
             </div>
           </section>
+
+          <div className="d-flex justify-end mb-3">
+            <Form.Check
+              type="switch"
+              id="show-transfers-only-main"
+              label="Show transfers only"
+              checked={showTransfersOnly}
+              onChange={(e) => setShowTransfersOnly(e.target.checked)}
+            />
+          </div>
 
           {/* Search and Filters */}
           <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -1482,155 +1507,242 @@ const ManageStocksPage = () => {
 
             {adjustmentsStatus === 'succeeded' && (
               <>
-                {adjustments.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-slate-600">No stock adjustments found.</p>
-                    <p className="text-sm text-slate-500 mt-2">
-                      Create your first adjustment to track inventory changes.
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    <Table responsive hover>
-                      <thead>
-                        <tr>
-                          <th>Type</th>
-                          <th>Stock Product</th>
-                          <th>Quantity</th>
-                          <th>Reason</th>
-                          <th>Status</th>
-                          <th>Created By</th>
-                          <th>Date</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {adjustments.map((adjustment) => (
-                          <tr key={adjustment.id}>
-                            <td>
-                              <span style={{ marginRight: '0.5rem' }}>
-                                {getAdjustmentIcon(adjustment.adjustment_type)}
-                              </span>
-                              <Badge bg={getAdjustmentColor(adjustment.adjustment_type)}>
-                                {formatAdjustmentType(adjustment.adjustment_type)}
-                              </Badge>
-                            </td>
-                            <td>
-                              {adjustment.stock_product_details?.product_name || `Stock #${adjustment.stock_product}`}
-                            </td>
-                            <td>
-                              <span className={adjustment.is_increase ? 'text-success' : 'text-danger'}>
-                                {adjustment.is_increase ? '+' : '-'}
-                                {adjustment.quantity}
-                              </span>
-                            </td>
-                            <td>{adjustment.reason || '-'}</td>
-                            <td>
-                              <Badge 
-                                bg={
-                                  adjustment.status === 'COMPLETED' ? 'success' :
-                                  adjustment.status === 'APPROVED' ? 'info' :
-                                  adjustment.status === 'REJECTED' ? 'danger' :
-                                  'warning'
-                                }
-                              >
-                                {adjustment.status}
-                              </Badge>
-                            </td>
-                            <td>{adjustment.created_by_name || 'System'}</td>
-                            <td>{new Date(adjustment.created_at).toLocaleDateString()}</td>
-                            <td>
-                              <div className="d-flex gap-1">
-                                <Button
-                                  variant="link"
-                                  size="sm"
-                                  onClick={() => handleViewAdjustment(adjustment)}
-                                >
-                                  View
-                                </Button>
-                                <Button
-                                  variant="outline-primary"
-                                  size="sm"
-                                  onClick={() => handleEditAdjustment(adjustment)}
-                                  disabled={updateAdjustmentStatus === 'loading'}
-                                >
-                                  Edit
-                                </Button>
-                                <Button
-                                  variant="outline-danger"
-                                  size="sm"
-                                  onClick={() => handleDeleteAdjustment(adjustment)}
-                                  disabled={deleteAdjustmentStatus === 'loading'}
-                                >
-                                  Delete
-                                </Button>
-                                {adjustment.status === 'PENDING' && adjustment.requires_approval && (
-                                  <Fragment key={`actions-${adjustment.id}`}>
-                                    <Button
-                                      variant="success"
-                                      size="sm"
-                                      onClick={() => handleApproveAdjustment(adjustment.id)}
-                                      disabled={approveAdjustmentStatus === 'loading'}
-                                    >
-                                      Approve
-                                    </Button>
-                                    <Button
-                                      variant="danger"
-                                      size="sm"
-                                      onClick={() => handleRejectAdjustment(adjustment.id)}
-                                      disabled={rejectAdjustmentStatus === 'loading'}
-                                    >
-                                      Reject
-                                    </Button>
-                                  </Fragment>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </Table>
+                {showTransfersOnly ? (
+                  // Render grouped transfers view (paired TRANSFER_OUT/TRANSFER_IN)
+                  (() => {
+                    type Group = {
+                      reference: string
+                      date: string
+                      out?: StockAdjustment
+                      in?: StockAdjustment
+                      products: Array<{ name: string; quantity: number; type: AdjustmentType }>
+                      status?: string
+                    }
+                    const groups: Record<string, Group> = {}
+                    adjustments
+                      .filter(a => a.adjustment_type === 'TRANSFER_OUT' || a.adjustment_type === 'TRANSFER_IN')
+                      .forEach((a) => {
+                        const key = a.reference_number || a.related_transfer || a.id
+                        if (!groups[key]) {
+                          groups[key] = { reference: key, date: a.created_at, products: [], status: a.status }
+                        }
+                        const g = groups[key]
+                        if (a.adjustment_type === 'TRANSFER_OUT') g.out = a
+                        if (a.adjustment_type === 'TRANSFER_IN') g.in = a
+                        const prodName = a.stock_product_details?.product_name || stockProducts.find(sp => sp.id === a.stock_product)?.product_name || '—'
+                        g.products.push({ name: prodName, quantity: a.quantity, type: a.adjustment_type })
+                      })
 
-                    {/* Pagination */}
-                    {adjustmentsPagination && adjustmentsPagination.count > 0 && (
-                      <div className="d-flex justify-content-between align-items-center mt-4">
-                        <div className="text-slate-600">
-                          Showing {((adjustmentsPage - 1) * 20) + 1} to{' '}
-                          {Math.min(adjustmentsPage * 20, adjustmentsPagination.count)} of{' '}
-                          {adjustmentsPagination.count} adjustments
+                    const rows = Object.values(groups)
+                      .sort((x, y) => new Date(y.date).getTime() - new Date(x.date).getTime())
+                      .slice(0, 50)
+
+                    return (
+                      <Table responsive hover>
+                        <thead>
+                          <tr>
+                            <th>Reference #</th>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Source (deducted from)</th>
+                            <th>Destination (added to)</th>
+                            <th>Products</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((g) => {
+                            const sourceName = g.out ? (g.out.stock_product_details?.warehouse || stockProducts.find(sp => sp.id === g.out!.stock_product)?.warehouse_name) : '—'
+                            const destName = g.in ? (g.in.stock_product_details?.warehouse || stockProducts.find(sp => sp.id === g.in!.stock_product)?.warehouse_name) : '—'
+                            return (
+                              <tr key={g.reference}>
+                                <td>{g.reference || '—'}</td>
+                                <td>{new Date(g.date).toLocaleString()}</td>
+                                <td>
+                                  <Badge bg={(g.out && !g.in) ? 'danger' : (g.in && !g.out) ? 'info' : 'secondary'}>
+                                    {g.out && g.in ? 'Paired Transfer' : g.out ? 'Transfer Out — deducted from source' : 'Transfer In — added to destination'}
+                                  </Badge>
+                                </td>
+                                <td>{sourceName || '—'}</td>
+                                <td>{destName || '—'}</td>
+                                <td>{g.products.length > 0 ? g.products.map(p => `${p.name} (${formatQuantityWithSign(p.quantity, p.type)})`).join(', ') : '—'}</td>
+                                <td>
+                                  <Badge bg={g.status === 'COMPLETED' ? 'success' : g.status === 'APPROVED' ? 'info' : g.status === 'REJECTED' ? 'danger' : 'warning'}>
+                                    {g.status}
+                                  </Badge>
+                                </td>
+                                <td>
+                                  <div className="d-flex gap-1">
+                                    <Button variant="link" size="sm" onClick={() => handleViewAdjustment(g.out ?? g.in!)}>
+                                      View
+                                    </Button>
+                                    <Button variant="outline-primary" size="sm" onClick={() => handleEditAdjustment(g.out ?? g.in!)}>
+                                      Edit
+                                    </Button>
+                                    <Button variant="outline-danger" size="sm" onClick={() => handleDeleteAdjustment(g.out ?? g.in!)}>
+                                      Delete
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </Table>
+                    )
+                  })()
+                ) : (
+                  adjustments.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-slate-600">No stock adjustments found.</p>
+                      <p className="text-sm text-slate-500 mt-2">
+                        Create your first adjustment to track inventory changes.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <Table responsive hover>
+                        <thead>
+                          <tr>
+                            <th>Type</th>
+                            <th>Stock Product</th>
+                            <th>Quantity</th>
+                            <th>Reason</th>
+                            <th>Status</th>
+                            <th>Created By</th>
+                            <th>Date</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {adjustments.map((adjustment) => (
+                            <tr key={adjustment.id}>
+                              <td>
+                                <span style={{ marginRight: '0.5rem' }}>
+                                  {getAdjustmentIcon(adjustment.adjustment_type)}
+                                </span>
+                                <Badge bg={getAdjustmentColor(adjustment.adjustment_type)}>
+                                  {formatAdjustmentType(adjustment.adjustment_type)}
+                                </Badge>
+                              </td>
+                              <td>
+                                {adjustment.stock_product_details?.product_name || `Stock #${adjustment.stock_product}`}
+                              </td>
+                              <td>
+                                <span className={adjustment.is_increase ? 'text-success' : 'text-danger'}>
+                                  {adjustment.is_increase ? '+' : '-'}
+                                  {adjustment.quantity}
+                                </span>
+                              </td>
+                              <td>{adjustment.reason || '-'}</td>
+                              <td>
+                                <Badge 
+                                  bg={
+                                    adjustment.status === 'COMPLETED' ? 'success' :
+                                    adjustment.status === 'APPROVED' ? 'info' :
+                                    adjustment.status === 'REJECTED' ? 'danger' :
+                                    'warning'
+                                  }
+                                >
+                                  {adjustment.status}
+                                </Badge>
+                              </td>
+                              <td>{adjustment.created_by_name || 'System'}</td>
+                              <td>{new Date(adjustment.created_at).toLocaleDateString()}</td>
+                              <td>
+                                <div className="d-flex gap-1">
+                                  <Button
+                                    variant="link"
+                                    size="sm"
+                                    onClick={() => handleViewAdjustment(adjustment)}
+                                  >
+                                    View
+                                  </Button>
+                                  <Button
+                                    variant="outline-primary"
+                                    size="sm"
+                                    onClick={() => handleEditAdjustment(adjustment)}
+                                    disabled={updateAdjustmentStatus === 'loading'}
+                                  >
+                                    Edit
+                                  </Button>
+                                  <Button
+                                    variant="outline-danger"
+                                    size="sm"
+                                    onClick={() => handleDeleteAdjustment(adjustment)}
+                                    disabled={deleteAdjustmentStatus === 'loading'}
+                                  >
+                                    Delete
+                                  </Button>
+                                  {adjustment.status === 'PENDING' && adjustment.requires_approval && (
+                                    <Fragment key={`actions-${adjustment.id}`}>
+                                      <Button
+                                        variant="success"
+                                        size="sm"
+                                        onClick={() => handleApproveAdjustment(adjustment.id)}
+                                        disabled={approveAdjustmentStatus === 'loading'}
+                                      >
+                                        Approve
+                                      </Button>
+                                      <Button
+                                        variant="danger"
+                                        size="sm"
+                                        onClick={() => handleRejectAdjustment(adjustment.id)}
+                                        disabled={rejectAdjustmentStatus === 'loading'}
+                                      >
+                                        Reject
+                                      </Button>
+                                    </Fragment>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </Table>
+
+                      {/* Pagination */}
+                      {adjustmentsPagination && adjustmentsPagination.count > 0 && (
+                        <div className="d-flex justify-content-between align-items-center mt-4">
+                          <div className="text-slate-600">
+                            Showing {((adjustmentsPage - 1) * 20) + 1} to{' '}
+                            {Math.min(adjustmentsPage * 20, adjustmentsPagination.count)} of{' '}
+                            {adjustmentsPagination.count} adjustments
+                          </div>
+                          <div className="d-flex gap-2">
+                            <Button
+                              variant="outline-secondary"
+                              size="sm"
+                              disabled={!adjustmentsPagination.previous}
+                              onClick={() => {
+                                if (adjustmentsPage > 1) {
+                                  dispatch(setAdjustmentsPage(adjustmentsPage - 1))
+                                  void dispatch(loadStockAdjustments(buildAdjustmentParams(adjustmentsPage - 1)))
+                                }
+                              }}
+                            >
+                              Previous
+                            </Button>
+                            <span className="d-flex align-items-center px-3">
+                              Page {adjustmentsPage} of {Math.ceil(adjustmentsPagination.count / 20)}
+                            </span>
+                            <Button
+                              variant="outline-secondary"
+                              size="sm"
+                              disabled={!adjustmentsPagination.next}
+                              onClick={() => {
+                                dispatch(setAdjustmentsPage(adjustmentsPage + 1))
+                                void dispatch(loadStockAdjustments(buildAdjustmentParams(adjustmentsPage + 1)))
+                              }}
+                            >
+                              Next
+                            </Button>
+                          </div>
                         </div>
-                        <div className="d-flex gap-2">
-                          <Button
-                            variant="outline-secondary"
-                            size="sm"
-                            disabled={!adjustmentsPagination.previous}
-                            onClick={() => {
-                              if (adjustmentsPage > 1) {
-                                dispatch(setAdjustmentsPage(adjustmentsPage - 1))
-                                void dispatch(loadStockAdjustments(buildAdjustmentParams(adjustmentsPage - 1)))
-                              }
-                            }}
-                          >
-                            Previous
-                          </Button>
-                          <span className="d-flex align-items-center px-3">
-                            Page {adjustmentsPage} of {Math.ceil(adjustmentsPagination.count / 20)}
-                          </span>
-                          <Button
-                            variant="outline-secondary"
-                            size="sm"
-                            disabled={!adjustmentsPagination.next}
-                            onClick={() => {
-                              dispatch(setAdjustmentsPage(adjustmentsPage + 1))
-                              void dispatch(loadStockAdjustments(buildAdjustmentParams(adjustmentsPage + 1)))
-                            }}
-                          >
-                            Next
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </>
+                      )}
+                    </>
+                  )
                 )}
               </>
             )}
