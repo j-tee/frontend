@@ -9,6 +9,7 @@ import Spinner from 'react-bootstrap/Spinner'
 import Table from 'react-bootstrap/Table'
 import { useAppDispatch, useAppSelector } from '../../../hooks/index.js'
 import StockIntakeModal from '../components/StockIntakeModal'
+import { TransferModal } from '../components/TransferModal'
 import StockProductDetailModal from '../components/StockProductDetailModal'
 import StockRequestForm from '../components/stock-requests/StockRequestForm'
 import StockRequestList from '../components/stock-requests/StockRequestList'
@@ -107,6 +108,7 @@ import {
   selectDeleteAdjustmentError,
 } from '../../../store/slices/stockAdjustmentSlice'
 import { getAdjustmentIcon, getAdjustmentColor, formatAdjustmentType } from '../../../utils/stockAdjustmentHelpers.js'
+import type { AdjustmentType } from '../../../types/stockAdjustments.js'
 import type { Product, StockProduct, StockProductPayload, Storefront, SupplierPayload, TransferRequest, TransferRequestCreatePayload } from '../../../types/inventory.js'
 import type { StockAdjustmentCreatePayload, StockAdjustment } from '../../../types/stockAdjustments.js'
 
@@ -221,6 +223,62 @@ const ManageStocksPage = () => {
   const [productLookupError, setProductLookupError] = useState<string | null>(null)
   const [storefronts, setStorefronts] = useState<Storefront[]>([])
   const [showCreateRequestForm, setShowCreateRequestForm] = useState(false)
+  // Duplicate declaration removed: activeTab, setActiveTab
+  const [showTransferModal, setShowTransferModal] = useState(false)
+  const [transferError, setTransferError] = useState<string | null>(null)
+  const [isSubmittingTransfer, setIsSubmittingTransfer] = useState(false)
+  const [transferSuccess, setTransferSuccess] = useState<{ reference_number: string } | null>(null)
+  // Handler for submitting transfer
+  const handleSubmitTransfer = async ({ sourceWarehouse, destinationWarehouse, products, reason }: { sourceWarehouse: string; destinationWarehouse: string; products: Array<{ product: string; quantity: number }>; reason?: string }) => {
+    setIsSubmittingTransfer(true)
+    setTransferError(null)
+    setTransferSuccess(null)
+    try {
+      if (!products.length) throw new Error('No products selected for transfer')
+  const results: Array<{ success: boolean; transfer_reference?: string; out_adjustment_id?: string; in_adjustment_id?: string; source_stock_id?: string; dest_stock_id?: string; message?: string }> = []
+      for (const p of products) {
+        // We cannot rely on a `warehouse` field on StockProduct (it's not present in the type).
+        // The API returns `warehouse_name` and `stock` (stock/batch id). Match by warehouse_name
+        // where possible, otherwise match by stock id as a fallback.
+  const sourceWarehouseObj = warehouses.find((w) => w.id === sourceWarehouse)
+
+        const sourceStockProduct = stockProducts.find((sp) => sp.product === p.product && (
+          (sp.warehouse_name && sourceWarehouseObj && sp.warehouse_name === sourceWarehouseObj.name) ||
+          (sp.stock && sp.stock === sourceWarehouse)
+        ))
+        if (!sourceStockProduct) throw new Error('Product not in stock for source warehouse')
+
+        // Destination stock product lookup is no longer required for product-level transfer API
+
+        // The backend transfer API accepts product-level payload with warehouse ids.
+        const transferPayload = {
+          product_id: p.product,
+          from_warehouse_id: sourceWarehouse,
+          to_warehouse_id: destinationWarehouse,
+          quantity: p.quantity,
+          unit_cost: sourceStockProduct.unit_cost,
+          reason,
+        }
+
+        // Call the service
+        const data = await import('../../../services/inventoryService.js').then((m) => m.createWarehouseTransfer(transferPayload))
+        results.push(data)
+      }
+
+  const first = results[0]
+  setTransferSuccess({ reference_number: first?.transfer_reference || 'N/A' })
+      setShowTransferModal(false)
+      void dispatch(loadStockAdjustments(buildAdjustmentParams(1)))
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setTransferError(err.message)
+      } else {
+        setTransferError('Failed to create transfer')
+      }
+    } finally {
+      setIsSubmittingTransfer(false)
+    }
+  }
   const [showRequestDetailModal, setShowRequestDetailModal] = useState(false)
   const [selectedRequest, setSelectedRequest] = useState<TransferRequest | null>(null)
   const [showEditFulfilledModal, setShowEditFulfilledModal] = useState(false)
@@ -818,6 +876,11 @@ const ManageStocksPage = () => {
             Stock Adjustments
           </Nav.Link>
         </Nav.Item>
+        <Nav.Item>
+          <Nav.Link active={activeTab === 'transfers'} onClick={() => setActiveTab('transfers')}>
+            Transfers
+          </Nav.Link>
+        </Nav.Item>
       </Nav>
 
       {/* Stock Products Tab */}
@@ -1085,6 +1148,122 @@ const ManageStocksPage = () => {
         </div>
       </div>
 
+
+      {/* Transfers Tab */}
+      <div className="space-y-6" style={{ display: activeTab === 'transfers' ? 'block' : 'none' }}>
+        <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h3 className="text-xl font-semibold text-slate-900">Warehouse Transfers</h3>
+              <p className="text-slate-600">
+                Initiate and view recent inter-warehouse transfers. For full analytics and audit trails, see the reporting page.
+              </p>
+            </div>
+            <Button variant="primary" className="rounded-pill px-4" onClick={() => setShowTransferModal(true)}>
+              Initiate Transfer
+            </Button>
+          </div>
+          {transferSuccess && (
+            <Alert variant="success" className="mb-0 py-1 px-3 d-inline-block mt-3">
+              Transfer created. Reference #: <b>{transferSuccess.reference_number}</b>
+            </Alert>
+          )}
+        </section>
+        <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h4 className="text-lg font-semibold text-slate-900 mb-3">Recent Transfers</h4>
+          {/* Example: Use adjustments filtered for TRANSFER_OUT/TRANSFER_IN, sorted by date desc. Replace with selector if available. */}
+          <Table responsive hover size="sm" className="align-middle">
+            <thead>
+              <tr>
+                <th>Reference #</th>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Source</th>
+                <th>Destination</th>
+                <th>Products</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {adjustments
+                .filter(a => a.adjustment_type === 'TRANSFER_OUT' || a.adjustment_type === 'TRANSFER_IN')
+                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                .slice(0, 10)
+                .map((a) => (
+                            <tr key={a.id}>
+                              <td>{a.reference_number || '—'}</td>
+                              <td>{new Date(a.created_at).toLocaleString()}</td>
+                              <td>
+                                <Badge bg={a.adjustment_type === 'TRANSFER_OUT' ? 'danger' : 'info'}>
+                                  {a.adjustment_type.replace('TRANSFER_', '').replace('_', ' ')}
+                                </Badge>
+                              </td>
+                              {
+                                // Some backend responses embed additional fields for transfer adjustments
+                                // (source_warehouse_name, destination_warehouse_name, products list). Use a
+                                // small local typed view to render them when present.
+                              }
+                              {(() => {
+                                type TransferView = {
+                                  source_warehouse_name?: string
+                                  destination_warehouse_name?: string
+                                  products?: Array<{ name: string; quantity: number }>
+                                }
+                                const extra = a as unknown as TransferView
+                                return (
+                                  <>
+                                    <td>{extra.source_warehouse_name || '—'}</td>
+                                    <td>{extra.destination_warehouse_name || '—'}</td>
+                                    <td>
+                                      {extra.products && extra.products.length > 0
+                                        ? extra.products.map((p) => `${p.name} (${p.quantity})`).join(', ')
+                                        : a.stock_product_details?.product_name || '—'}
+                                    </td>
+                                  </>
+                                )
+                              })()}
+                              <td>
+                                <Badge bg={a.status === 'COMPLETED' ? 'success' : a.status === 'APPROVED' ? 'info' : a.status === 'REJECTED' ? 'danger' : 'warning'}>
+                                  {a.status}
+                                </Badge>
+                              </td>
+                              <td>
+                                <div className="d-flex gap-1">
+                                  <Button variant="link" size="sm" onClick={() => handleViewAdjustment(a)}>
+                                    View
+                                  </Button>
+                                  <Button variant="outline-primary" size="sm" onClick={() => handleEditAdjustment(a)}>
+                                    Edit
+                                  </Button>
+                                  <Button variant="outline-danger" size="sm" onClick={() => handleDeleteAdjustment(a)}>
+                                    Delete
+                                  </Button>
+                                  {/* TODO: Add audit/implication modal or link here if needed */}
+                                </div>
+                              </td>
+                            </tr>
+                ))}
+            </tbody>
+          </Table>
+          <div className="text-xs text-slate-500 mt-2">
+            Only the 10 most recent transfers are shown here. For full history and analytics, see the reporting page.
+          </div>
+        </section>
+        <TransferModal
+          show={showTransferModal}
+          onClose={() => setShowTransferModal(false)}
+          onSubmit={handleSubmitTransfer}
+          warehouses={warehouses.map(w => ({ id: w.id, name: w.name }))}
+          // generic products list (fallback)
+          products={productLookup.map(p => ({ id: p.id, name: p.name }))}
+          // pass detailed stockProducts so the modal can filter by selected source warehouse
+          stockProducts={stockProducts}
+          isSubmitting={isSubmittingTransfer}
+          error={transferError}
+        />
+      </div>
+
       {/* Stock Requests Tab */}
       <div className="space-y-6" style={{ display: activeTab === 'stock-requests' ? 'block' : 'none' }}>
               <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -1269,7 +1448,7 @@ const ManageStocksPage = () => {
                 )}
                 {adjustmentTypeFilter && (
                   <Badge bg="secondary" className="d-flex align-items-center gap-1">
-                    Type: {formatAdjustmentType(adjustmentTypeFilter)}
+                    Type: {formatAdjustmentType(adjustmentTypeFilter as AdjustmentType)}
                     <button
                       className="btn-close btn-close-white"
                       style={{ fontSize: '0.6rem', padding: '0.25rem' }}

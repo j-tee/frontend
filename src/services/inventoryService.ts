@@ -1,3 +1,37 @@
+// Inter-warehouse transfer (paired stock adjustments)
+// Calls POST /inventory/api/stock-adjustments/transfer/ (custom action)
+export const createWarehouseTransfer = async (payload: {
+  product_id: string;
+  from_warehouse_id: string;
+  to_warehouse_id: string;
+  quantity: number;
+  unit_cost?: string | number;
+  reason?: string;
+}) => {
+  // New API expects product-level payload (product_id + warehouse ids)
+  const body = {
+    product_id: payload.product_id,
+    from_warehouse_id: payload.from_warehouse_id,
+    to_warehouse_id: payload.to_warehouse_id,
+    quantity: payload.quantity,
+    unit_cost: payload.unit_cost,
+    reason: payload.reason,
+  }
+
+  const { data } = await httpClient.post<{
+    success: boolean;
+    transfer_reference?: string;
+    out_adjustment_id?: string;
+    in_adjustment_id?: string;
+    source_stock_id?: string;
+    dest_stock_id?: string;
+    message?: string;
+  }>(
+    '/inventory/api/stock-adjustments/transfer/',
+    body,
+  )
+  return data
+}
 import httpClient from './httpClient.js'
 import type { PaginatedResponse, UUID } from '../types/common.js'
 import type {

@@ -443,7 +443,9 @@ export interface StockMovement {
   sku: string;
   warehouse_id: string;
   warehouse_name: string;
-  movement_type: 'in' | 'out' | 'adjustment' | 'transfer';
+  movement_type: 'in' | 'out' | 'adjustment' | 'transfer'; // legacy, keep for compatibility
+  adjustment_type: 'IN' | 'OUT' | 'ADJUSTMENT' | 'TRANSFER_OUT' | 'TRANSFER_IN';
+  reference_number?: string;
   quantity: number;
   quantity_before: number;
   quantity_after: number;
