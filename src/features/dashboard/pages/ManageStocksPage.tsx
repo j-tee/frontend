@@ -10,6 +10,7 @@ import Table from 'react-bootstrap/Table'
 import { useAppDispatch, useAppSelector } from '../../../hooks/index.js'
 import StockIntakeModal from '../components/StockIntakeModal'
 import { TransferModal } from '../components/TransferModal'
+import TransferDetailModal from '../components/TransferDetailModal'
 import StockProductDetailModal from '../components/StockProductDetailModal'
 import StockRequestForm from '../components/stock-requests/StockRequestForm'
 import StockRequestList from '../components/stock-requests/StockRequestList'
@@ -107,9 +108,24 @@ import {
   selectDeleteAdjustmentStatus,
   selectDeleteAdjustmentError,
 } from '../../../store/slices/stockAdjustmentSlice'
+import {
+  loadWarehouseTransfers,
+  loadWarehouseTransferDetail,
+  completeWarehouseTransferThunk,
+  cancelWarehouseTransferThunk,
+  deleteWarehouseTransferThunk,
+  selectWarehouseTransfers,
+  selectWarehouseTransfersStatus,
+  selectWarehouseTransfersError,
+  selectWarehouseTransferDetail,
+  selectWarehouseTransferDetailStatus,
+  selectWarehouseTransferMutationStatus,
+  clearWarehouseTransferDetail,
+  clearWarehouseTransferMutation,
+} from '../../../store/slices/warehouseTransferSlice'
 import { getAdjustmentIcon, getAdjustmentColor, formatAdjustmentType, formatQuantityWithSign } from '../../../utils/stockAdjustmentHelpers.js'
 import type { AdjustmentType } from '../../../types/stockAdjustments.js'
-import type { Product, StockProduct, StockProductPayload, Storefront, SupplierPayload, TransferRequest, TransferRequestCreatePayload } from '../../../types/inventory.js'
+import type { Product, StockProduct, StockProductPayload, Storefront, SupplierPayload, TransferRequest, TransferRequestCreatePayload, WarehouseTransfer } from '../../../types/inventory.js'
 import type { StockAdjustmentCreatePayload, StockAdjustment } from '../../../types/stockAdjustments.js'
 
 const formatDecimal = (value?: string | null) => {
@@ -207,6 +223,27 @@ const ManageStocksPage = () => {
   const updateAdjustmentError = useAppSelector(selectUpdateAdjustmentError)
   const deleteAdjustmentStatus = useAppSelector(selectDeleteAdjustmentStatus)
   const deleteAdjustmentError = useAppSelector(selectDeleteAdjustmentError)
+  
+  // New Warehouse Transfer selectors
+  const warehouseTransfers = useAppSelector(selectWarehouseTransfers)
+  const warehouseTransfersStatus = useAppSelector(selectWarehouseTransfersStatus)
+  const warehouseTransfersError = useAppSelector(selectWarehouseTransfersError)
+  const warehouseTransferDetail = useAppSelector(selectWarehouseTransferDetail)
+  const warehouseTransferDetailStatus = useAppSelector(selectWarehouseTransferDetailStatus)
+  const warehouseTransferMutationStatus = useAppSelector(selectWarehouseTransferMutationStatus)
+  
+  // Get user role for permission checks
+  // Priority order: employment.role > user.final_userRole > user.role
+  const employment = useAppSelector((state) => state.auth.employment)
+  const user = useAppSelector((state) => state.auth.user)
+  
+  const userRole = employment?.role || user?.final_userRole || user?.role
+  
+  // Debug: Log the user role being passed to modal (can be removed after testing)
+  console.log('ManageStocksPage - employment.role:', employment?.role)
+  console.log('ManageStocksPage - user.final_userRole:', user?.final_userRole)
+  console.log('ManageStocksPage - user.role:', user?.role)
+  console.log('ManageStocksPage - final userRole:', userRole)
 
   // Local state
   const [activeTab, setActiveTab] = useState('stock-products')
@@ -233,42 +270,91 @@ const ManageStocksPage = () => {
     setIsSubmittingTransfer(true)
     setTransferError(null)
     setTransferSuccess(null)
+    
     try {
       if (!products.length) throw new Error('No products selected for transfer')
-  const results: Array<{ success: boolean; transfer_reference?: string; out_adjustment_id?: string; in_adjustment_id?: string; source_stock_id?: string; dest_stock_id?: string; message?: string }> = []
-      for (const p of products) {
-        // We cannot rely on a `warehouse` field on StockProduct (it's not present in the type).
-        // The API returns `warehouse_name` and `stock` (stock/batch id). Match by warehouse_name
-        // where possible, otherwise match by stock id as a fallback.
-  const sourceWarehouseObj = warehouses.find((w) => w.id === sourceWarehouse)
-
-        const sourceStockProduct = stockProducts.find((sp) => sp.product === p.product && (
-          (sp.warehouse_name && sourceWarehouseObj && sp.warehouse_name === sourceWarehouseObj.name) ||
-          (sp.stock && sp.stock === sourceWarehouse)
-        ))
-        if (!sourceStockProduct) throw new Error('Product not in stock for source warehouse')
-
-        // Destination stock product lookup is no longer required for product-level transfer API
-
-        // The backend transfer API accepts product-level payload with warehouse ids.
-        const transferPayload = {
-          product_id: p.product,
-          from_warehouse_id: sourceWarehouse,
-          to_warehouse_id: destinationWarehouse,
-          quantity: p.quantity,
-          unit_cost: sourceStockProduct.unit_cost,
-          reason,
+      
+      // Feature flag: Use new batch transfer API or old product-level loop
+      const useNewTransferAPI = import.meta.env.VITE_USE_NEW_TRANSFER_API === 'true'
+      
+      if (useNewTransferAPI) {
+        // NEW: Single batch API call
+        const sourceWarehouseObj = warehouses.find((w) => w.id === sourceWarehouse)
+        
+        // Validate all products exist in source warehouse before making API call
+        for (const p of products) {
+          const sourceStockProduct = stockProducts.find((sp) => 
+            sp.product === p.product && (
+              (sp.warehouse_name && sourceWarehouseObj && sp.warehouse_name === sourceWarehouseObj.name) ||
+              (sp.stock && sp.stock === sourceWarehouse)
+            )
+          )
+          if (!sourceStockProduct) {
+            throw new Error(`Product not in stock for source warehouse: ${p.product}`)
+          }
         }
-
-        // Call the service
-        const data = await import('../../../services/inventoryService.js').then((m) => m.createWarehouseTransfer(transferPayload))
-        results.push(data)
+        
+        // Create batch transfer payload
+        const { createWarehouseTransferBatch } = await import('../../../services/inventoryService.js')
+        
+        const transfer = await createWarehouseTransferBatch({
+          source_warehouse: sourceWarehouse,
+          destination_warehouse: destinationWarehouse,
+          notes: reason || '',
+          items: products.map(p => ({
+            product: p.product,
+            quantity: p.quantity,
+            // Omit unit_cost - let backend auto-detect from source warehouse
+          }))
+        })
+        
+        setTransferSuccess({ reference_number: transfer.reference_number })
+        setShowTransferModal(false)
+        
+        // Reload adjustments (they'll still be created in the background for compatibility)
+        void dispatch(loadStockAdjustments(buildAdjustmentParams(1)))
+      } else {
+        // OLD: Product-level loop (legacy)
+        const results: Array<{ 
+          success: boolean
+          transfer_reference?: string
+          out_adjustment_id?: string
+          in_adjustment_id?: string
+          source_stock_id?: string
+          dest_stock_id?: string
+          message?: string 
+        }> = []
+        
+        for (const p of products) {
+          const sourceWarehouseObj = warehouses.find((w) => w.id === sourceWarehouse)
+          
+          const sourceStockProduct = stockProducts.find((sp) => 
+            sp.product === p.product && (
+              (sp.warehouse_name && sourceWarehouseObj && sp.warehouse_name === sourceWarehouseObj.name) ||
+              (sp.stock && sp.stock === sourceWarehouse)
+            )
+          )
+          if (!sourceStockProduct) throw new Error('Product not in stock for source warehouse')
+          
+          const transferPayload = {
+            product_id: p.product,
+            from_warehouse_id: sourceWarehouse,
+            to_warehouse_id: destinationWarehouse,
+            quantity: p.quantity,
+            unit_cost: sourceStockProduct.unit_cost,
+            reason,
+          }
+          
+          const { createWarehouseTransfer } = await import('../../../services/inventoryService.js')
+          const data = await createWarehouseTransfer(transferPayload)
+          results.push(data)
+        }
+        
+        const first = results[0]
+        setTransferSuccess({ reference_number: first?.transfer_reference || 'N/A' })
+        setShowTransferModal(false)
+        void dispatch(loadStockAdjustments(buildAdjustmentParams(1)))
       }
-
-  const first = results[0]
-  setTransferSuccess({ reference_number: first?.transfer_reference || 'N/A' })
-      setShowTransferModal(false)
-      void dispatch(loadStockAdjustments(buildAdjustmentParams(1)))
     } catch (err: unknown) {
       if (err instanceof Error) {
         setTransferError(err.message)
@@ -292,6 +378,10 @@ const ManageStocksPage = () => {
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
   // Toggle to show dedicated transfers view in adjustments tab
   const [showTransfersOnly, setShowTransfersOnly] = useState(false)
+  
+  // New Warehouse Transfer modal state
+  const [showWarehouseTransferDetailModal, setShowWarehouseTransferDetailModal] = useState(false)
+  const [selectedWarehouseTransfer, setSelectedWarehouseTransfer] = useState<WarehouseTransfer | null>(null)
   
   // Adjustments filters
   const [adjustmentSearchTerm, setAdjustmentSearchTerm] = useState('')
@@ -423,6 +513,21 @@ const ManageStocksPage = () => {
       const params = buildAdjustmentParams()
       void dispatch(loadStockAdjustments(params))
       console.log('📊 Loading stock adjustments with filters:', params)
+    }
+  }, [activeTab, dispatch, buildAdjustmentParams])
+  
+  // Load warehouse transfers when on transfers tab (NEW API with feature flag)
+  useEffect(() => {
+    const useNewTransferAPI = import.meta.env.VITE_USE_NEW_TRANSFER_API === 'true'
+    
+    if (activeTab === 'transfers') {
+      if (useNewTransferAPI) {
+        void dispatch(loadWarehouseTransfers())
+      } else {
+        // Load stock adjustments for old grouped transfer display
+        const params = buildAdjustmentParams()
+        void dispatch(loadStockAdjustments(params))
+      }
     }
   }, [activeTab, dispatch, buildAdjustmentParams])
 
@@ -676,6 +781,78 @@ const ManageStocksPage = () => {
     [forwardTransferRequests.length, transferRequestsPage, transferRequestsPageSize]
   )
 
+  // Memoize grouped transfers so we don't declare types inside JSX IIFEs (avoids TSX parser issues)
+  const groupedTransfers = useMemo(() => {
+    type Group = {
+      reference: string
+      date: string
+      out?: StockAdjustment
+      in?: StockAdjustment
+      products: Array<{ name: string; quantity: number; type: AdjustmentType }>
+      status?: string
+    }
+
+    const groups: Record<string, Group> = {}
+    // Consider both TRANSFER_OUT and TRANSFER_IN adjustments and group them by reference_number
+    // Prefer reference_number, then related_transfer, then fall back to adjustment id.
+    adjustments
+      .filter(a => a.adjustment_type === 'TRANSFER_OUT' || a.adjustment_type === 'TRANSFER_IN')
+      .forEach((a) => {
+  // Prefer the related_transfer id as the canonical grouping key when present
+  // Some transfer adjustments create distinct reference_numbers but link via related_transfer
+  // Using related_transfer first ensures paired IN/OUT adjustments collapse into one row.
+  const key = a.related_transfer || a.reference_number || a.id
+        if (!groups[key]) {
+          groups[key] = { reference: key, date: a.created_at || '', products: [], status: a.status }
+        }
+
+        const g = groups[key]
+        // Attach the specific adjustment to the group
+        if (a.adjustment_type === 'TRANSFER_OUT') g.out = a
+        if (a.adjustment_type === 'TRANSFER_IN') g.in = a
+
+        // Resolve product name reliably: prefer embedded snapshot, fall back to stockProducts lookup
+        const prodName = a.stock_product_details?.product_name
+          || stockProducts.find(sp => sp.id === a.stock_product)?.product_name
+          || '—'
+
+        g.products.push({ name: prodName, quantity: a.quantity, type: a.adjustment_type as AdjustmentType })
+
+        // Keep group's date as the newest created_at among attached adjustments
+        if (a.created_at) {
+          const existing = g.date ? new Date(g.date).getTime() : 0
+          const candidate = new Date(a.created_at).getTime()
+          if (!g.date || candidate > existing) {
+            g.date = a.created_at
+          }
+        }
+
+        // Normalize status: if both sides exist and both completed, mark COMPLETED; otherwise prefer the most recent status
+        if (g.out && g.in) {
+          if (g.out.status === 'COMPLETED' && g.in.status === 'COMPLETED') {
+            g.status = 'COMPLETED'
+          } else {
+            // choose status from the adjustment with the newest timestamp
+            const outTime = g.out.created_at ? new Date(g.out.created_at).getTime() : 0
+            const inTime = g.in.created_at ? new Date(g.in.created_at).getTime() : 0
+            g.status = outTime >= inTime ? g.out.status : g.in.status
+          }
+        } else {
+          g.status = a.status
+        }
+      })
+
+    const rows = Object.values(groups)
+      .sort((x, y) => new Date(y.date).getTime() - new Date(x.date).getTime())
+    return rows
+  }, [adjustments, stockProducts])
+
+  // When not showing transfers-only, exclude transfer adjustments from the generic adjustments table
+  const visibleAdjustments = useMemo(() => {
+    if (showTransfersOnly) return [] as StockAdjustment[]
+    return adjustments.filter(a => a.adjustment_type !== 'TRANSFER_OUT' && a.adjustment_type !== 'TRANSFER_IN')
+  }, [adjustments, showTransfersOnly])
+
   const handleViewStockRequest = (request: TransferRequest) => {
     setSelectedRequest(request)
     setShowRequestDetailModal(true)
@@ -846,6 +1023,75 @@ const ManageStocksPage = () => {
     setAdjustmentStatusFilter('')
     setAdjustmentTypeFilter('')
     dispatch(setAdjustmentsPage(1))
+  }
+  
+  // ============================================================================
+  // New Warehouse Transfer Handlers
+  // ============================================================================
+  
+  const handleViewWarehouseTransfer = async (transfer: WarehouseTransfer) => {
+    setSelectedWarehouseTransfer(transfer)
+    setShowWarehouseTransferDetailModal(true)
+    // Load full details if needed
+    void dispatch(loadWarehouseTransferDetail(transfer.id))
+  }
+  
+  const handleCompleteWarehouseTransfer = async (id: string, notes?: string) => {
+    try {
+      console.log('=== Attempting to complete transfer ===')
+      console.log('Transfer ID:', id)
+      console.log('Notes:', notes)
+      console.log('Payload:', notes ? { notes } : undefined)
+      
+      const result = await dispatch(completeWarehouseTransferThunk({ transferId: id, payload: notes ? { notes } : undefined })).unwrap()
+      
+      console.log('=== Complete transfer SUCCESS ===')
+      console.log('Result:', result)
+      
+      // Reload transfers list
+      void dispatch(loadWarehouseTransfers())
+      setShowWarehouseTransferDetailModal(false)
+      dispatch(clearWarehouseTransferMutation('complete'))
+    } catch (error) {
+      console.error('=== Failed to complete warehouse transfer ===')
+      console.error('Error object:', error)
+      console.error('Error type:', typeof error)
+      console.error('Error keys:', Object.keys(error as object))
+      console.error('Error JSON:', JSON.stringify(error, null, 2))
+      // Keep modal open to show error
+    }
+  }
+  
+  const handleCancelWarehouseTransfer = async (id: string, reason: string) => {
+    try {
+      await dispatch(cancelWarehouseTransferThunk({ transferId: id, payload: { reason } })).unwrap()
+      // Reload transfers list
+      void dispatch(loadWarehouseTransfers())
+      setShowWarehouseTransferDetailModal(false)
+      dispatch(clearWarehouseTransferMutation('cancel'))
+    } catch (error) {
+      console.error('Failed to cancel warehouse transfer:', error)
+      // Keep modal open to show error
+    }
+  }
+  
+  const handleDeleteWarehouseTransfer = async (id: string, reason: string) => {
+    try {
+      await dispatch(deleteWarehouseTransferThunk({ transferId: id, reason })).unwrap()
+      // Reload transfers list
+      void dispatch(loadWarehouseTransfers())
+      setShowWarehouseTransferDetailModal(false)
+      dispatch(clearWarehouseTransferMutation('delete'))
+    } catch (error) {
+      console.error('Failed to delete warehouse transfer:', error)
+      // Keep modal open to show error
+    }
+  }
+  
+  const handleCloseWarehouseTransferDetail = () => {
+    setShowWarehouseTransferDetailModal(false)
+    setSelectedWarehouseTransfer(null)
+    dispatch(clearWarehouseTransferDetail())
   }
 
   return (
@@ -1171,111 +1417,212 @@ const ManageStocksPage = () => {
             </Alert>
           )}
         </section>
-        <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h4 className="text-lg font-semibold text-slate-900 mb-3">Recent Transfers</h4>
-          {/* Example: Use adjustments filtered for TRANSFER_OUT/TRANSFER_IN, sorted by date desc. Replace with selector if available. */}
-          <Table responsive hover size="sm" className="align-middle">
-            <thead>
-              <tr>
-                <th>Reference #</th>
-                <th>Date</th>
-                <th>Type</th>
-                <th>Source (deducted from)</th>
-                <th>Destination (added to)</th>
-                <th>Products</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {
-                // Build grouped transfer entries (pair TRANSFER_OUT and TRANSFER_IN by reference)
-              }
-              {(() => {
-                type Group = {
-                  reference: string
-                  date: string
-                  out?: StockAdjustment
-                  in?: StockAdjustment
-                  products: Array<{ name: string; quantity: number; type: AdjustmentType }>
-                  status?: string
-                }
-
-                const groups: Record<string, Group> = {}
-                adjustments
-                  .filter(a => a.adjustment_type === 'TRANSFER_OUT' || a.adjustment_type === 'TRANSFER_IN')
-                  .forEach((a) => {
-                    const key = a.reference_number || a.related_transfer || a.id
-                    if (!groups[key]) {
-                      groups[key] = { reference: key, date: a.created_at, products: [], status: a.status }
-                    }
-                    const g = groups[key]
-                    if (a.adjustment_type === 'TRANSFER_OUT') g.out = a
-                    if (a.adjustment_type === 'TRANSFER_IN') g.in = a
-                    const prodName = a.stock_product_details?.product_name || stockProducts.find(sp => sp.id === a.stock_product)?.product_name || '—'
-                    g.products.push({ name: prodName, quantity: a.quantity, type: a.adjustment_type })
-                  })
-
-                const rows = Object.values(groups)
-                  .sort((x, y) => new Date(y.date).getTime() - new Date(x.date).getTime())
-                  .slice(0, 10)
-
-                return rows.map((g) => {
-                  const sourceName = g.out ? (g.out.stock_product_details?.warehouse || stockProducts.find(sp => sp.id === g.out!.stock_product)?.warehouse_name) : '—'
-                  const destName = g.in ? (g.in.stock_product_details?.warehouse || stockProducts.find(sp => sp.id === g.in!.stock_product)?.warehouse_name) : '—'
-                  return (
-                    <tr key={g.reference}>
-                      <td>{g.reference || '—'}</td>
-                      <td>{new Date(g.date).toLocaleString()}</td>
-                      <td>
-                        <Badge bg={(g.out && !g.in) ? 'danger' : (g.in && !g.out) ? 'info' : 'secondary'}>
-                          {g.out && g.in ? 'Paired Transfer' : g.out ? 'Transfer Out — deducted from source' : 'Transfer In — added to destination'}
-                        </Badge>
-                      </td>
-                      <td>{sourceName || '—'}</td>
-                      <td>{destName || '—'}</td>
-                      <td>
-                        {g.products.length > 0 ? g.products.map(p => `${p.name} (${formatQuantityWithSign(p.quantity, p.type)})`).join(', ') : '—'}
-                      </td>
-                      <td>
-                        <Badge bg={g.status === 'COMPLETED' ? 'success' : g.status === 'APPROVED' ? 'info' : g.status === 'REJECTED' ? 'danger' : 'warning'}>
-                          {g.status}
-                        </Badge>
-                      </td>
-                      <td>
-                        <div className="d-flex gap-1">
-                          <Button variant="link" size="sm" onClick={() => handleViewAdjustment(g.out ?? g.in!)}>
-                            View
-                          </Button>
-                          <Button variant="outline-primary" size="sm" onClick={() => handleEditAdjustment(g.out ?? g.in!)}>
-                            Edit
-                          </Button>
-                          <Button variant="outline-danger" size="sm" onClick={() => handleDeleteAdjustment(g.out ?? g.in!)}>
-                            Delete
-                          </Button>
-                        </div>
-                      </td>
+        
+        {/* Conditional display based on feature flag */}
+        {(() => {
+          const useNewTransferAPI = import.meta.env.VITE_USE_NEW_TRANSFER_API === 'true'
+          
+          if (useNewTransferAPI) {
+            // NEW: Warehouse Transfer API display
+            return (
+              <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h4 className="text-lg font-semibold text-slate-900 mb-3">Recent Transfers</h4>
+                
+                {warehouseTransfersStatus === 'loading' && (
+                  <div className="text-center py-4">
+                    <Spinner animation="border" variant="primary" />
+                    <p className="mt-2 text-muted">Loading transfers...</p>
+                  </div>
+                )}
+                
+                {warehouseTransfersError && (
+                  <Alert variant="danger">
+                    <Alert.Heading>Error loading transfers</Alert.Heading>
+                    <p>{warehouseTransfersError}</p>
+                  </Alert>
+                )}
+                
+                {warehouseTransfersStatus === 'succeeded' && (
+                  <>
+                    <Table responsive hover size="sm" className="align-middle">
+                      <thead>
+                        <tr>
+                          <th>Reference #</th>
+                          <th>Date</th>
+                          <th>From → To</th>
+                          <th>Items</th>
+                          <th>Status</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {warehouseTransfers.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="text-center text-muted py-4">
+                              No transfers found. Click "Initiate Transfer" to create one.
+                            </td>
+                          </tr>
+                        ) : (
+                          warehouseTransfers.slice(0, 10).map((transfer) => {
+                            const totalQty = transfer.items.reduce((sum, item) => sum + item.quantity, 0)
+                            const getStatusVariant = (status: string) => {
+                              const variants: Record<string, string> = {
+                                pending: 'warning',
+                                in_transit: 'info',
+                                completed: 'success',
+                                cancelled: 'secondary',
+                              }
+                              return variants[status] || 'secondary'
+                            }
+                            
+                            return (
+                              <tr key={transfer.id}>
+                                <td>
+                                  <code className="text-xs">{transfer.reference_number}</code>
+                                </td>
+                                <td>{new Date(transfer.created_at).toLocaleString()}</td>
+                                <td>
+                                  <div className="text-xs">
+                                    <div>{transfer.source_warehouse_name || transfer.source_warehouse}</div>
+                                    <div className="text-muted">↓</div>
+                                    <div>{transfer.destination_warehouse_name || transfer.destination_warehouse}</div>
+                                  </div>
+                                </td>
+                                <td>
+                                  <Badge bg="secondary">
+                                    {transfer.items.length} product{transfer.items.length !== 1 ? 's' : ''} ({totalQty} units)
+                                  </Badge>
+                                </td>
+                                <td>
+                                  <Badge bg={getStatusVariant(transfer.status)}>
+                                    {transfer.status.replace('_', ' ').toUpperCase()}
+                                  </Badge>
+                                </td>
+                                <td>
+                                  <Button
+                                    variant="primary"
+                                    size="sm"
+                                    onClick={() => handleViewWarehouseTransfer(transfer)}
+                                  >
+                                    View Details
+                                  </Button>
+                                </td>
+                              </tr>
+                            )
+                          })
+                        )}
+                      </tbody>
+                    </Table>
+                    <div className="text-xs text-slate-500 mt-2">
+                      Showing {Math.min(10, warehouseTransfers.length)} of {warehouseTransfers.length} recent transfers.
+                      For full history and analytics, see the reporting page.
+                    </div>
+                  </>
+                )}
+              </section>
+            )
+          } else {
+            // OLD: Grouped adjustments display (legacy)
+            return (
+              <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h4 className="text-lg font-semibold text-slate-900 mb-3">Recent Transfers (Legacy View)</h4>
+                <Table responsive hover size="sm" className="align-middle">
+                  <thead>
+                    <tr>
+                      <th>Reference #</th>
+                      <th>Date</th>
+                      <th>Type</th>
+                      <th>Source (deducted from)</th>
+                      <th>Destination (added to)</th>
+                      <th>Products</th>
+                      <th>Status</th>
+                      <th>Actions</th>
                     </tr>
-                  )
-                })
-              })()}
-            </tbody>
-          </Table>
-          <div className="text-xs text-slate-500 mt-2">
-            Only the 10 most recent transfers are shown here. For full history and analytics, see the reporting page.
-          </div>
-        </section>
+                  </thead>
+                  <tbody>
+                    {groupedTransfers.slice(0, 10).map((g) => {
+                      const sourceName = g.out ? (g.out.stock_product_details?.warehouse || stockProducts.find(sp => sp.id === g.out!.stock_product)?.warehouse_name) : '—'
+                      const destName = g.in ? (g.in.stock_product_details?.warehouse || stockProducts.find(sp => sp.id === g.in!.stock_product)?.warehouse_name) : '—'
+                      return (
+                        <tr key={g.reference}>
+                          <td>{g.reference || '—'}</td>
+                          <td>{new Date(g.date).toLocaleString()}</td>
+                          <td>
+                            <Badge bg={(g.out && !g.in) ? 'danger' : (g.in && !g.out) ? 'info' : 'secondary'}>
+                              {g.out && g.in ? 'Paired Transfer' : g.out ? 'Transfer Out — deducted from source' : 'Transfer In — added to destination'}
+                            </Badge>
+                          </td>
+                          <td>{sourceName || '—'}</td>
+                          <td>{destName || '—'}</td>
+                          <td>
+                            {g.products.length > 0 ? g.products.map(p => `${p.name} (${formatQuantityWithSign(p.quantity, p.type)})`).join(', ') : '—'}
+                          </td>
+                          <td>
+                            <Badge bg={g.status === 'COMPLETED' ? 'success' : g.status === 'APPROVED' ? 'info' : g.status === 'REJECTED' ? 'danger' : 'warning'}>
+                              {g.status}
+                            </Badge>
+                          </td>
+                          <td>
+                            <div className="d-flex gap-1">
+                              <Button variant="link" size="sm" onClick={() => handleViewAdjustment(g.out ?? g.in!)}>
+                                View
+                              </Button>
+                              <Button variant="outline-primary" size="sm" onClick={() => handleEditAdjustment(g.out ?? g.in!)}>
+                                Edit
+                              </Button>
+                              <Button variant="outline-danger" size="sm" onClick={() => handleDeleteAdjustment(g.out ?? g.in!)}>
+                                Delete
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => {
+                                  const adj = g.out ?? g.in
+                                  if (adj) handleViewAdjustment(adj)
+                                }}
+                                className="ms-1"
+                              >
+                                Open & Approve
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </Table>
+                <div className="text-xs text-slate-500 mt-2">
+                  Only the 10 most recent transfers are shown here. For full history and analytics, see the reporting page.
+                </div>
+              </section>
+            )
+          }
+        })()}
+        
         <TransferModal
           show={showTransferModal}
           onClose={() => setShowTransferModal(false)}
           onSubmit={handleSubmitTransfer}
           warehouses={warehouses.map(w => ({ id: w.id, name: w.name }))}
-          // generic products list (fallback)
           products={productLookup.map(p => ({ id: p.id, name: p.name }))}
-          // pass detailed stockProducts so the modal can filter by selected source warehouse
           stockProducts={stockProducts}
           isSubmitting={isSubmittingTransfer}
           error={transferError}
+        />
+        
+        {/* New Warehouse Transfer Detail Modal */}
+        <TransferDetailModal
+          show={showWarehouseTransferDetailModal}
+          onClose={handleCloseWarehouseTransferDetail}
+          transfer={warehouseTransferDetail || selectedWarehouseTransfer}
+          isLoading={warehouseTransferDetailStatus === 'loading'}
+          onComplete={handleCompleteWarehouseTransfer}
+          onCancel={handleCancelWarehouseTransfer}
+          onDelete={handleDeleteWarehouseTransfer}
+          isCompleting={warehouseTransferMutationStatus.complete === 'loading'}
+          isCancelling={warehouseTransferMutationStatus.cancel === 'loading'}
+          isDeleting={warehouseTransferMutationStatus.delete === 'loading'}
+          userRole={userRole || undefined}
         />
       </div>
 
@@ -1508,90 +1855,58 @@ const ManageStocksPage = () => {
             {adjustmentsStatus === 'succeeded' && (
               <>
                 {showTransfersOnly ? (
-                  // Render grouped transfers view (paired TRANSFER_OUT/TRANSFER_IN)
-                  (() => {
-                    type Group = {
-                      reference: string
-                      date: string
-                      out?: StockAdjustment
-                      in?: StockAdjustment
-                      products: Array<{ name: string; quantity: number; type: AdjustmentType }>
-                      status?: string
-                    }
-                    const groups: Record<string, Group> = {}
-                    adjustments
-                      .filter(a => a.adjustment_type === 'TRANSFER_OUT' || a.adjustment_type === 'TRANSFER_IN')
-                      .forEach((a) => {
-                        const key = a.reference_number || a.related_transfer || a.id
-                        if (!groups[key]) {
-                          groups[key] = { reference: key, date: a.created_at, products: [], status: a.status }
-                        }
-                        const g = groups[key]
-                        if (a.adjustment_type === 'TRANSFER_OUT') g.out = a
-                        if (a.adjustment_type === 'TRANSFER_IN') g.in = a
-                        const prodName = a.stock_product_details?.product_name || stockProducts.find(sp => sp.id === a.stock_product)?.product_name || '—'
-                        g.products.push({ name: prodName, quantity: a.quantity, type: a.adjustment_type })
-                      })
-
-                    const rows = Object.values(groups)
-                      .sort((x, y) => new Date(y.date).getTime() - new Date(x.date).getTime())
-                      .slice(0, 50)
-
-                    return (
-                      <Table responsive hover>
-                        <thead>
-                          <tr>
-                            <th>Reference #</th>
-                            <th>Date</th>
-                            <th>Type</th>
-                            <th>Source (deducted from)</th>
-                            <th>Destination (added to)</th>
-                            <th>Products</th>
-                            <th>Status</th>
-                            <th>Actions</th>
+                  <Table responsive hover>
+                    <thead>
+                      <tr>
+                        <th>Reference #</th>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Source (deducted from)</th>
+                        <th>Destination (added to)</th>
+                        <th>Products</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {groupedTransfers.slice(0, 50).map((g) => {
+                        const sourceName = g.out ? (g.out.stock_product_details?.warehouse || stockProducts.find(sp => sp.id === g.out!.stock_product)?.warehouse_name) : '—'
+                        const destName = g.in ? (g.in.stock_product_details?.warehouse || stockProducts.find(sp => sp.id === g.in!.stock_product)?.warehouse_name) : '—'
+                        return (
+                          <tr key={g.reference}>
+                            <td>{g.reference || '—'}</td>
+                            <td>{new Date(g.date).toLocaleString()}</td>
+                            <td>
+                              <Badge bg={(g.out && !g.in) ? 'danger' : (g.in && !g.out) ? 'info' : 'secondary'}>
+                                {g.out && g.in ? 'Paired Transfer' : g.out ? 'Transfer Out — deducted from source' : 'Transfer In — added to destination'}
+                              </Badge>
+                            </td>
+                            <td>{sourceName || '—'}</td>
+                            <td>{destName || '—'}</td>
+                            <td>{g.products.length > 0 ? g.products.map(p => `${p.name} (${formatQuantityWithSign(p.quantity, p.type)})`).join(', ') : '—'}</td>
+                            <td>
+                              <Badge bg={g.status === 'COMPLETED' ? 'success' : g.status === 'APPROVED' ? 'info' : g.status === 'REJECTED' ? 'danger' : 'warning'}>
+                                {g.status}
+                              </Badge>
+                            </td>
+                            <td>
+                              <div className="d-flex gap-1">
+                                <Button variant="link" size="sm" onClick={() => handleViewAdjustment(g.out ?? g.in!)}>
+                                  View
+                                </Button>
+                                <Button variant="outline-primary" size="sm" onClick={() => handleEditAdjustment(g.out ?? g.in!)}>
+                                  Edit
+                                </Button>
+                                <Button variant="outline-danger" size="sm" onClick={() => handleDeleteAdjustment(g.out ?? g.in!)}>
+                                  Delete
+                                </Button>
+                              </div>
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {rows.map((g) => {
-                            const sourceName = g.out ? (g.out.stock_product_details?.warehouse || stockProducts.find(sp => sp.id === g.out!.stock_product)?.warehouse_name) : '—'
-                            const destName = g.in ? (g.in.stock_product_details?.warehouse || stockProducts.find(sp => sp.id === g.in!.stock_product)?.warehouse_name) : '—'
-                            return (
-                              <tr key={g.reference}>
-                                <td>{g.reference || '—'}</td>
-                                <td>{new Date(g.date).toLocaleString()}</td>
-                                <td>
-                                  <Badge bg={(g.out && !g.in) ? 'danger' : (g.in && !g.out) ? 'info' : 'secondary'}>
-                                    {g.out && g.in ? 'Paired Transfer' : g.out ? 'Transfer Out — deducted from source' : 'Transfer In — added to destination'}
-                                  </Badge>
-                                </td>
-                                <td>{sourceName || '—'}</td>
-                                <td>{destName || '—'}</td>
-                                <td>{g.products.length > 0 ? g.products.map(p => `${p.name} (${formatQuantityWithSign(p.quantity, p.type)})`).join(', ') : '—'}</td>
-                                <td>
-                                  <Badge bg={g.status === 'COMPLETED' ? 'success' : g.status === 'APPROVED' ? 'info' : g.status === 'REJECTED' ? 'danger' : 'warning'}>
-                                    {g.status}
-                                  </Badge>
-                                </td>
-                                <td>
-                                  <div className="d-flex gap-1">
-                                    <Button variant="link" size="sm" onClick={() => handleViewAdjustment(g.out ?? g.in!)}>
-                                      View
-                                    </Button>
-                                    <Button variant="outline-primary" size="sm" onClick={() => handleEditAdjustment(g.out ?? g.in!)}>
-                                      Edit
-                                    </Button>
-                                    <Button variant="outline-danger" size="sm" onClick={() => handleDeleteAdjustment(g.out ?? g.in!)}>
-                                      Delete
-                                    </Button>
-                                  </div>
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </Table>
-                    )
-                  })()
+                        )
+                      })}
+                    </tbody>
+                  </Table>
                 ) : (
                   adjustments.length === 0 ? (
                     <div className="text-center py-8">
@@ -1616,7 +1931,7 @@ const ManageStocksPage = () => {
                           </tr>
                         </thead>
                         <tbody>
-                          {adjustments.map((adjustment) => (
+                          {visibleAdjustments.map((adjustment) => (
                             <tr key={adjustment.id}>
                               <td>
                                 <span style={{ marginRight: '0.5rem' }}>

@@ -898,7 +898,7 @@ const DashboardLayout = () => {
                 <Badge 
                   bg={subscriptionVariant} 
                   className="rounded-pill px-3 py-2 text-sm"
-                  title={`Business Subscription: ${subscriptionStatusLabel}${business?.subscription ? ` (${business.subscription.plan.name})` : ''} - Click to manage`}
+                  title={`Business Subscription: ${subscriptionStatusLabel}${activeSubscription?.plan?.name ? ` (${activeSubscription.plan.name})` : ''} - Click to manage`}
                   style={{ cursor: 'pointer' }}
                   onClick={() => navigate('/app/subscription')}
                   role="button"

@@ -5,6 +5,7 @@ import locationReducer from './slices/locationSlice.js'
 import inventoryReducer from './slices/inventorySlice.js'
 import staffReducer from './slices/staffSlice.js'
 import transferReducer from './slices/transferSlice.js'
+import warehouseTransferReducer from './slices/warehouseTransferSlice.js'
 import transferRequestReducer from './slices/transferRequestSlice.js'
 import salesReducer from './slices/salesSlice.js'
 import stockAdjustmentReducer from './slices/stockAdjustmentSlice.js'
@@ -20,6 +21,7 @@ export const store = configureStore({
     inventory: inventoryReducer,
     staff: staffReducer,
     transfers: transferReducer,
+    warehouseTransfers: warehouseTransferReducer,
     transferRequests: transferRequestReducer,
     sales: salesReducer,
     stockAdjustment: stockAdjustmentReducer,

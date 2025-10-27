@@ -43,6 +43,20 @@ interface ProductSearchPanelProps {
   ensureSaleSession?: (preferredStorefrontId?: UUID) => Promise<UUID | null>  // Accept storefront parameter
   multiStorefront?: boolean  // Explicitly enable multi-storefront mode
 }
+// Robust number parser used for prices/quantities returned as strings with symbols/commas
+const robustNumber = (v: unknown): number => {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0
+  if (typeof v === 'string') {
+    const cleaned = v.replace(/[^0-9.-]+/g, '')
+    const parsed = Number(cleaned)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+  return 0
+}
+
+const parsePrice = (value: string | number | null | undefined): number => {
+  return robustNumber(value)
+}
 
 export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, ensureSaleSession, multiStorefront = false }: ProductSearchPanelProps) {
   const dispatch = useAppDispatch()
@@ -58,7 +72,7 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
   const [error, setError] = useState<string | null>(null)
   const [addingItemId, setAddingItemId] = useState<UUID | null>(null)
   const [quantities, setQuantities] = useState<Record<UUID, number>>({})
-  const [accessibleStorefronts, setAccessibleStorefronts] = useState<Array<{ id: UUID; name: string }>>([])
+  // accessible storefronts list not required for current logic
 
   const lastSearchTimestampRef = useRef(0)
   const availabilitySupportedRef = useRef(true)
@@ -68,16 +82,7 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
   const SEARCH_DEBOUNCE_MS = 400
   const SEARCH_THROTTLE_MS = 600
 
-  const parsePrice = (value: string | number | null | undefined): number => {
-    if (typeof value === 'number') {
-      return Number.isFinite(value) ? value : 0
-    }
-    if (typeof value === 'string') {
-      const parsed = Number(value)
-      return Number.isFinite(parsed) ? parsed : 0
-    }
-    return 0
-  }
+  
 
   useEffect(() => {
     let isMounted = true
@@ -97,8 +102,7 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
           // Fetch from all accessible storefronts
           const multiResponse = await fetchMultiStorefrontCatalog()
           
-          // Store accessible storefronts for reference
-          setAccessibleStorefronts(multiResponse.storefronts)
+          // storefront list returned but not stored (not needed for product price display)
           
           // Map multi-storefront response to Product format
           normalized = (multiResponse.products ?? [])
@@ -109,7 +113,7 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
             .map((item: MultiStorefrontCatalogItem): Product => {
               const retail = parsePrice(item.retail_price)
               const wholesale = parsePrice(item.wholesale_price ?? item.retail_price)
-              const available = item.total_available || 0
+              const available = robustNumber(item.total_available) || 0
 
               return {
                 id: item.product_id,
@@ -139,7 +143,7 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
               const wholesale = parsePrice(item.wholesale_price ?? item.retail_price)
               const available = typeof item.available_quantity === 'number'
                 ? item.available_quantity
-                : Number(item.available_quantity) || 0
+                : robustNumber(item.available_quantity) || 0
 
               return {
                 id: item.product_id,
@@ -364,10 +368,10 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
           const stockId = firstBatch?.id || existingStock?.id || productId
           const quantityTotal = typeof data.total_available === 'number'
             ? data.total_available
-            : Number(data.total_available) || 0
+            : robustNumber(data.total_available)
           const availableQuantity = typeof data.unreserved_quantity === 'number'
             ? data.unreserved_quantity
-            : Number(data.unreserved_quantity) || 0
+            : robustNumber(data.unreserved_quantity)
           
           console.log('✅ [API RESPONSE] Got accurate unreserved_quantity from availability API', {
             productId,
@@ -380,13 +384,13 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
           
           const unitCost = typeof firstBatch?.unit_cost === 'number'
             ? firstBatch.unit_cost
-            : Number(firstBatch?.unit_cost ?? existingStock?.unit_cost ?? 0) || 0
+            : robustNumber(firstBatch?.unit_cost ?? existingStock?.unit_cost ?? 0)
           const retailPrice = typeof firstBatch?.retail_price === 'number'
             ? firstBatch.retail_price
-            : Number(firstBatch?.retail_price ?? existingStock?.retail_price ?? 0) || 0
+            : robustNumber(firstBatch?.retail_price ?? existingStock?.retail_price ?? 0)
           const wholesalePrice = typeof firstBatch?.wholesale_price === 'number'
             ? firstBatch.wholesale_price
-            : Number(firstBatch?.wholesale_price ?? existingStock?.wholesale_price ?? retailPrice) || 0
+            : robustNumber(firstBatch?.wholesale_price ?? existingStock?.wholesale_price ?? retailPrice)
 
           stockMap[productId] = {
             id: stockId,
@@ -404,26 +408,15 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
           console.log(`⚠️ [FALLBACK PATH] Product ${productId} using fallback source: "${source}"`)
           console.log(`⚠️ This may NOT account for sold items! data.available_quantity =`, data.available_quantity)
           
-          const toNumber = (value: unknown): number => {
-            if (typeof value === 'number') {
-              return Number.isFinite(value) ? value : 0
-            }
-            if (typeof value === 'string') {
-              const parsed = Number(value)
-              return Number.isFinite(parsed) ? parsed : 0
-            }
-            return 0
-          }
-
           stockMap[productId] = {
             id: data.id,
             product: productId,
-            quantity: toNumber(data.quantity),
-            available_quantity: toNumber(data.available_quantity ?? data.quantity),
-            reserved_quantity: toNumber(data.reserved_quantity),
-            unit_cost: toNumber(data.unit_cost ?? existingStock?.unit_cost),
-            retail_price: toNumber(data.retail_price ?? existingStock?.retail_price),
-            wholesale_price: toNumber(data.wholesale_price ?? existingStock?.wholesale_price ?? data.retail_price),
+            quantity: robustNumber(data.quantity),
+            available_quantity: robustNumber(data.available_quantity ?? data.quantity),
+            reserved_quantity: robustNumber(data.reserved_quantity),
+            unit_cost: robustNumber(data.unit_cost ?? existingStock?.unit_cost),
+            retail_price: robustNumber(data.retail_price ?? existingStock?.retail_price),
+            wholesale_price: robustNumber(data.wholesale_price ?? existingStock?.wholesale_price ?? data.retail_price),
             batch_number: data.batch_number ?? undefined,
             expiry_date: data.expiry_date ?? null,
           }
@@ -771,11 +764,18 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
 
   const getPrice = (product: Product) => {
     const stock = stockData[product.id]
-    const priceSource = saleType === 'WHOLESALE'
-      ? stock?.wholesale_price ?? product.wholesale_price
-      : stock?.retail_price ?? product.retail_price
+    // Prefer a positive price from the fetched stock record when available.
+    // Some availability / stock endpoints may return 0 for prices; in that case
+    // fall back to the catalog price which is likely the intended unit price.
+    if (saleType === 'WHOLESALE') {
+      const stockPrice = stock?.wholesale_price ?? 0
+      const fallback = product.wholesale_price ?? product.retail_price
+      return robustNumber(stockPrice > 0 ? stockPrice : fallback)
+    }
 
-    return typeof priceSource === 'number' && Number.isFinite(priceSource) ? priceSource : 0
+    const stockPrice = stock?.retail_price ?? 0
+    const fallback = product.retail_price
+    return robustNumber(stockPrice > 0 ? stockPrice : fallback)
   }
 
   const getQuantity = (productId: UUID) => {
@@ -851,6 +851,19 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
                 const stockStatus = getStockStatus(product)
                 const price = getPrice(product)
                 const isAdding = addingItemId === product.id
+
+                // Debug: log computed price sources so we can diagnose why price may show as 0
+                const currentStock = stockData[product.id]
+                console.log('[PRICE DEBUG]', {
+                  productId: product.id,
+                  name: product.name,
+                  saleType,
+                  catalogRetail: product.retail_price,
+                  catalogWholesale: product.wholesale_price,
+                  stockRetail: currentStock?.retail_price,
+                  stockWholesale: currentStock?.wholesale_price,
+                  computedPrice: price,
+                })
 
                 return (
                   <div

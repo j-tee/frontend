@@ -1,37 +1,5 @@
 // Inter-warehouse transfer (paired stock adjustments)
 // Calls POST /inventory/api/stock-adjustments/transfer/ (custom action)
-export const createWarehouseTransfer = async (payload: {
-  product_id: string;
-  from_warehouse_id: string;
-  to_warehouse_id: string;
-  quantity: number;
-  unit_cost?: string | number;
-  reason?: string;
-}) => {
-  // New API expects product-level payload (product_id + warehouse ids)
-  const body = {
-    product_id: payload.product_id,
-    from_warehouse_id: payload.from_warehouse_id,
-    to_warehouse_id: payload.to_warehouse_id,
-    quantity: payload.quantity,
-    unit_cost: payload.unit_cost,
-    reason: payload.reason,
-  }
-
-  const { data } = await httpClient.post<{
-    success: boolean;
-    transfer_reference?: string;
-    out_adjustment_id?: string;
-    in_adjustment_id?: string;
-    source_stock_id?: string;
-    dest_stock_id?: string;
-    message?: string;
-  }>(
-    '/inventory/api/stock-adjustments/transfer/',
-    body,
-  )
-  return data
-}
 import httpClient from './httpClient.js'
 import type { PaginatedResponse, UUID } from '../types/common.js'
 import type {
@@ -72,8 +40,128 @@ import type {
   WarehousePayload,
   WarehouseAvailabilityResponse,
   StorefrontAvailabilityResponse,
+  // New Warehouse Transfer types
+  WarehouseTransfer,
+  WarehouseTransferCreatePayload,
+  WarehouseTransferCompletePayload,
+  WarehouseTransferCancelPayload,
 } from '../types/inventory.js'
 import type { StockAdjustment } from '../types/stockAdjustments.js'
+
+export const createWarehouseTransfer = async (payload: {
+  product_id: string;
+  from_warehouse_id: string;
+  to_warehouse_id: string;
+  quantity: number;
+  unit_cost?: string | number;
+  reason?: string;
+}) => {
+  // New API expects product-level payload (product_id + warehouse ids)
+  const body = {
+    product_id: payload.product_id,
+    from_warehouse_id: payload.from_warehouse_id,
+    to_warehouse_id: payload.to_warehouse_id,
+    quantity: payload.quantity,
+    unit_cost: payload.unit_cost,
+    reason: payload.reason,
+  }
+
+  const { data } = await httpClient.post<{
+    success: boolean;
+    transfer_reference?: string;
+    out_adjustment_id?: string;
+    in_adjustment_id?: string;
+    source_stock_id?: string;
+    dest_stock_id?: string;
+    message?: string;
+  }>(
+    '/inventory/api/stock-adjustments/transfer/',
+    body,
+  )
+  return data
+}
+
+// ============================================================================
+// New Warehouse Transfer API (Phase 4 Backend Integration)
+// ============================================================================
+
+export const createWarehouseTransferBatch = async (
+  payload: WarehouseTransferCreatePayload
+): Promise<WarehouseTransfer> => {
+  const { data } = await httpClient.post<WarehouseTransfer>(
+    '/inventory/api/warehouse-transfers/',
+    payload
+  )
+  return data
+}
+
+export const fetchWarehouseTransfers = async (params?: {
+  status?: string
+  source_warehouse?: UUID
+  destination_warehouse?: UUID
+  created_after?: string
+  created_before?: string
+  ordering?: string
+}): Promise<PaginatedResponse<WarehouseTransfer>> => {
+  const { data } = await httpClient.get<PaginatedResponse<WarehouseTransfer>>(
+    '/inventory/api/warehouse-transfers/',
+    { params }
+  )
+  return data
+}
+
+export const getWarehouseTransferDetail = async (
+  id: UUID
+): Promise<WarehouseTransfer> => {
+  const { data } = await httpClient.get<WarehouseTransfer>(
+    `/inventory/api/warehouse-transfers/${id}/`
+  )
+  return data
+}
+
+export const completeWarehouseTransfer = async (
+  id: UUID,
+  payload?: WarehouseTransferCompletePayload
+): Promise<WarehouseTransfer> => {
+  console.log('=== completeWarehouseTransfer SERVICE ===')
+  console.log('Transfer ID:', id)
+  console.log('Payload:', payload)
+  console.log('URL:', `/inventory/api/warehouse-transfers/${id}/complete/`)
+  console.log('Body:', payload || {})
+  
+  try {
+    const { data } = await httpClient.post<WarehouseTransfer>(
+      `/inventory/api/warehouse-transfers/${id}/complete/`,
+      payload || {}
+    )
+    console.log('=== completeWarehouseTransfer SUCCESS ===')
+    console.log('Response data:', data)
+    return data
+  } catch (error) {
+    console.error('=== completeWarehouseTransfer ERROR ===')
+    console.error('Error:', error)
+    throw error
+  }
+}
+
+export const cancelWarehouseTransfer = async (
+  id: UUID,
+  payload: WarehouseTransferCancelPayload
+): Promise<WarehouseTransfer> => {
+  const { data } = await httpClient.post<WarehouseTransfer>(
+    `/inventory/api/warehouse-transfers/${id}/cancel/`,
+    payload
+  )
+  return data
+}
+
+export const deleteWarehouseTransfer = async (id: UUID): Promise<void> => {
+  await httpClient.delete(`/inventory/api/warehouse-transfers/${id}/`)
+}
+
+export const deleteStorefrontTransfer = async (id: UUID): Promise<void> => {
+  await httpClient.delete(`/inventory/api/storefront-transfers/${id}/`)
+}
 
 export const fetchCategories = async () => {
   const { data } = await httpClient.get<PaginatedResponse<Category> | Category[]>(
