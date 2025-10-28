@@ -9,6 +9,7 @@ import { useCurrency } from '../../../hooks'
 import type {
   Product,
   StockBatch,
+  StockBatchPayload,
   StockProduct,
   StockProductPayload,
   Supplier,
@@ -23,7 +24,7 @@ interface StockIntakeModalProps {
   stockBatches: StockBatch[]
   suppliers: Supplier[]
   products: Product[]
-  createBatch: (payload: { warehouse: string; arrival_date?: string | null; description?: string | null }) => Promise<StockBatch>
+  createBatch: (payload: StockBatchPayload) => Promise<StockBatch>
   createStockProduct: (payload: StockProductPayload) => Promise<StockProduct>
   createSupplier: (payload: SupplierPayload) => Promise<Supplier>
   resetBatchState: () => void
@@ -251,7 +252,7 @@ const StockIntakeModal = ({
     if (!batch) return
     setCreatedBatch(batch)
     setBatchForm({
-      warehouse: batch.warehouse,
+      warehouse: batch.warehouse_id ?? '',
       arrival_date: batch.arrival_date ?? '',
       description: batch.description ?? '',
     })
@@ -321,8 +322,7 @@ const StockIntakeModal = ({
     if (!hasWarehouses) return
     if (!batchForm.warehouse) return
     try {
-      const payload = {
-        warehouse: batchForm.warehouse,
+      const payload: StockBatchPayload = {
         arrival_date: batchForm.arrival_date ? batchForm.arrival_date : null,
         description: batchForm.description.trim() ? batchForm.description.trim() : null,
       }
@@ -341,7 +341,7 @@ const StockIntakeModal = ({
     if (!lineItemForm.unit_cost.trim()) return
     if (lineItemForm.quantity <= 0) return
 
-    const warehouseId = createdBatch.warehouse ?? batchForm.warehouse
+  const warehouseId = createdBatch.warehouse_id ?? batchForm.warehouse
 
     if (!warehouseId) {
       console.error('Missing warehouse on stock batch, cannot create stock product', {
@@ -353,7 +353,6 @@ const StockIntakeModal = ({
     const payload: StockProductPayload = {
       stock: createdBatch.id,
       warehouse: warehouseId,
-      stock_batch: createdBatch.id,
       product: lineItemForm.product,
       supplier: lineItemForm.supplier ? lineItemForm.supplier : null,
       quantity: lineItemForm.quantity,
@@ -361,8 +360,8 @@ const StockIntakeModal = ({
       unit_tax_rate: lineItemForm.unit_tax_rate.trim() ? lineItemForm.unit_tax_rate.trim() : null,
       unit_tax_amount: lineItemForm.unit_tax_amount.trim() ? lineItemForm.unit_tax_amount.trim() : null,
       unit_additional_cost: lineItemForm.unit_additional_cost.trim() ? lineItemForm.unit_additional_cost.trim() : null,
-      retail_price: lineItemForm.retail_price.trim() ? lineItemForm.retail_price.trim() : null,
-      wholesale_price: lineItemForm.wholesale_price.trim() ? lineItemForm.wholesale_price.trim() : null,
+  retail_price: lineItemForm.retail_price.trim() ? lineItemForm.retail_price.trim() : undefined,
+  wholesale_price: lineItemForm.wholesale_price.trim() ? lineItemForm.wholesale_price.trim() : undefined,
       expiry_date: lineItemForm.expiry_date ? lineItemForm.expiry_date : null,
       description: lineItemForm.description.trim() ? lineItemForm.description.trim() : null,
     }

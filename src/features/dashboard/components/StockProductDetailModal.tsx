@@ -197,12 +197,12 @@ const StockProductDetailModal = ({
   }, [stockBatches, stockProduct])
 
   const warehouse = useMemo(() => {
-    if (stockProduct?.warehouse_name) return null
-    if (!stockProduct?.stock && !stockBatch?.warehouse) return null
-    const warehouseId = stockBatch?.warehouse ?? stockProduct?.stock ?? null
+    if (!stockProduct) return null
+    if (stockProduct.warehouse_name) return null
+    const warehouseId = stockProduct.warehouse ?? stockBatch?.warehouse_id ?? null
     if (!warehouseId) return null
     return warehouses.find((item) => item.id === warehouseId) ?? null
-  }, [stockBatch?.warehouse, stockProduct, warehouses])
+  }, [stockBatch?.warehouse_id, stockProduct, warehouses])
 
   const reconciliationMetrics = useMemo(() => {
     if (!stockProduct) {
@@ -461,10 +461,10 @@ const StockProductDetailModal = ({
       payload.unit_additional_cost = formValues.unit_additional_cost ? formValues.unit_additional_cost : null
     }
     if (changedFields.has('retail_price')) {
-      payload.retail_price = formValues.retail_price ? formValues.retail_price : null
+      payload.retail_price = formValues.retail_price ? formValues.retail_price : undefined
     }
     if (changedFields.has('wholesale_price')) {
-      payload.wholesale_price = formValues.wholesale_price ? formValues.wholesale_price : null
+      payload.wholesale_price = formValues.wholesale_price ? formValues.wholesale_price : undefined
     }
     if (changedFields.has('expiry_date')) {
       payload.expiry_date = formValues.expiry_date ? formValues.expiry_date : null

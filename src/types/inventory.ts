@@ -62,43 +62,22 @@ export interface ProductPayload {
   is_active?: boolean
 }
 
-export interface StockBatchItemSummary {
-  id: UUID
-  product: UUID
-  product_name?: string
-  product_sku?: string
-  supplier?: UUID | null
-  supplier_name?: string | null
-  expiry_date?: string | null
-  quantity: number
-  unit_cost: string
-  unit_tax_rate?: string | null
-  unit_tax_amount?: string | null
-  unit_additional_cost?: string | null
-  retail_price?: string | null
-  wholesale_price?: string | null
-  landed_unit_cost?: string | null
-  total_tax_amount?: string | null
-  total_additional_cost?: string | null
-  total_landed_cost?: string | null
-  description?: string | null
-  created_at?: string
-  updated_at?: string
-}
-
 export interface StockBatch {
   id: UUID
-  warehouse: UUID
-  warehouse_name?: string
-  arrival_date?: string | null
-  description?: string | null
+  business: UUID
+  business_name?: string
+  arrival_date: string | null
+  description: string | null
+  warehouse_id?: UUID | null
+  warehouse_name?: string | null
+  total_items?: number
+  total_quantity?: number
+  items?: StockProduct[]
   created_at?: string
   updated_at?: string
-  items?: StockBatchItemSummary[]
 }
 
 export interface StockBatchPayload {
-  warehouse: UUID
   arrival_date?: string | null
   description?: string | null
 }
@@ -127,51 +106,54 @@ export interface SupplierPayload {
 export interface StockProduct {
   id: UUID
   stock: UUID
-  stock_batch?: UUID
-  warehouse_name?: string
+  warehouse: UUID
+  warehouse_name: string
   product: UUID
-  product_name?: string
-  product_sku?: string
-  supplier?: UUID | null
-  supplier_name?: string | null
+  product_name: string
+  product_sku: string
+  supplier: UUID | null
+  supplier_name: string | null
   quantity: number
+  expiry_date: string | null
+  description: string | null
+  unit_cost: string
+  unit_tax_rate: string | null
+  unit_tax_amount: string | null
+  unit_additional_cost: string | null
+  retail_price: string
+  wholesale_price: string
+  landed_unit_cost: string
+  total_base_cost: string
+  total_tax_amount: string
+  total_additional_cost: string
+  total_landed_cost: string
+  expected_profit_amount: string
+  expected_profit_margin: string
+  expected_total_profit: string
+  projected_retail_profit: string
+  projected_wholesale_profit: string
   quantity_stocked?: number | null
   quantity_available?: number | null
   quantity_sold?: number | null
   reserved_quantity?: number | null
-  unit_cost: string
-  unit_tax_rate?: string | null
-  unit_tax_amount?: string | null
-  unit_additional_cost?: string | null
-  retail_price?: string | null
-  wholesale_price?: string | null
-  landed_unit_cost?: string | null
-  total_base_cost?: string | null
-  total_tax_amount?: string | null
-  total_additional_cost?: string | null
-  total_landed_cost?: string | null
-  projected_retail_profit?: string | null
-  projected_wholesale_profit?: string | null
-  expiry_date?: string | null
-  description?: string | null
   created_at?: string
   updated_at?: string
+  stock_batch?: UUID // Legacy support for views still referencing stock_batch
 }
 
 export interface StockProductPayload {
   stock: UUID
-  warehouse: UUID  // Required - warehouse where stock product is located
-  stock_batch?: UUID
+  warehouse: UUID
   product: UUID
-  supplier?: UUID | null
   quantity: number
   unit_cost: string
+  supplier?: UUID | null
+  expiry_date?: string | null
   unit_tax_rate?: string | null
   unit_tax_amount?: string | null
   unit_additional_cost?: string | null
-  retail_price?: string | null
-  wholesale_price?: string | null
-  expiry_date?: string | null
+  retail_price?: string
+  wholesale_price?: string
   description?: string | null
 }
 

@@ -125,7 +125,7 @@ import {
 } from '../../../store/slices/warehouseTransferSlice'
 import { getAdjustmentIcon, getAdjustmentColor, formatAdjustmentType, formatQuantityWithSign } from '../../../utils/stockAdjustmentHelpers.js'
 import type { AdjustmentType } from '../../../types/stockAdjustments.js'
-import type { Product, StockProduct, StockProductPayload, Storefront, SupplierPayload, TransferRequest, TransferRequestCreatePayload, WarehouseTransfer } from '../../../types/inventory.js'
+import type { Product, StockBatchPayload, StockProduct, StockProductPayload, Storefront, SupplierPayload, TransferRequest, TransferRequestCreatePayload, WarehouseTransfer } from '../../../types/inventory.js'
 import type { StockAdjustmentCreatePayload, StockAdjustment } from '../../../types/stockAdjustments.js'
 
 const formatDecimal = (value?: string | null) => {
@@ -685,7 +685,7 @@ const ManageStocksPage = () => {
     handleCloseStockProductModal()
   }
 
-  const handleCreateBatch = (payload: { warehouse: string; arrival_date?: string | null; description?: string | null }) => {
+  const handleCreateBatch = (payload: StockBatchPayload) => {
     return dispatch(addStockBatch(payload)).unwrap()
   }
 
