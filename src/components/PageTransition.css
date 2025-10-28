@@ -1,0 +1,49 @@
+/* Page Transition Animations */
+.page-transition {
+  animation-duration: 400ms;
+  animation-fill-mode: both;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.page-transition.fade-in {
+  animation-name: fadeInUp;
+}
+
+.page-transition.fade-out {
+  animation-name: fadeOutUp;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fadeOutUp {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.99);
+  }
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  .page-transition {
+    animation: none;
+  }
+  
+  .page-transition.fade-in,
+  .page-transition.fade-out {
+    opacity: 1;
+    transform: none;
+  }
+}

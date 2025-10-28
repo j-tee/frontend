@@ -1,28 +1,228 @@
-import httpClient from './httpClient.js'
-import type { PaginatedResponse } from '../types/common.js'
-import type { Plan, Subscription, SubscriptionPayment } from '../types/subscriptions.js'
+import httpClient from './httpClient'
+import type { PaginatedResponse } from '../types/common'
+import type { 
+  Plan, 
+  Subscription, 
+  SubscriptionPayment,
+  Invoice,
+  SubscriptionAlert,
+  SubscriptionStats,
+  CreateSubscriptionRequest,
+  CancelSubscriptionRequest,
+  InitializePaymentRequest,
+  VerifyPaymentRequest,
+  PaymentInitiationResponse,
+  PaymentVerificationResponse
+} from '../types/subscriptions'
+
+// ========== Plans ==========
 
 export const fetchPlans = async () => {
   const { data } = await httpClient.get<PaginatedResponse<Plan>>(
-    '/subscriptions/api/plans/',
+    '/subscriptions/api/plans/'
   )
   return data
 }
 
-export const fetchSubscriptions = async (params?: Record<string, unknown>) => {
+export const fetchPlanDetails = async (planId: string) => {
+  const { data } = await httpClient.get<Plan>(
+    `/subscriptions/api/plans/${planId}/`
+  )
+  return data
+}
+
+export const fetchPopularPlans = async () => {
+  const { data } = await httpClient.get<Plan[]>(
+    '/subscriptions/api/plans/popular/'
+  )
+  return data
+}
+
+// ========== Subscriptions ==========
+
+export const createSubscription = async (payload: CreateSubscriptionRequest) => {
+  const { data } = await httpClient.post<Subscription>(
+    '/subscriptions/api/subscriptions/',
+    payload
+  )
+  return data
+}
+
+export const fetchMySubscription = async () => {
+  const { data } = await httpClient.get<Subscription>(
+    '/subscriptions/api/subscriptions/me/'
+  )
+  return data
+}
+
+export const fetchSubscriptions = async (businessId?: string) => {
   const { data } = await httpClient.get<PaginatedResponse<Subscription>>(
     '/subscriptions/api/subscriptions/',
-    { params },
+    businessId ? { params: { business_id: businessId } } : undefined
   )
   return data
 }
 
-export const fetchSubscriptionPayments = async (
-  params?: Record<string, unknown>,
+export const fetchSubscriptionDetails = async (subscriptionId: string) => {
+  const { data } = await httpClient.get<Subscription>(
+    `/subscriptions/api/subscriptions/${subscriptionId}/`
+  )
+  return data
+}
+
+export const cancelSubscription = async (
+  subscriptionId: string,
+  payload: CancelSubscriptionRequest
 ) => {
+  const { data } = await httpClient.post<Subscription>(
+    `/subscriptions/api/subscriptions/${subscriptionId}/cancel/`,
+    payload
+  )
+  return data
+}
+
+export const renewSubscription = async (
+  subscriptionId: string,
+  paymentMethod?: string
+) => {
+  const { data } = await httpClient.post<Subscription>(
+    `/subscriptions/api/subscriptions/${subscriptionId}/renew/`,
+    paymentMethod ? { payment_method: paymentMethod } : {}
+  )
+  return data
+}
+
+export const fetchSubscriptionUsage = async (subscriptionId: string) => {
+  const { data } = await httpClient.get<Subscription>(
+    `/subscriptions/api/subscriptions/${subscriptionId}/usage/`
+  )
+  return data
+}
+
+// ========== Payments ==========
+
+export const initializePayment = async (
+  subscriptionId: string,
+  payload: InitializePaymentRequest
+) => {
+  const { data } = await httpClient.post<PaymentInitiationResponse>(
+    `/subscriptions/api/subscriptions/${subscriptionId}/initialize_payment/`,
+    payload
+  )
+  return data
+}
+
+export const verifyPayment = async (
+  subscriptionId: string,
+  payload: VerifyPaymentRequest
+) => {
+  const { data } = await httpClient.post<PaymentVerificationResponse>(
+    `/subscriptions/api/subscriptions/${subscriptionId}/verify_payment/`,
+    payload
+  )
+  return data
+}
+
+export const fetchPayments = async () => {
   const { data } = await httpClient.get<PaginatedResponse<SubscriptionPayment>>(
-    '/subscriptions/api/payments/',
-    { params },
+    '/subscriptions/api/payments/'
+  )
+  return data
+}
+
+export const fetchSubscriptionPayments = async (subscriptionId: string) => {
+  const { data } = await httpClient.get<PaginatedResponse<SubscriptionPayment>>(
+    `/subscriptions/api/subscriptions/${subscriptionId}/payments/`
+  )
+  return data
+}
+
+// ========== Invoices ==========
+
+export const fetchInvoices = async () => {
+  const { data } = await httpClient.get<PaginatedResponse<Invoice>>(
+    '/subscriptions/api/invoices/'
+  )
+  return data
+}
+
+export const fetchSubscriptionInvoices = async (subscriptionId: string) => {
+  const { data } = await httpClient.get<PaginatedResponse<Invoice>>(
+    `/subscriptions/api/subscriptions/${subscriptionId}/invoices/`
+  )
+  return data
+}
+
+export const fetchInvoiceDetails = async (invoiceId: string) => {
+  const { data } = await httpClient.get<Invoice>(
+    `/subscriptions/api/invoices/${invoiceId}/`
+  )
+  return data
+}
+
+// ========== Alerts ==========
+
+export const fetchAlerts = async () => {
+  const { data } = await httpClient.get<PaginatedResponse<SubscriptionAlert>>(
+    '/subscriptions/api/alerts/'
+  )
+  return data
+}
+
+export const fetchSubscriptionAlerts = async (subscriptionId: string) => {
+  const { data } = await httpClient.get<PaginatedResponse<SubscriptionAlert>>(
+    `/subscriptions/api/subscriptions/${subscriptionId}/alerts/`
+  )
+  return data
+}
+
+export const fetchUnreadAlerts = async () => {
+  const { data } = await httpClient.get<PaginatedResponse<SubscriptionAlert>>(
+    '/subscriptions/api/alerts/unread/'
+  )
+  return data
+}
+
+export const fetchCriticalAlerts = async () => {
+  const { data } = await httpClient.get<PaginatedResponse<SubscriptionAlert>>(
+    '/subscriptions/api/alerts/critical/'
+  )
+  return data
+}
+
+export const markAlertAsRead = async (alertId: string) => {
+  const { data } = await httpClient.post<SubscriptionAlert>(
+    `/subscriptions/api/alerts/${alertId}/mark_read/`
+  )
+  return data
+}
+
+export const dismissAlert = async (alertId: string) => {
+  const { data } = await httpClient.post<SubscriptionAlert>(
+    `/subscriptions/api/alerts/${alertId}/dismiss/`
+  )
+  return data
+}
+
+// ========== Admin Stats (Platform Owner) ==========
+
+export const fetchSubscriptionStats = async () => {
+  const { data } = await httpClient.get<SubscriptionStats>(
+    '/subscriptions/api/stats/overview/'
+  )
+  return data
+}
+
+export const fetchRevenueByPlan = async () => {
+  const { data } = await httpClient.get<Array<{ plan: string; revenue: string }>>(
+    '/subscriptions/api/stats/revenue_by_plan/'
+  )
+  return data
+}
+
+export const fetchExpiringSoon = async () => {
+  const { data } = await httpClient.get<PaginatedResponse<Subscription>>(
+    '/subscriptions/api/stats/expiring_soon/'
   )
   return data
 }

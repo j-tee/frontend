@@ -6,8 +6,9 @@ import Form from 'react-bootstrap/Form'
 import Offcanvas from 'react-bootstrap/Offcanvas'
 import Spinner from 'react-bootstrap/Spinner'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { useAppDispatch, useAppSelector } from '../../hooks/index.js'
-import { fetchCurrentUser, logout, selectAuthState } from '../../store/slices/authSlice.js'
+import PageTransition from '../../components/PageTransition.tsx'
+import { useAppDispatch, useAppSelector, usePermissions } from '../../hooks/index.js'
+import { fetchCurrentUser, loadUserStorefronts, logout, selectAuthState } from '../../store/slices/authSlice.js'
 import { selectActiveSubscription } from '../../store/slices/subscriptionSlice.js'
 import {
   addStorefront,
@@ -26,12 +27,15 @@ import {
   resetLocationCreationState,
 } from '../../store/slices/locationSlice.js'
 import type { StorefrontPayload, WarehousePayload } from '../../types/inventory.js'
+import { CAPABILITIES, normalizeMembershipRole, type Capability } from '../../utils/permissions.js'
+import { isPlatformAdmin } from '../../utils/platformPermissions.js'
 
 type NavIconKey =
   | 'dashboard'
   | 'sales'
   | 'inventory'
   | 'customers'
+  | 'employees'
   | 'reports'
   | 'bookkeeping'
   | 'billing'
@@ -42,6 +46,8 @@ interface SideNavLink {
   label: string
   icon: NavIconKey
   end?: boolean
+  requiredCapability?: Capability
+  subLinks?: { to: string; label: string; requiredCapability?: Capability }[]
 }
 
 interface SideNavSection {
@@ -78,6 +84,14 @@ const ICONS: Record<NavIconKey, ReactNode> = {
       <path d="M3.5 19a5.5 5.5 0 0 1 11 0" strokeLinecap="round" />
       <circle cx="17.5" cy="9.5" r="2.5" />
       <path d="M16 17.5a4 4 0 0 1 5 3.5" strokeLinecap="round" />
+    </svg>
+  ),
+  employees: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <path d="M7.5 13a4.5 4.5 0 1 1 9 0v.5a3.5 3.5 0 0 1-3.5 3.5h-2a3.5 3.5 0 0 1-3.5-3.5z" strokeLinejoin="round" />
+      <path d="M4.5 20a4.5 4.5 0 0 1 4.5-4.5" strokeLinecap="round" />
+      <path d="M19.5 20a4.5 4.5 0 0 0-4.5-4.5" strokeLinecap="round" />
+      <circle cx="12" cy="7" r="3" />
     </svg>
   ),
   reports: (
@@ -122,32 +136,92 @@ const SIDE_NAV_SECTIONS: SideNavSection[] = [
   {
     title: 'Operations',
     links: [
-      { label: 'Dashboard', to: '/app', icon: 'dashboard', end: true },
-      { label: 'Sales', to: '/app/sales', icon: 'sales' },
-      { label: 'Inventory', to: '/app/inventory', icon: 'inventory' },
-      { label: 'Customers', to: '/app/customers', icon: 'customers' },
+      {
+        label: 'Dashboard',
+        to: '/app',
+        icon: 'dashboard',
+        end: true,
+        requiredCapability: CAPABILITIES.DASHBOARD_VIEW,
+      },
+      {
+        label: 'Sales',
+        to: '/app/sales',
+        icon: 'sales',
+        requiredCapability: CAPABILITIES.SALES_VIEW,
+      },
+      {
+        label: 'Inventory',
+        to: '/app/inventory',
+        icon: 'inventory',
+        requiredCapability: CAPABILITIES.INVENTORY_VIEW,
+      },
+      {
+        label: 'Customers',
+        to: '/app/customers',
+        icon: 'customers',
+        requiredCapability: CAPABILITIES.CUSTOMERS_VIEW,
+      },
+      {
+        label: 'Employees',
+        to: '/app/employees',
+        icon: 'employees',
+        requiredCapability: CAPABILITIES.EMPLOYEES_VIEW,
+      },
     ],
   },
   {
     title: 'Insights',
     links: [
-      { label: 'Reports', to: '/app/reports', icon: 'reports' },
-      { label: 'Bookkeeping', to: '/app/bookkeeping', icon: 'bookkeeping' },
+      {
+        label: 'Reports',
+        to: '/app/reports',
+        icon: 'reports',
+        requiredCapability: CAPABILITIES.REPORTS_VIEW,
+        subLinks: [
+          {
+            to: '/app/reports/export-schedules',
+            label: 'Export Automation',
+            requiredCapability: CAPABILITIES.REPORTS_VIEW,
+          },
+          {
+            to: '/app/reports/export-history',
+            label: 'Export History',
+            requiredCapability: CAPABILITIES.REPORTS_VIEW,
+          },
+        ],
+      },
+      {
+        label: 'Bookkeeping',
+        to: '/app/bookkeeping',
+        icon: 'bookkeeping',
+        requiredCapability: CAPABILITIES.BOOKKEEPING_VIEW,
+      },
     ],
   },
   {
     title: 'Administration',
     links: [
-      { label: 'Billing', to: '/app/billing', icon: 'billing' },
-      { label: 'Settings', to: '/app/settings', icon: 'settings' },
+      {
+        label: 'Billing',
+        to: '/app/billing',
+        icon: 'billing',
+        requiredCapability: CAPABILITIES.BILLING_MANAGE,
+      },
+      {
+        label: 'Settings',
+        to: '/app/settings',
+        icon: 'settings',
+        requiredCapability: CAPABILITIES.SETTINGS_MANAGE,
+      },
     ],
   },
 ]
 
 const DashboardLayout = () => {
   const dispatch = useAppDispatch()
-  const { user, business } = useAppSelector(selectAuthState)
+  const { user, business, employment } = useAppSelector(selectAuthState)
   const activeSubscription = useAppSelector(selectActiveSubscription)
+  const { can } = usePermissions()
   const [showNavigation, setShowNavigation] = useState(false)
   const [showWorkspace, setShowWorkspace] = useState(false)
   const [showLocationSwitcher, setShowLocationSwitcher] = useState(false)
@@ -168,10 +242,22 @@ const DashboardLayout = () => {
   const createStorefrontError = useAppSelector(selectCreateStorefrontError)
   const createWarehouseStatus = useAppSelector(selectCreateWarehouseStatus)
   const createWarehouseError = useAppSelector(selectCreateWarehouseError)
+  const canManageSales = can(CAPABILITIES.SALES_MANAGE)
+  const canManageInventory = can(CAPABILITIES.INVENTORY_MANAGE)
+  const canManageStaff = can(CAPABILITIES.EMPLOYEES_MANAGE)
+  const canManageLocations = can(CAPABILITIES.LOCATIONS_MANAGE)
+  const hasQuickActions = canManageSales || canManageInventory || canManageLocations || canManageStaff
 
   useEffect(() => {
     if (!user) {
       void dispatch(fetchCurrentUser())
+    }
+  }, [dispatch, user])
+
+  // Load user's accessible storefronts for multi-storefront filtering
+  useEffect(() => {
+    if (user) {
+      void dispatch(loadUserStorefronts())
     }
   }, [dispatch, user])
 
@@ -227,12 +313,17 @@ const DashboardLayout = () => {
   }
 
   const openLocationSwitcher = (mode: 'list' | 'storefront' | 'warehouse' = 'list') => {
-    switchLocationMode(mode)
+    const nextMode = canManageLocations ? mode : 'list'
+    switchLocationMode(nextMode)
     setShowLocationSwitcher(true)
   }
 
   const handleCreateStorefront = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (!canManageLocations) {
+      setStorefrontValidationError('You do not have permission to create storefronts.')
+      return
+    }
     const trimmedName = storefrontName.trim()
     const trimmedLocation = storefrontLocation.trim()
     if (!trimmedName || !trimmedLocation) {
@@ -252,6 +343,7 @@ const DashboardLayout = () => {
         payload.manager = business.owner
       }
       await dispatch(addStorefront(payload)).unwrap()
+      void dispatch(loadLocations({ storefrontPage: 1 }))
       setShowLocationSwitcher(false)
     } catch (error) {
       const message = typeof error === 'string' ? error : error instanceof Error ? error.message : null
@@ -261,6 +353,10 @@ const DashboardLayout = () => {
 
   const handleCreateWarehouse = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (!canManageLocations) {
+      setWarehouseValidationError('You do not have permission to create warehouses.')
+      return
+    }
     const trimmedName = warehouseName.trim()
     const trimmedLocation = warehouseLocation.trim()
     if (!trimmedName || !trimmedLocation) {
@@ -331,11 +427,37 @@ const DashboardLayout = () => {
       : null
   }, [activeLocation, storefronts, warehouses])
 
-  const activeRegister = user?.role_name ?? 'Register 01'
-  const subscriptionStatusLabel = activeSubscription?.status ?? 'Inactive'
+  const membershipRole = useMemo(
+    () => normalizeMembershipRole(employment?.role ?? user?.role, user?.account_type),
+    [employment?.role, user?.role, user?.account_type],
+  )
+
+  const formatRoleLabel = (role?: string | null) => {
+    if (!role) return null
+    const normalized = role.trim()
+    if (!normalized) return null
+    return normalized
+      .split('_')
+      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1).toLowerCase())
+      .join(' ')
+  }
+
+  const businessRoleLabel = formatRoleLabel(membershipRole) ?? 'Staff'
+
+  const platformRoleLabel = (() => {
+    const platformRole = user?.platform_role?.trim().toUpperCase()
+    if (!platformRole || platformRole === 'NONE') {
+      return 'None'
+    }
+    return formatRoleLabel(platformRole) ?? 'None'
+  })()
+
+  // Use business subscription status (business-centric architecture)
+  const subscriptionStatusLabel = business?.subscription_status ?? activeSubscription?.status ?? 'Inactive'
   const subscriptionVariant = (() => {
     const normalized = subscriptionStatusLabel.toLowerCase()
     if (normalized === 'active') return 'success'
+    if (normalized === 'trial') return 'info'
     if (normalized === 'suspended') return 'warning'
     return 'danger'
   })()
@@ -356,7 +478,7 @@ const DashboardLayout = () => {
     ? 'Create storefront'
     : locationMode === 'warehouse'
       ? 'Create warehouse'
-      : 'Manage locations'
+      : canManageLocations ? 'Manage locations' : 'Locations'
 
   const activeLocationTypeLabel = activeLocationSummary
     ? activeLocationSummary.type === 'storefront'
@@ -364,81 +486,126 @@ const DashboardLayout = () => {
       : 'Warehouse'
     : null
 
-  const renderNavigation = (onNavigate?: () => void) => (
-    <div className="flex flex-col gap-8">
-      <div className="space-y-4 rounded-3xl border border-white/10 bg-white/5 p-4 text-slate-100">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">Active location</p>
-        {activeLocationSummary ? (
-          <div className="space-y-1">
-            <p className="text-base font-semibold text-white">{activeLocationSummary.name}</p>
-            <p className="text-xs text-slate-300">
-              {activeLocationTypeLabel}
-              {activeLocationSummary.location ? ` • ${activeLocationSummary.location}` : ''}
-            </p>
-          </div>
-        ) : (
-          <p className="text-sm text-slate-300">
-            {hasLocations
-              ? 'Select a location to focus your workspace.'
-              : 'Create a storefront or warehouse to unlock your workspace.'}
-          </p>
-        )}
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button
-            variant="outline-light"
-            className="rounded-pill px-3 py-2 text-sm"
-            onClick={() => openLocationSwitcher(hasLocations ? 'list' : 'storefront')}
-          >
-            {hasLocations ? 'Manage locations' : 'Add location'}
-          </Button>
-        </div>
-        {locationStatus === 'loading' ? (
-          <div className="mt-2 text-xs text-slate-300">Loading locations…</div>
-        ) : null}
-        {locationError ? (
-          <div className="mt-2 text-xs text-red-200">{locationError}</div>
-        ) : null}
-      </div>
-      <div className="space-y-6">
-        {SIDE_NAV_SECTIONS.map((section) => (
-          <div key={section.title} className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              {section.title}
-            </p>
-            <div className="flex flex-col gap-1.5">
-              {section.links.map((link) => (
-                <NavLink
-                  key={link.to}
-                  to={link.to}
-                  end={link.end}
-                  onClick={onNavigate}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 rounded-2xl px-3 py-2 text-sm font-medium transition ${
-                      isActive
-                        ? 'bg-white/15 text-white shadow-md shadow-indigo-500/10'
-                        : 'text-slate-200 hover:bg-white/10 hover:text-white'
-                    }`
-                  }
-                >
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900/60">
-                    {ICONS[link.icon]}
-                  </span>
-                  <span>{link.label}</span>
-                </NavLink>
-              ))}
+  const renderNavigation = (onNavigate?: () => void) => {
+    const filteredSections = SIDE_NAV_SECTIONS
+      .map((section) => ({
+        ...section,
+        links: section.links.filter((link) => !link.requiredCapability || can(link.requiredCapability)),
+      }))
+      .filter((section) => section.links.length > 0)
+
+    const locationButtonTarget = hasLocations ? 'list' : 'storefront'
+    const locationButtonMode = canManageLocations ? locationButtonTarget : 'list'
+    const locationButtonLabel = hasLocations
+      ? canManageLocations
+        ? 'Manage locations'
+        : 'View locations'
+      : canManageLocations
+        ? 'Add location'
+        : 'View locations'
+
+    return (
+      <div className="flex flex-col gap-8">
+        <div className="space-y-4 rounded-3xl border border-white/10 bg-white/5 p-4 text-slate-100">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">Active location</p>
+          {activeLocationSummary ? (
+            <div className="space-y-1">
+              <p className="text-base font-semibold text-white">{activeLocationSummary.name}</p>
+              <p className="text-xs text-slate-300">
+                {activeLocationTypeLabel}
+                {activeLocationSummary.location ? ` • ${activeLocationSummary.location}` : ''}
+              </p>
             </div>
+          ) : (
+            <p className="text-sm text-slate-300">
+              {hasLocations
+                ? 'Select a location to focus your workspace.'
+                : canManageLocations
+                  ? 'Create a storefront or warehouse to unlock your workspace.'
+                  : 'Ask your administrator to create a storefront or warehouse for you.'}
+            </p>
+          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              variant="outline-light"
+              className="rounded-pill px-3 py-2 text-sm"
+              onClick={() => openLocationSwitcher(locationButtonMode)}
+            >
+              {locationButtonLabel}
+            </Button>
           </div>
-        ))}
+          {locationStatus === 'loading' ? (
+            <div className="mt-2 text-xs text-slate-300">Loading locations…</div>
+          ) : null}
+          {locationError ? (
+            <div className="mt-2 text-xs text-red-200">{locationError}</div>
+          ) : null}
+        </div>
+        <div className="space-y-6">
+          {filteredSections.map((section) => (
+            <div key={section.title} className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                {section.title}
+              </p>
+              <div className="flex flex-col gap-1.5">
+                {section.links.map((link) => (
+                  <div key={link.to}>
+                    <NavLink
+                      to={link.to}
+                      end={link.end}
+                      onClick={onNavigate}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 rounded-2xl px-3 py-2 text-sm font-medium transition ${
+                          isActive
+                            ? 'bg-white/15 text-white shadow-md shadow-indigo-500/10'
+                            : 'text-slate-200 hover:bg-white/10 hover:text-white'
+                        }`
+                      }
+                    >
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900/60">
+                        {ICONS[link.icon]}
+                      </span>
+                      <span>{link.label}</span>
+                    </NavLink>
+                    {link.subLinks && link.subLinks.length > 0 && (
+                      <div className="ml-12 mt-1 flex flex-col gap-1">
+                        {link.subLinks.map((subLink) => (
+                          <NavLink
+                            key={subLink.to}
+                            to={subLink.to}
+                            onClick={onNavigate}
+                            className={({ isActive }) =>
+                              `flex items-center rounded-lg px-3 py-1.5 text-sm transition ${
+                                isActive
+                                  ? 'bg-white/10 text-white font-medium'
+                                  : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                              }`
+                            }
+                          >
+                            <span className="mr-2 text-xs">•</span>
+                            <span>{subLink.label}</span>
+                          </NavLink>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        {canManageLocations ? (
+          <Button
+            variant="primary"
+            className="w-full rounded-pill px-4 py-2"
+            onClick={() => openLocationSwitcher('storefront')}
+          >
+            {hasLocations ? 'New location' : 'Create your first location'}
+          </Button>
+        ) : null}
       </div>
-      <Button
-        variant="primary"
-        className="w-full rounded-pill px-4 py-2"
-        onClick={() => openLocationSwitcher('storefront')}
-      >
-        {hasLocations ? 'New location' : 'Create your first location'}
-      </Button>
-    </div>
-  )
+    )
+  }
 
   const renderWorkspace = () => (
     <div className="flex flex-col gap-6">
@@ -448,9 +615,11 @@ const DashboardLayout = () => {
           <Button
             variant="outline-primary"
             className="rounded-pill px-3 py-2"
-            onClick={() => openLocationSwitcher(hasLocations ? 'list' : 'storefront')}
+            onClick={() => openLocationSwitcher(
+              canManageLocations ? (hasLocations ? 'list' : 'storefront') : 'list',
+            )}
           >
-            {hasLocations ? 'Manage' : 'Add location'}
+            {hasLocations ? (canManageLocations ? 'Manage' : 'View') : canManageLocations ? 'Add location' : 'View locations'}
           </Button>
         </div>
         {locationStatus === 'loading' ? (
@@ -513,24 +682,30 @@ const DashboardLayout = () => {
           </div>
         ) : (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 p-4 text-sm text-slate-600">
-            No storefronts or warehouses yet. Create one to unlock sales and inventory workflows.
+            {canManageLocations
+              ? 'No storefronts or warehouses yet. Create one to unlock sales and inventory workflows.'
+              : 'No storefronts or warehouses yet. Ask an administrator to create one so you can start working.'}
           </div>
         )}
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="primary"
-            className="rounded-pill px-3 py-2 text-white"
-            onClick={() => openLocationSwitcher('storefront')}
-          >
-            New storefront
-          </Button>
-          <Button
-            variant="outline-secondary"
-            className="rounded-pill px-3 py-2"
-            onClick={() => openLocationSwitcher('warehouse')}
-          >
-            New warehouse
-          </Button>
+          {canManageLocations ? (
+            <>
+              <Button
+                variant="primary"
+                className="rounded-pill px-3 py-2 text-white"
+                onClick={() => openLocationSwitcher('storefront')}
+              >
+                New storefront
+              </Button>
+              <Button
+                variant="outline-secondary"
+                className="rounded-pill px-3 py-2"
+                onClick={() => openLocationSwitcher('warehouse')}
+              >
+                New warehouse
+              </Button>
+            </>
+          ) : null}
         </div>
       </section>
       <section className="rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm">
@@ -582,7 +757,7 @@ const DashboardLayout = () => {
         Skip to main content
       </a>
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-7xl items-center gap-3 px-4 py-3 lg:px-8">
+        <div className="flex w-full items-center gap-3 px-4 py-3 sm:px-6 lg:px-10 xl:px-12">
           <div className="flex flex-1 items-center gap-3">
             <Button
               variant="outline-secondary"
@@ -610,14 +785,51 @@ const DashboardLayout = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <div className="hidden items-center gap-2 md:flex">
-              <Button variant="primary" className="rounded-pill px-4">
-                New sale
-              </Button>
-              <Button variant="outline-primary" className="rounded-pill px-4">
-                Add product
-              </Button>
-            </div>
+            {hasQuickActions ? (
+              <div className="hidden items-center gap-2 md:flex">
+                {canManageSales ? (
+                  <Button variant="primary" className="rounded-pill px-4">
+                    New sale
+                  </Button>
+                ) : null}
+                {canManageInventory ? (
+                  <Button
+                    variant="outline-primary"
+                    className="rounded-pill px-4"
+                    onClick={() => navigate('/app/inventory#add-product')}
+                  >
+                    Add product
+                  </Button>
+                ) : null}
+                {canManageInventory ? (
+                  <Button
+                    variant="outline-secondary"
+                    className="rounded-pill px-4"
+                    onClick={() => navigate('/app/inventory/stocks')}
+                  >
+                    Manage stocks
+                  </Button>
+                ) : null}
+                {canManageLocations ? (
+                  <Button
+                    variant="outline-secondary"
+                    className="rounded-pill px-4"
+                    onClick={() => navigate('/app/storefronts')}
+                  >
+                    Manage store front
+                  </Button>
+                ) : null}
+                {canManageStaff ? (
+                  <Button
+                    variant="outline-secondary"
+                    className="rounded-pill px-4"
+                    onClick={() => navigate('/app/employees')}
+                  >
+                    Manage staff
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
             <Button
               variant="light"
               className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-slate-700 shadow-sm lg:hidden"
@@ -666,7 +878,7 @@ const DashboardLayout = () => {
         </div>
       </header>
 
-      <div className="mx-auto flex w-full max-w-7xl flex-1 gap-6 px-4 py-6 lg:px-8">
+  <div className="flex w-full flex-1 gap-6 px-4 py-6 sm:px-6 lg:px-10 xl:px-12">
         <aside className="hidden w-64 flex-shrink-0 flex-col rounded-3xl bg-slate-900/95 px-5 py-6 text-slate-100 xl:flex">
           <div className="mb-6 text-sm font-semibold uppercase tracking-wide text-slate-400">Navigation</div>
           {renderNavigation()}
@@ -675,22 +887,49 @@ const DashboardLayout = () => {
           <header className="rounded-3xl border border-slate-200 bg-white/90 px-6 py-5 shadow-sm backdrop-blur-sm">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="space-y-2">
-                <h1 className="text-2xl font-semibold text-slate-900">{business?.name ?? 'Your business'}</h1>
-                <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600">
-                  <span>{`Active register: ${activeRegister}`}</span>
+                <h1 className="text-2xl font-bold text-slate-900">{business?.name ?? 'Your business'}</h1>
+                <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm font-medium text-slate-700">
+                  <span aria-live="polite">{`Business role: ${businessRoleLabel}`}</span>
+                  <span aria-live="polite">{`Platform role: ${platformRoleLabel}`}</span>
                   <span aria-live="polite">{formattedToday}</span>
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Badge bg={subscriptionVariant} className="rounded-pill px-3 py-2 text-sm">
+                <Badge 
+                  bg={subscriptionVariant} 
+                  className="rounded-pill px-3 py-2 text-sm"
+                  title={`Business Subscription: ${subscriptionStatusLabel}${activeSubscription?.plan?.name ? ` (${activeSubscription.plan.name})` : ''} - Click to manage`}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => navigate('/app/subscription')}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      navigate('/app/subscription')
+                    }
+                  }}
+                >
                   {subscriptionStatusLabel}
                 </Badge>
-                <Button variant="outline-secondary" className="rounded-pill px-4">
-                  Switch store
-                </Button>
-                <Button variant="outline-secondary" className="rounded-pill px-4">
-                  Export
-                </Button>
+                
+                {/* Platform Admin Access */}
+                {user && isPlatformAdmin(user) && (
+                  <Button
+                    variant="outline-primary"
+                    size="sm"
+                    className="rounded-pill px-3 py-1"
+                    onClick={() => navigate('/app/platform')}
+                    title="Platform Management Dashboard"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="me-1" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                      <path d="M12 2L2 7l10 5 10-5-10-5z" strokeLinejoin="round" />
+                      <path d="M2 17l10 5 10-5" strokeLinejoin="round" />
+                      <path d="M2 12l10 5 10-5" strokeLinejoin="round" />
+                    </svg>
+                    Platform Admin
+                  </Button>
+                )}
               </div>
             </div>
           </header>
@@ -701,7 +940,9 @@ const DashboardLayout = () => {
             aria-live="polite"
           >
             <div className="space-y-6">
-              <Outlet />
+              <PageTransition>
+                <Outlet />
+              </PageTransition>
             </div>
           </main>
         </div>
@@ -711,7 +952,7 @@ const DashboardLayout = () => {
       </div>
 
       <footer className="border-t border-slate-200 bg-white/90 py-4">
-        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-center gap-4 px-4 text-sm text-slate-600">
+        <div className="flex w-full flex-wrap items-center justify-center gap-4 px-4 text-sm text-slate-600 sm:px-6 lg:px-10 xl:px-12">
           <span>© 2025 POS Suite</span>
           <span aria-live="polite">Status: Online</span>
           <a href="#release-notes" className="text-brand-primary">
@@ -765,20 +1006,24 @@ const DashboardLayout = () => {
             >
               Manage
             </Button>
-            <Button
-              variant={locationMode === 'storefront' ? 'primary' : 'outline-primary'}
-              className="rounded-pill px-3 py-2"
-              onClick={() => switchLocationMode('storefront')}
-            >
-              New storefront
-            </Button>
-            <Button
-              variant={locationMode === 'warehouse' ? 'primary' : 'outline-primary'}
-              className="rounded-pill px-3 py-2"
-              onClick={() => switchLocationMode('warehouse')}
-            >
-              New warehouse
-            </Button>
+            {canManageLocations ? (
+              <>
+                <Button
+                  variant={locationMode === 'storefront' ? 'primary' : 'outline-primary'}
+                  className="rounded-pill px-3 py-2"
+                  onClick={() => switchLocationMode('storefront')}
+                >
+                  New storefront
+                </Button>
+                <Button
+                  variant={locationMode === 'warehouse' ? 'primary' : 'outline-primary'}
+                  className="rounded-pill px-3 py-2"
+                  onClick={() => switchLocationMode('warehouse')}
+                >
+                  New warehouse
+                </Button>
+              </>
+            ) : null}
           </div>
 
           {locationMode === 'list' ? (
@@ -852,21 +1097,25 @@ const DashboardLayout = () => {
               ) : (
                 <div className="space-y-3">
                   <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 p-4 text-sm text-slate-600">
-                    You don&apos;t have any locations yet. Create a storefront or warehouse to get started.
+                    {canManageLocations
+                      ? 'You don\'t have any locations yet. Create a storefront or warehouse to get started.'
+                      : 'You don\'t have any locations yet. Ask your administrator to create a storefront or warehouse for you.'}
                   </div>
-                  <Button
-                    variant="primary"
-                    className="rounded-pill px-3 py-2 text-white"
-                    onClick={() => switchLocationMode('storefront')}
-                  >
-                    Create your first location
-                  </Button>
+                  {canManageLocations ? (
+                    <Button
+                      variant="primary"
+                      className="rounded-pill px-3 py-2 text-white"
+                      onClick={() => switchLocationMode('storefront')}
+                    >
+                      Create your first location
+                    </Button>
+                  ) : null}
                 </div>
               )}
             </div>
           ) : null}
 
-          {locationMode === 'storefront' ? (
+          {locationMode === 'storefront' && canManageLocations ? (
             <Form onSubmit={handleCreateStorefront} className="space-y-3">
               {storefrontValidationError ? (
                 <Alert variant="warning" className="rounded-3xl border border-amber-200 bg-amber-50 text-amber-700">
@@ -928,7 +1177,7 @@ const DashboardLayout = () => {
             </Form>
           ) : null}
 
-          {locationMode === 'warehouse' ? (
+          {locationMode === 'warehouse' && canManageLocations ? (
             <Form onSubmit={handleCreateWarehouse} className="space-y-3">
               {warehouseValidationError ? (
                 <Alert variant="warning" className="rounded-3xl border border-amber-200 bg-amber-50 text-amber-700">

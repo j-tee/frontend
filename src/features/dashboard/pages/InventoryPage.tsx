@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import Alert from 'react-bootstrap/Alert'
 import Button from 'react-bootstrap/Button'
 import Form from 'react-bootstrap/Form'
 import Spinner from 'react-bootstrap/Spinner'
 import Table from 'react-bootstrap/Table'
+import { useLocation } from 'react-router-dom'
 import { useAppDispatch, useAppSelector } from '../../../hooks/index.js'
 import {
   addCategory,
@@ -12,6 +13,8 @@ import {
   loadProducts,
   resetCreateCategoryState,
   resetCreateProductState,
+  setProductsPage,
+  setProductsPageSize,
   selectCategories,
   selectCategoriesError,
   selectCategoriesStatus,
@@ -21,6 +24,9 @@ import {
   selectCreateProductStatus,
   selectProducts,
   selectProductsError,
+  selectProductsPage,
+  selectProductsPageSize,
+  selectProductsPagination,
   selectProductsStatus,
 } from '../../../store/slices/inventorySlice.js'
 
@@ -34,9 +40,6 @@ interface ProductFormState {
   sku: string
   category: string
   unit: string
-  retail_price: string
-  wholesale_price: string
-  cost: string
   description: string
   is_active: boolean
 }
@@ -51,21 +54,22 @@ const initialProductForm: ProductFormState = {
   sku: '',
   category: '',
   unit: 'unit',
-  retail_price: '',
-  wholesale_price: '',
-  cost: '',
   description: '',
   is_active: true,
 }
 
 const InventoryPage = () => {
   const dispatch = useAppDispatch()
+  const location = useLocation()
   const categories = useAppSelector(selectCategories)
   const categoriesStatus = useAppSelector(selectCategoriesStatus)
   const categoriesError = useAppSelector(selectCategoriesError)
   const products = useAppSelector(selectProducts)
   const productsStatus = useAppSelector(selectProductsStatus)
   const productsError = useAppSelector(selectProductsError)
+  const productsPagination = useAppSelector(selectProductsPagination)
+  const productsPage = useAppSelector(selectProductsPage)
+  const productsPageSize = useAppSelector(selectProductsPageSize)
   const createCategoryStatus = useAppSelector(selectCreateCategoryStatus)
   const createCategoryError = useAppSelector(selectCreateCategoryError)
   const createProductStatus = useAppSelector(selectCreateProductStatus)
@@ -73,8 +77,11 @@ const InventoryPage = () => {
 
   const [categoryForm, setCategoryForm] = useState(initialCategoryForm)
   const [categoryFormError, setCategoryFormError] = useState<string | null>(null)
+  const [categorySuccessMessage, setCategorySuccessMessage] = useState<string | null>(null)
   const [productForm, setProductForm] = useState(initialProductForm)
   const [productFormError, setProductFormError] = useState<string | null>(null)
+  const [productSuccessMessage, setProductSuccessMessage] = useState<string | null>(null)
+  const productNameRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     if (categoriesStatus === 'idle') {
@@ -84,14 +91,15 @@ const InventoryPage = () => {
 
   useEffect(() => {
     if (productsStatus === 'idle') {
-      void dispatch(loadProducts({ limit: 25 }))
+      void dispatch(loadProducts({ page: productsPage, page_size: productsPageSize }))
     }
-  }, [dispatch, productsStatus])
+  }, [dispatch, productsPage, productsPageSize, productsStatus])
 
   useEffect(() => {
     if (createCategoryStatus === 'succeeded') {
       setCategoryForm(initialCategoryForm)
       setCategoryFormError(null)
+      setCategorySuccessMessage('Category created successfully.')
       dispatch(resetCreateCategoryState())
     }
   }, [createCategoryStatus, dispatch])
@@ -100,13 +108,22 @@ const InventoryPage = () => {
     if (createProductStatus === 'succeeded') {
       setProductForm(initialProductForm)
       setProductFormError(null)
+      setProductSuccessMessage('Product created successfully.')
       dispatch(resetCreateProductState())
     }
   }, [createProductStatus, dispatch])
 
-  const sortedProducts = useMemo(() => {
-    return [...products].sort((a, b) => a.name.localeCompare(b.name))
-  }, [products])
+  useEffect(() => {
+    if (!categorySuccessMessage) return
+    const timeoutId = window.setTimeout(() => setCategorySuccessMessage(null), 4000)
+    return () => window.clearTimeout(timeoutId)
+  }, [categorySuccessMessage])
+
+  useEffect(() => {
+    if (!productSuccessMessage) return
+    const timeoutId = window.setTimeout(() => setProductSuccessMessage(null), 4000)
+    return () => window.clearTimeout(timeoutId)
+  }, [productSuccessMessage])
 
   const handleCategorySubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -117,26 +134,13 @@ const InventoryPage = () => {
     }
 
     setCategoryFormError(null)
+    setCategorySuccessMessage(null)
     void dispatch(
       addCategory({
         name: trimmedName,
         description: categoryForm.description.trim() || undefined,
       }),
     )
-  }
-
-  const parseCurrency = (value: string, fieldLabel: string): number | null => {
-    const trimmed = value.trim()
-    if (!trimmed) {
-      setProductFormError(`${fieldLabel} is required.`)
-      return null
-    }
-    const parsed = Number.parseFloat(trimmed)
-    if (Number.isNaN(parsed) || parsed < 0) {
-      setProductFormError(`${fieldLabel} must be a positive number.`)
-      return null
-    }
-    return parsed
   }
 
   const handleProductSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -157,13 +161,6 @@ const InventoryPage = () => {
       return
     }
 
-    const retailPrice = parseCurrency(productForm.retail_price, 'Retail price')
-    if (retailPrice === null) return
-    const wholesalePrice = parseCurrency(productForm.wholesale_price, 'Wholesale price')
-    if (wholesalePrice === null) return
-    const unitCost = parseCurrency(productForm.cost, 'Unit cost')
-    if (unitCost === null) return
-
     const trimmedUnit = productForm.unit.trim()
     if (!trimmedUnit) {
       setProductFormError('Unit is required.')
@@ -171,6 +168,7 @@ const InventoryPage = () => {
     }
 
     setProductFormError(null)
+    setProductSuccessMessage(null)
 
     void dispatch(
       addProduct({
@@ -178,9 +176,6 @@ const InventoryPage = () => {
         sku: productForm.sku.trim(),
         category: productForm.category,
         unit: trimmedUnit,
-        retail_price: retailPrice,
-        wholesale_price: wholesalePrice,
-        cost: unitCost,
         description: productForm.description.trim() || undefined,
         is_active: productForm.is_active,
       }),
@@ -191,6 +186,49 @@ const InventoryPage = () => {
   const isLoadingProducts = productsStatus === 'loading'
   const isCreatingCategory = createCategoryStatus === 'loading'
   const isCreatingProduct = createProductStatus === 'loading'
+
+  const totalProducts = productsPagination.count ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalProducts / productsPageSize))
+  const showingFrom = totalProducts === 0 ? 0 : (productsPage - 1) * productsPageSize + 1
+  const showingTo = totalProducts === 0
+    ? 0
+    : Math.min(productsPage * productsPageSize, totalProducts)
+
+  const handleRefreshProducts = () => {
+    void dispatch(loadProducts({ page: productsPage, page_size: productsPageSize }))
+  }
+
+  const handlePreviousPage = () => {
+    if (productsPage <= 1 || isLoadingProducts) return
+    const previousPage = productsPage - 1
+    dispatch(setProductsPage(previousPage))
+    void dispatch(loadProducts({ page: previousPage, page_size: productsPageSize }))
+  }
+
+  const handleNextPage = () => {
+    if (productsPage >= totalPages || isLoadingProducts || totalProducts === 0) return
+    const nextPage = productsPage + 1
+    dispatch(setProductsPage(nextPage))
+    void dispatch(loadProducts({ page: nextPage, page_size: productsPageSize }))
+  }
+
+  const handlePageSizeChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const nextSize = Number(event.target.value)
+    if (Number.isNaN(nextSize) || nextSize <= 0 || nextSize === productsPageSize) return
+    dispatch(setProductsPageSize(nextSize))
+    dispatch(setProductsPage(1))
+    void dispatch(loadProducts({ page: 1, page_size: nextSize }))
+  }
+
+  useEffect(() => {
+    if (location.hash === '#add-product') {
+      window.setTimeout(() => {
+        const section = document.getElementById('add-product-section')
+        section?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        productNameRef.current?.focus()
+      }, 0)
+    }
+  }, [location.hash])
 
   return (
     <div className="space-y-6">
@@ -211,17 +249,13 @@ const InventoryPage = () => {
             </p>
           </div>
 
-          {categoriesError ? (
-            <Alert variant="danger">{categoriesError}</Alert>
-          ) : null}
+          {categoriesError ? <Alert variant="danger">{categoriesError}</Alert> : null}
 
-          {categoryFormError ? (
-            <Alert variant="warning">{categoryFormError}</Alert>
-          ) : null}
+          {categoryFormError ? <Alert variant="warning">{categoryFormError}</Alert> : null}
 
-          {createCategoryError ? (
-            <Alert variant="danger">{createCategoryError}</Alert>
-          ) : null}
+          {createCategoryError ? <Alert variant="danger">{createCategoryError}</Alert> : null}
+
+          {categorySuccessMessage ? <Alert variant="success">{categorySuccessMessage}</Alert> : null}
 
           <Form onSubmit={handleCategorySubmit} className="space-y-3">
             <Form.Group controlId="categoryName">
@@ -288,12 +322,15 @@ const InventoryPage = () => {
           </div>
         </section>
 
-        <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <section
+          id="add-product-section"
+          className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+        >
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="text-lg font-semibold text-slate-900">Products</h3>
               <p className="text-sm text-slate-600">
-                Capture new products on the fly so every stock lot ties back to a SKU.
+                Capture catalog metadata now—set landed costs and supplier info when receiving stock.
               </p>
             </div>
             {isLoadingProducts ? (
@@ -305,7 +342,7 @@ const InventoryPage = () => {
               <Button
                 variant="outline-secondary"
                 size="sm"
-                onClick={() => void dispatch(loadProducts({ limit: 25 }))}
+                onClick={handleRefreshProducts}
                 disabled={isLoadingProducts}
               >
                 Refresh list
@@ -317,10 +354,13 @@ const InventoryPage = () => {
           {productFormError ? <Alert variant="warning">{productFormError}</Alert> : null}
           {createProductError ? <Alert variant="danger">{createProductError}</Alert> : null}
 
+          {productSuccessMessage ? <Alert variant="success">{productSuccessMessage}</Alert> : null}
+
           <Form onSubmit={handleProductSubmit} className="grid gap-4 md:grid-cols-2">
             <Form.Group controlId="productName" className="md:col-span-1">
               <Form.Label>Name</Form.Label>
               <Form.Control
+                ref={productNameRef}
                 type="text"
                 placeholder="Product name"
                 value={productForm.name}
@@ -376,51 +416,9 @@ const InventoryPage = () => {
                 disabled={isCreatingProduct}
                 required
               />
-            </Form.Group>
-            <Form.Group controlId="productRetailPrice" className="md:col-span-1">
-              <Form.Label>Retail price</Form.Label>
-              <Form.Control
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="Retail price"
-                value={productForm.retail_price}
-                onChange={(event) =>
-                  setProductForm((previous) => ({ ...previous, retail_price: event.target.value }))
-                }
-                disabled={isCreatingProduct}
-                required
-              />
-            </Form.Group>
-            <Form.Group controlId="productWholesalePrice" className="md:col-span-1">
-              <Form.Label>Wholesale price</Form.Label>
-              <Form.Control
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="Wholesale price"
-                value={productForm.wholesale_price}
-                onChange={(event) =>
-                  setProductForm((previous) => ({ ...previous, wholesale_price: event.target.value }))
-                }
-                disabled={isCreatingProduct}
-                required
-              />
-            </Form.Group>
-            <Form.Group controlId="productCost" className="md:col-span-1">
-              <Form.Label>Unit cost</Form.Label>
-              <Form.Control
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="Unit cost"
-                value={productForm.cost}
-                onChange={(event) =>
-                  setProductForm((previous) => ({ ...previous, cost: event.target.value }))
-                }
-                disabled={isCreatingProduct}
-                required
-              />
+              <Form.Text muted>
+                Prices now live on stock receipts. Keep this unit descriptive for future landed cost calculations.
+              </Form.Text>
             </Form.Group>
             <Form.Group controlId="productDescription" className="md:col-span-2">
               <Form.Label>Description</Form.Label>
@@ -462,37 +460,94 @@ const InventoryPage = () => {
 
           <div className="space-y-3">
             <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Catalog preview</h4>
-            {products.length === 0 ? (
+            {isLoadingProducts && totalProducts === 0 ? (
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <Spinner animation="border" size="sm" role="status" aria-hidden />
+                Loading products…
+              </div>
+            ) : totalProducts === 0 ? (
               <p className="text-sm text-slate-500">
                 No products yet. Add one above to make stocking faster next time.
               </p>
             ) : (
-              <div className="max-h-80 overflow-auto">
-                <Table responsive size="sm" hover>
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>SKU</th>
-                      <th>Category</th>
-                      <th className="text-right">Retail</th>
-                      <th className="text-right">Cost</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedProducts.map((product) => (
-                      <tr key={product.id}>
-                        <td>{product.name}</td>
-                        <td>{product.sku}</td>
-                        <td>{product.category_name ?? categories.find((category) => category.id === product.category)?.name ?? '—'}</td>
-                        <td className="text-right">${product.retail_price.toFixed(2)}</td>
-                        <td className="text-right">${product.cost.toFixed(2)}</td>
-                        <td>{product.is_active ? 'Active' : 'Archived'}</td>
+              <>
+                <div className="max-h-80 overflow-auto">
+                  <Table responsive size="sm" hover>
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>SKU</th>
+                        <th>Category</th>
+                        <th>Unit</th>
+                        <th>Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </Table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {products.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="py-3 text-center text-sm text-slate-500">
+                            No products on this page. Try a different page or refresh.
+                          </td>
+                        </tr>
+                      ) : (
+                        products.map((product) => (
+                          <tr key={product.id}>
+                            <td>{product.name}</td>
+                            <td>{product.sku}</td>
+                            <td>{product.category_name ?? categories.find((category) => category.id === product.category)?.name ?? '—'}</td>
+                            <td>{product.unit}</td>
+                            <td>{product.is_active ? 'Active' : 'Archived'}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </Table>
+                </div>
+                <div className="flex flex-col gap-3 border-t border-slate-200 pt-3 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    Showing {showingFrom.toLocaleString()}–{showingTo.toLocaleString()} of {totalProducts.toLocaleString()} products
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Form.Select
+                      size="sm"
+                      className="w-auto"
+                      value={productsPageSize.toString()}
+                      onChange={handlePageSizeChange}
+                      disabled={isLoadingProducts}
+                      aria-label="Select products per page"
+                    >
+                      {[10, 25, 50, 100].map((option) => (
+                        <option key={option} value={option}>
+                          {option} per page
+                        </option>
+                      ))}
+                    </Form.Select>
+                    <div className="inline-flex items-center gap-2">
+                      <Button
+                        variant="outline-secondary"
+                        size="sm"
+                        onClick={handlePreviousPage}
+                        disabled={isLoadingProducts || productsPage <= 1}
+                      >
+                        Previous
+                      </Button>
+                      <span className="text-sm text-slate-600">
+                        Page {Math.min(productsPage, totalPages)} of {totalPages}
+                      </span>
+                      <Button
+                        variant="outline-secondary"
+                        size="sm"
+                        onClick={handleNextPage}
+                        disabled={
+                          isLoadingProducts || productsPage >= totalPages || totalProducts === 0
+                        }
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </>
             )}
           </div>
         </section>

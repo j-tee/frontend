@@ -3,6 +3,7 @@ import { Navigate, Outlet } from 'react-router-dom'
 import { useAppDispatch, useAppSelector } from '../hooks/index.js'
 import {
   fetchCurrentUser,
+  hydrateBusinessContext,
   selectAuthState,
   selectIsAuthenticated,
 } from '../store/slices/authSlice.js'
@@ -11,13 +12,24 @@ import SubscriptionGateBanner from './SubscriptionGateBanner.js'
 const ProtectedRoute = () => {
   const dispatch = useAppDispatch()
   const isAuthenticated = useAppSelector(selectIsAuthenticated)
-  const { token, user, status, error } = useAppSelector(selectAuthState)
+  const { token, user, business, status, error, businessStatus } = useAppSelector(selectAuthState)
 
   useEffect(() => {
     if (token && !user && status !== 'loading') {
       void dispatch(fetchCurrentUser())
     }
   }, [dispatch, token, user, status])
+
+  useEffect(() => {
+    if (
+      token &&
+      user &&
+      !business &&
+      (businessStatus === 'idle' || businessStatus === 'failed')
+    ) {
+      void dispatch(hydrateBusinessContext())
+    }
+  }, [dispatch, token, user, business, businessStatus])
 
   const redirect = useMemo(() => {
     if (!token) {

@@ -1,5 +1,5 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/toolkit'
-import { isAxiosError } from 'axios'
+import { toUserFacingError } from '../../utils/errorMessage'
 import {
   createStorefront,
   createWarehouse,
@@ -14,6 +14,8 @@ import type {
 } from '../../types/inventory.js'
 import type { RootState } from '../index.js'
 
+const DEFAULT_STOREFRONT_PAGE_SIZE = 20
+
 type LocationType = 'storefront' | 'warehouse'
 
 interface SelectedLocation {
@@ -21,8 +23,17 @@ interface SelectedLocation {
   id: string
 }
 
+interface PaginationState {
+  count: number
+  next: string | null
+  previous: string | null
+  page: number
+  pageSize: number
+}
+
 interface LocationState {
   storefronts: Storefront[]
+  storefrontPagination: PaginationState
   warehouses: Warehouse[]
   status: 'idle' | 'loading' | 'succeeded' | 'failed'
   error: string | null
@@ -35,6 +46,13 @@ interface LocationState {
 
 const initialState: LocationState = {
   storefronts: [],
+  storefrontPagination: {
+    count: 0,
+    next: null,
+    previous: null,
+    page: 1,
+    pageSize: DEFAULT_STOREFRONT_PAGE_SIZE,
+  },
   warehouses: [],
   status: 'idle',
   error: null,
@@ -45,41 +63,81 @@ const initialState: LocationState = {
   createWarehouseError: null,
 }
 
-const extractError = (error: unknown): string => {
-  if (isAxiosError(error)) {
-    if (error.response?.data) {
-      if (typeof error.response.data === 'string') {
-        return error.response.data
-      }
-      try {
-        return JSON.stringify(error.response.data)
-      } catch {
-        return error.message
-      }
-    }
-    return error.message
-  }
-  if (error instanceof Error) return error.message
-  return 'Failed to load locations.'
+const extractError = (
+  error: unknown,
+  fallback = "We couldn't load locations right now. Please try again.",
+): string => toUserFacingError(error, { fallback })
+
+interface LoadLocationsArgs {
+  storefrontPage?: number
 }
 
 interface LoadLocationsResult {
   storefronts: Storefront[]
+  storefrontPagination: PaginationState
   warehouses: Warehouse[]
 }
 
-export const loadLocations = createAsyncThunk<LoadLocationsResult>(
+export const loadLocations = createAsyncThunk<
+  LoadLocationsResult,
+  LoadLocationsArgs | undefined,
+  { state: RootState }
+>(
   'locations/loadAll',
-  async (_, thunkAPI) => {
+  async (args, thunkAPI) => {
     try {
-      const [storefronts, warehouses] = await Promise.all([
-        fetchStorefronts(),
-        fetchWarehouses(),
+      const page = args?.storefrontPage ?? 1
+      const state = thunkAPI.getState()
+      const targetBusinessId = state.auth.employment?.business.id ?? state.auth.business?.id ?? null
+
+      const resolveBusinessId = (item: unknown): string | null => {
+        if (!item || typeof item !== 'object') return null
+        const record = item as Record<string, unknown>
+        const direct = record.business
+        if (typeof direct === 'string') return direct
+        if (direct && typeof direct === 'object' && 'id' in direct) {
+          const nestedId = (direct as { id?: unknown }).id
+          if (typeof nestedId === 'string') return nestedId
+        }
+        const snake = record.business_id
+        if (typeof snake === 'string') return snake
+        const camel = record.businessId
+        if (typeof camel === 'string') return camel
+        return null
+      }
+
+      const filterByBusiness = <T>(items: T[]): T[] => {
+        if (!targetBusinessId) return items
+        const hasBusinessMetadata = items.some((item) => resolveBusinessId(item) !== null)
+        if (!hasBusinessMetadata) {
+          return items
+        }
+        return items.filter((item) => resolveBusinessId(item) === targetBusinessId)
+      }
+
+      const storefrontParams = targetBusinessId ? { page, business: targetBusinessId } : { page }
+      const warehouseParams = targetBusinessId ? { business: targetBusinessId } : undefined
+      const [storefrontsResponse, warehouses] = await Promise.all([
+        fetchStorefronts(storefrontParams),
+        fetchWarehouses(warehouseParams),
       ])
+
+      const storefronts = filterByBusiness(storefrontsResponse.results)
+      const scopedWarehouses = filterByBusiness(warehouses)
+
+      const storefrontsWereFiltered = storefronts.length !== storefrontsResponse.results.length
+      const shouldPaginate = !targetBusinessId
 
       return {
         storefronts,
-        warehouses,
+        storefrontPagination: {
+          count: storefrontsWereFiltered || targetBusinessId ? storefronts.length : storefrontsResponse.count,
+          next: shouldPaginate ? storefrontsResponse.next : null,
+          previous: shouldPaginate ? storefrontsResponse.previous : null,
+          page: storefrontsResponse.page,
+          pageSize: DEFAULT_STOREFRONT_PAGE_SIZE,
+        },
+        warehouses: scopedWarehouses,
       }
     } catch (error) {
       return thunkAPI.rejectWithValue(extractError(error))
@@ -135,9 +193,10 @@ const locationSlice = createSlice({
       .addCase(
         loadLocations.fulfilled,
         (state: LocationState, action: PayloadAction<LoadLocationsResult>) => {
-          const { storefronts, warehouses } = action.payload
+          const { storefronts, storefrontPagination, warehouses } = action.payload
           state.status = 'succeeded'
           state.storefronts = storefronts
+          state.storefrontPagination = storefrontPagination
           state.warehouses = warehouses
           state.error = null
 
@@ -177,7 +236,15 @@ const locationSlice = createSlice({
         addStorefront.fulfilled,
         (state: LocationState, action: PayloadAction<Storefront>) => {
           state.createStorefrontStatus = 'succeeded'
-          state.storefronts = [action.payload, ...state.storefronts]
+          state.storefrontPagination.count += 1
+          if (state.storefrontPagination.page === 1) {
+            const nextStorefronts = [action.payload, ...state.storefronts]
+            state.storefronts = nextStorefronts.slice(0, state.storefrontPagination.pageSize)
+          } else {
+            state.storefronts = [action.payload, ...state.storefronts]
+            state.storefrontPagination.page = 1
+            state.storefrontPagination.previous = null
+          }
           state.selectedLocation = { type: 'storefront', id: action.payload.id }
         },
       )
@@ -208,6 +275,7 @@ export const { selectLocation, clearSelectedLocation, resetLocationCreationState
 
 export const selectLocationsState = (state: RootState) => state.locations
 export const selectStorefronts = (state: RootState) => state.locations.storefronts
+export const selectStorefrontPagination = (state: RootState) => state.locations.storefrontPagination
 export const selectWarehouses = (state: RootState) => state.locations.warehouses
 export const selectLocationStatus = (state: RootState) => state.locations.status
 export const selectLocationError = (state: RootState) => state.locations.error

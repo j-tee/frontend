@@ -1,19 +1,18 @@
 export const PAYMENT_TYPES = [
   'CASH',
   'CARD',
-  'MOBILE',
   'CREDIT',
-  'MIXED',
+  'MOBILE',
+  'SPLIT',
 ] as const
 
 export type PaymentType = (typeof PAYMENT_TYPES)[number]
 
 export const SALE_STATUSES = [
+  'DRAFT',
   'COMPLETED',
-  'PENDING',
-  'REFUNDED',
-  'PARTIAL',
   'CANCELLED',
+  'REFUNDED',
 ] as const
 
 export type SaleStatus = (typeof SALE_STATUSES)[number]
@@ -24,20 +23,18 @@ export type SaleType = (typeof SALE_TYPES)[number]
 
 export const PAYMENT_METHODS = [
   'CASH',
-  'MOMO',
   'CARD',
-  'PAYSTACK',
-  'STRIPE',
+  'MOBILE',
+  'CREDIT',
   'BANK_TRANSFER',
 ] as const
 
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number]
 
 export const PAYMENT_STATUSES = [
-  'SUCCESSFUL',
   'PENDING',
+  'COMPLETED',
   'FAILED',
-  'CANCELLED',
 ] as const
 
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number]
@@ -47,7 +44,9 @@ export const REFUND_TYPES = ['FULL', 'PARTIAL', 'EXCHANGE'] as const
 export type RefundType = (typeof REFUND_TYPES)[number]
 
 export const REFUND_STATUSES = [
-  'PENDING',
+  'DRAFT',
+  'REQUESTED',
+  'APPROVED',
   'APPROVED',
   'PROCESSED',
   'REJECTED',
@@ -56,8 +55,11 @@ export const REFUND_STATUSES = [
 export type RefundStatus = (typeof REFUND_STATUSES)[number]
 
 export const TRANSFER_STATUSES = [
-  'PENDING',
+  'DRAFT',
+  'REQUESTED',
+  'APPROVED',
   'IN_TRANSIT',
+  'REJECTED',
   'COMPLETED',
   'CANCELLED',
 ] as const
@@ -84,3 +86,28 @@ export interface PaginatedResponse<T> {
   previous: string | null
   results: T[]
 }
+
+export const TRANSFER_REQUEST_STATUSES = [
+  'NEW',
+  'ASSIGNED',
+  'FULFILLED',
+  'CANCELLED',
+] as const
+
+export type TransferRequestStatus = (typeof TRANSFER_REQUEST_STATUSES)[number]
+
+export const TRANSFER_REQUEST_PRIORITIES = [
+  'LOW',
+  'MEDIUM',
+  'HIGH',
+  'URGENT',
+] as const
+
+export type TransferRequestPriority = (typeof TRANSFER_REQUEST_PRIORITIES)[number]
+
+export const TRANSFER_DIRECTIONS = [
+  'FORWARD',  // Warehouse → Storefront (stock replenishment)
+  'REVERSE',  // Storefront → Warehouse (returns, excess inventory)
+] as const
+
+export type TransferDirection = (typeof TRANSFER_DIRECTIONS)[number]

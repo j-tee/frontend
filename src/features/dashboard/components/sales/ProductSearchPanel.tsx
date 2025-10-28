@@ -1,0 +1,997 @@
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Form, InputGroup, Card, Row, Col, Button, Badge, Spinner, Alert } from 'react-bootstrap'
+import { useAppDispatch, useCurrency } from '../../../../hooks'
+import { addItemToCart } from '../../../../store/slices/salesSlice'
+import { fetchSaleCatalog, fetchMultiStorefrontCatalog } from '../../../../services/inventoryService'
+import httpClient from '../../../../services/httpClient'
+import type { UUID } from '../../../../types/common'
+import type { SaleCatalogItem, MultiStorefrontCatalogItem, StorefrontLocation } from '../../../../types/inventory'
+
+interface Product {
+  id: UUID
+  name: string
+  sku: string
+  barcode: string | null
+  category_name: string
+  unit: string
+  image: string | null
+  stock_product_ids: UUID[]
+  retail_price: number
+  wholesale_price: number
+  available_quantity: number
+  locations?: StorefrontLocation[] // For multi-storefront mode
+}
+
+interface StockRecord {
+  id: UUID
+  product: UUID
+  quantity: number
+  available_quantity: number
+  reserved_quantity?: number
+  unit_cost?: number
+  wholesale_price: number
+  retail_price: number
+  batch_number?: string
+  expiry_date?: string | null
+}
+
+interface ProductSearchPanelProps {
+  storefrontId?: UUID  // Optional - when not provided, uses multi-storefront mode
+  saleId?: UUID
+  saleType: 'RETAIL' | 'WHOLESALE'
+  disabled?: boolean
+  ensureSaleSession?: (preferredStorefrontId?: UUID) => Promise<UUID | null>  // Accept storefront parameter
+  multiStorefront?: boolean  // Explicitly enable multi-storefront mode
+}
+// Robust number parser used for prices/quantities returned as strings with symbols/commas
+const robustNumber = (v: unknown): number => {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0
+  if (typeof v === 'string') {
+    const cleaned = v.replace(/[^0-9.-]+/g, '')
+    const parsed = Number(cleaned)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+  return 0
+}
+
+const parsePrice = (value: string | number | null | undefined): number => {
+  return robustNumber(value)
+}
+
+export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, ensureSaleSession, multiStorefront = false }: ProductSearchPanelProps) {
+  const dispatch = useAppDispatch()
+  const { formatCurrency } = useCurrency()
+  
+  const [searchQuery, setSearchQuery] = useState('')
+  const [barcodeInput, setBarcodeInput] = useState('')
+  const [catalog, setCatalog] = useState<Product[]>([])
+  const [products, setProducts] = useState<Product[]>([])
+  const [stockData, setStockData] = useState<Record<UUID, StockRecord>>({})
+  const [loading, setLoading] = useState(false)
+  const [catalogLoading, setCatalogLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [addingItemId, setAddingItemId] = useState<UUID | null>(null)
+  const [quantities, setQuantities] = useState<Record<UUID, number>>({})
+  // accessible storefronts list not required for current logic
+
+  const lastSearchTimestampRef = useRef(0)
+  const availabilitySupportedRef = useRef(true)
+  const stockDataRef = useRef<Record<UUID, StockRecord>>({})
+
+  const MIN_SEARCH_LENGTH = 2
+  const SEARCH_DEBOUNCE_MS = 400
+  const SEARCH_THROTTLE_MS = 600
+
+  
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadCatalog = async () => {
+      try {
+        setCatalogLoading(true)
+        setLoading(true)
+        setError(null)
+        availabilitySupportedRef.current = true
+        lastSearchTimestampRef.current = 0
+
+        let normalized: Product[]
+
+        // Use multi-storefront mode if enabled OR if no storefrontId provided
+        if (multiStorefront || !storefrontId) {
+          // Fetch from all accessible storefronts
+          const multiResponse = await fetchMultiStorefrontCatalog()
+          
+          // storefront list returned but not stored (not needed for product price display)
+          
+          // Map multi-storefront response to Product format
+          normalized = (multiResponse.products ?? [])
+            .filter((item: MultiStorefrontCatalogItem) => 
+              Array.isArray(item.stock_product_ids) && 
+              item.stock_product_ids.length > 0
+            )
+            .map((item: MultiStorefrontCatalogItem): Product => {
+              const retail = parsePrice(item.retail_price)
+              const wholesale = parsePrice(item.wholesale_price ?? item.retail_price)
+              const available = robustNumber(item.total_available) || 0
+
+              return {
+                id: item.product_id,
+                name: item.product_name,
+                sku: item.sku,
+                barcode: item.barcode ?? null,
+                category_name: item.category_name ?? 'Uncategorized',
+                unit: item.unit ?? 'unit',
+                image: item.product_image ?? null,
+                stock_product_ids: item.stock_product_ids,
+                retail_price: retail,
+                wholesale_price: wholesale,
+                available_quantity: available,
+                locations: item.locations, // Include location info
+              }
+            })
+        } else {
+          // Single storefront mode (original behavior)
+          const response = await fetchSaleCatalog(storefrontId)
+          normalized = (response.products ?? [])
+            .filter((item: SaleCatalogItem) => 
+              Array.isArray(item.stock_product_ids) && 
+              item.stock_product_ids.length > 0
+            )
+            .map((item: SaleCatalogItem): Product => {
+              const retail = parsePrice(item.retail_price)
+              const wholesale = parsePrice(item.wholesale_price ?? item.retail_price)
+              const available = typeof item.available_quantity === 'number'
+                ? item.available_quantity
+                : robustNumber(item.available_quantity) || 0
+
+              return {
+                id: item.product_id,
+                name: item.product_name,
+                sku: item.sku,
+                barcode: item.barcode ?? null,
+                category_name: item.category_name ?? 'Uncategorized',
+                unit: item.unit ?? 'unit',
+                image: item.product_image ?? null,
+                stock_product_ids: item.stock_product_ids,
+                retail_price: retail,
+                wholesale_price: wholesale,
+                available_quantity: available,
+              }
+            })
+        }
+
+        if (!isMounted) {
+          return
+        }
+
+        setCatalog(normalized)
+        setProducts([])
+        setQuantities({})
+
+        const seededStock: Record<UUID, StockRecord> = {}
+        normalized.forEach((product) => {
+          if (product.stock_product_ids.length === 0) {
+            return
+          }
+
+          const primaryStockId = product.stock_product_ids[0]
+          
+          console.log('⚠️ [SEEDING INITIAL STOCK] Using catalog data (INACCURATE - will be updated by fetchStockLevels)', {
+            productName: product.name,
+            catalogQuantity: product.available_quantity,
+            note: 'This is just transferred quantity, not accounting for sold items'
+          })
+          
+          seededStock[product.id] = {
+            id: primaryStockId,
+            product: product.id,
+            quantity: product.available_quantity,
+            available_quantity: product.available_quantity,
+            reserved_quantity: 0,
+            unit_cost: 0,
+            retail_price: product.retail_price,
+            wholesale_price: product.wholesale_price,
+            batch_number: undefined,
+            expiry_date: null,
+          }
+        })
+
+        setStockData(seededStock)
+        stockDataRef.current = seededStock
+      } catch (err) {
+        console.error('[ProductSearch] Failed to load sale catalog', err)
+        if (isMounted) {
+          setCatalog([])
+          setProducts([])
+          setStockData({})
+          stockDataRef.current = {}
+          setError('Unable to load catalog for this storefront. Please try again.')
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false)
+          setCatalogLoading(false)
+        }
+      }
+    }
+
+    loadCatalog()
+
+    return () => {
+      isMounted = false
+    }
+  }, [storefrontId, multiStorefront])
+
+  useEffect(() => {
+    stockDataRef.current = stockData
+  }, [stockData])
+
+  const fetchStockLevels = useCallback(async (productIds: UUID[]) => {
+    if (!productIds.length) {
+      return
+    }
+
+    // REMOVED: No longer skip in multi-storefront mode
+    // We need accurate unreserved_quantity which accounts for sold items
+    // The catalog's available_quantity only shows transferred quantity, not available to sell
+    
+    console.log('[fetchStockLevels] Starting fetch', {
+      productIds,
+      storefrontId,
+      multiStorefront,
+      productCount: productIds.length
+    })
+
+    try {
+      const shouldTryAvailability = availabilitySupportedRef.current
+
+      const stockPromises = productIds.map(async (productId) => {
+        try {
+          if (shouldTryAvailability) {
+            const url = `/inventory/api/storefronts/${storefrontId}/stock-products/${productId}/availability/`
+            console.log('[fetchStockLevels] Fetching availability', { productId, url })
+            const response = await httpClient.get(url)
+            console.log('[fetchStockLevels] API Response:', { productId, data: response.data })
+            return {
+              productId,
+              data: response.data,
+              source: 'availability' as const,
+            }
+          }
+          throw new Error('AVAILABILITY_DISABLED')
+        } catch (err) {
+          const error = err as { response?: { status?: number }; message?: string }
+
+          if (error.message !== 'AVAILABILITY_DISABLED') {
+            console.warn(`Availability endpoint not available for product ${productId}, falling back to stock-products`, err)
+
+            if (shouldTryAvailability && error.response && [404, 405, 500].includes(error.response.status ?? 0)) {
+              availabilitySupportedRef.current = false
+            }
+          }
+
+          try {
+            // Attempt warehouse availability endpoint first (new fallback path)
+            try {
+              const warehouseAvailability = await httpClient.get('/inventory/api/stock/availability/', {
+                params: {
+                  warehouse: storefrontId,
+                  product: productId,
+                },
+              })
+
+              const availabilityPayload = warehouseAvailability.data as {
+                available_quantity?: number | string
+                requested_quantity?: number | string
+              }
+
+              const toNumber = (value: unknown): number => {
+                if (typeof value === 'number') {
+                  return Number.isFinite(value) ? value : 0
+                }
+                if (typeof value === 'string') {
+                  const parsed = Number(value)
+                  return Number.isFinite(parsed) ? parsed : 0
+                }
+                return 0
+              }
+
+              const availableQuantity = toNumber(
+                availabilityPayload.available_quantity ?? availabilityPayload.requested_quantity ?? 0,
+              )
+
+              const existingStock = stockDataRef.current[productId]
+
+              return {
+                productId,
+                data: {
+                  id: existingStock?.id ?? productId,
+                  product: productId,
+                  quantity: availableQuantity,
+                  available_quantity: availableQuantity,
+                  reserved_quantity: existingStock?.reserved_quantity ?? 0,
+                  unit_cost: existingStock?.unit_cost ?? 0,
+                  retail_price: existingStock?.retail_price ?? 0,
+                  wholesale_price: existingStock?.wholesale_price ?? existingStock?.retail_price ?? 0,
+                  batch_number: existingStock?.batch_number ?? '',
+                  expiry_date: existingStock?.expiry_date ?? null,
+                },
+                source: 'warehouse-availability' as const,
+              }
+            } catch (warehouseFallbackError) {
+              console.warn(
+                `[ProductSearch] Warehouse availability fallback failed for product ${productId}`,
+                warehouseFallbackError,
+              )
+            }
+
+            const fallbackResponse = await httpClient.get('/inventory/api/stock-products/', {
+              params: {
+                storefront: storefrontId,
+                product: productId,
+              },
+            })
+            const stockList = fallbackResponse.data.results || fallbackResponse.data
+            const stock = Array.isArray(stockList) ? stockList[0] : stockList
+
+            if (stock) {
+              return {
+                productId,
+                data: stock,
+                source: 'fallback' as const,
+              }
+            }
+          } catch (fallbackErr) {
+            console.warn(`Fallback also failed for product ${productId}:`, fallbackErr)
+          }
+          return null
+        }
+      })
+
+      const results = await Promise.all(stockPromises)
+      const stockMap: Record<UUID, StockRecord> = {}
+
+      results.forEach((result) => {
+        if (!result || !result.data) {
+          return
+        }
+
+        const { productId, data, source } = result
+        const existingStock = stockDataRef.current[productId]
+
+        console.log(`🔀 [PROCESSING] Product ${productId} using source: "${source}"`)
+
+        if (source === 'availability') {
+          const firstBatch = data.batches?.[0]
+          const reserved = typeof data.reserved_quantity === 'number' ? data.reserved_quantity : 0
+          const stockId = firstBatch?.id || existingStock?.id || productId
+          const quantityTotal = typeof data.total_available === 'number'
+            ? data.total_available
+            : robustNumber(data.total_available)
+          const availableQuantity = typeof data.unreserved_quantity === 'number'
+            ? data.unreserved_quantity
+            : robustNumber(data.unreserved_quantity)
+          
+          console.log('✅ [API RESPONSE] Got accurate unreserved_quantity from availability API', {
+            productId,
+            unreserved_quantity: data.unreserved_quantity,
+            total_available: data.total_available,
+            reserved_quantity: data.reserved_quantity,
+            availableQuantity,
+            note: 'This accounts for sold items!'
+          })
+          
+          const unitCost = typeof firstBatch?.unit_cost === 'number'
+            ? firstBatch.unit_cost
+            : robustNumber(firstBatch?.unit_cost ?? existingStock?.unit_cost ?? 0)
+          const retailPrice = typeof firstBatch?.retail_price === 'number'
+            ? firstBatch.retail_price
+            : robustNumber(firstBatch?.retail_price ?? existingStock?.retail_price ?? 0)
+          const wholesalePrice = typeof firstBatch?.wholesale_price === 'number'
+            ? firstBatch.wholesale_price
+            : robustNumber(firstBatch?.wholesale_price ?? existingStock?.wholesale_price ?? retailPrice)
+
+          stockMap[productId] = {
+            id: stockId,
+            product: productId,
+            quantity: quantityTotal,
+            available_quantity: availableQuantity,
+            reserved_quantity: reserved,
+            unit_cost: unitCost,
+            retail_price: retailPrice,
+            wholesale_price: wholesalePrice,
+            batch_number: firstBatch?.batch_number || undefined,
+            expiry_date: firstBatch?.expiry_date ?? null,
+          }
+        } else {
+          console.log(`⚠️ [FALLBACK PATH] Product ${productId} using fallback source: "${source}"`)
+          console.log(`⚠️ This may NOT account for sold items! data.available_quantity =`, data.available_quantity)
+          
+          stockMap[productId] = {
+            id: data.id,
+            product: productId,
+            quantity: robustNumber(data.quantity),
+            available_quantity: robustNumber(data.available_quantity ?? data.quantity),
+            reserved_quantity: robustNumber(data.reserved_quantity),
+            unit_cost: robustNumber(data.unit_cost ?? existingStock?.unit_cost),
+            retail_price: robustNumber(data.retail_price ?? existingStock?.retail_price),
+            wholesale_price: robustNumber(data.wholesale_price ?? existingStock?.wholesale_price ?? data.retail_price),
+            batch_number: data.batch_number ?? undefined,
+            expiry_date: data.expiry_date ?? null,
+          }
+        }
+      })
+
+      if (Object.keys(stockMap).length > 0) {
+        console.log('[fetchStockLevels] SUCCESS - Updating stockData with:', stockMap)
+        setStockData((prev) => {
+          const next = {
+            ...prev,
+            ...stockMap,
+          }
+          stockDataRef.current = next
+          return next
+        })
+      } else {
+        console.warn('[fetchStockLevels] WARNING - No stock data fetched! StockMap is empty')
+      }
+    } catch (err) {
+      console.error('Failed to fetch stock levels:', err)
+    }
+  }, [storefrontId, multiStorefront])
+
+  const searchProducts = useCallback(async (rawQuery: string) => {
+    if (catalogLoading) {
+      return
+    }
+
+    const trimmedQuery = rawQuery.trim()
+
+    if (trimmedQuery.length < MIN_SEARCH_LENGTH) {
+      setProducts([])
+      setError(null)
+      return
+    }
+
+    try {
+      setLoading(true)
+      setError(null)
+
+      const now = Date.now()
+      const elapsedSinceLastSearch = now - lastSearchTimestampRef.current
+      if (elapsedSinceLastSearch < SEARCH_THROTTLE_MS) {
+        await new Promise((resolve) => setTimeout(resolve, SEARCH_THROTTLE_MS - elapsedSinceLastSearch))
+      }
+
+      lastSearchTimestampRef.current = Date.now()
+
+      const lowerQuery = trimmedQuery.toLowerCase()
+      const matches = catalog.filter((item) =>
+        item.name.toLowerCase().includes(lowerQuery) ||
+        item.sku.toLowerCase().includes(lowerQuery) ||
+        (item.barcode ? item.barcode.toLowerCase().includes(lowerQuery) : false)
+      )
+
+      setProducts(matches)
+
+      const newQuantities: Record<UUID, number> = {}
+      matches.forEach((product) => {
+        if (!quantities[product.id]) {
+          newQuantities[product.id] = 1
+        }
+      })
+      if (Object.keys(newQuantities).length > 0) {
+        setQuantities((prev) => ({ ...prev, ...newQuantities }))
+      }
+
+      if (matches.length > 0) {
+        await fetchStockLevels(matches.map((product) => product.id))
+      }
+    } catch (err) {
+      console.error('[ProductSearch] Search error:', err)
+      setError('Failed to search products. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }, [catalog, catalogLoading, fetchStockLevels, quantities])
+
+  // Debounced search
+  useEffect(() => {
+    if (catalogLoading) {
+      return
+    }
+
+    if (!searchQuery.trim()) {
+      setProducts([])
+      return
+    }
+
+    const timeoutId = setTimeout(() => {
+      searchProducts(searchQuery)
+    }, SEARCH_DEBOUNCE_MS)
+
+    return () => clearTimeout(timeoutId)
+  }, [catalogLoading, searchQuery, searchProducts, SEARCH_DEBOUNCE_MS])
+
+  // Re-run search when catalog finishes loading
+  useEffect(() => {
+    if (!catalogLoading && catalog.length > 0 && searchQuery.trim().length >= MIN_SEARCH_LENGTH) {
+      void searchProducts(searchQuery)
+    }
+  }, [catalogLoading, catalog, searchProducts, searchQuery])
+
+  const searchByBarcode = async (barcode: string) => {
+    const trimmed = barcode.trim()
+    if (!trimmed) {
+      return
+    }
+
+    try {
+      setLoading(true)
+      setError(null)
+
+      const normalized = trimmed.toLowerCase()
+      const match = catalog.find((item) =>
+        (item.barcode ? item.barcode.toLowerCase() === normalized : false) ||
+        item.sku.toLowerCase() === normalized
+      )
+
+      if (!match) {
+        setError(`No product found with barcode/SKU: ${trimmed}`)
+        return
+      }
+
+      await fetchStockLevels([match.id])
+
+      setQuantities((prev) => ({
+        ...prev,
+        [match.id]: prev[match.id] ?? 1,
+      }))
+
+      await handleAddToCart(match.id, 1)
+
+      setBarcodeInput('')
+    } catch (err) {
+      console.error('Barcode scan error:', err)
+      setError('Failed to scan barcode')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleAddToCart = async (productId: UUID, quantity: number = 1) => {
+    let activeSaleId = saleId
+
+    if (!activeSaleId) {
+      if (!ensureSaleSession) {
+        setError('Please create a sale first')
+        return
+      }
+
+      // In multi-storefront mode, use the current storefront (not the first one with stock)
+      let preferredStorefrontId: UUID | undefined
+      if (multiStorefront && storefrontId) {
+        preferredStorefrontId = storefrontId
+        const product = catalog.find((item) => item.id === productId)
+        if (product) {
+          console.log(`🏪 Creating cart for current storefront`, {
+            productId,
+            productName: product.name,
+            storefrontId: preferredStorefrontId
+          })
+        }
+      }
+
+      const ensuredSaleId = await ensureSaleSession(preferredStorefrontId)
+      if (!ensuredSaleId) {
+        if (saleType === 'WHOLESALE') {
+          setError('Select a customer before starting a wholesale sale.')
+        } else {
+          setError('Unable to start a new sale. Please try again.')
+        }
+        return
+      }
+      activeSaleId = ensuredSaleId
+    }
+
+    let stock = stockData[productId]
+    if (!stock) {
+      const product = catalog.find((item) => item.id === productId)
+      if (product && product.stock_product_ids.length > 0) {
+        // In multi-storefront mode, get storefront-specific quantity from locations
+        let storefrontAvailableQty = product.available_quantity
+        if (product.locations && product.locations.length > 0 && storefrontId) {
+          const currentLocationStock = product.locations.find(loc => loc.storefront_id === storefrontId)
+          if (currentLocationStock) {
+            storefrontAvailableQty = currentLocationStock.available_quantity
+          }
+        }
+        
+        const fallbackStock: StockRecord = {
+          id: product.stock_product_ids[0],
+          product: product.id,
+          quantity: product.available_quantity, // Total across all locations
+          available_quantity: storefrontAvailableQty, // Storefront-specific quantity
+          reserved_quantity: 0,
+          unit_cost: 0,
+          retail_price: product.retail_price,
+          wholesale_price: product.wholesale_price,
+          batch_number: undefined,
+          expiry_date: null,
+        }
+        stock = fallbackStock
+        setStockData((prev) => {
+          const next = { ...prev, [productId]: fallbackStock }
+          stockDataRef.current = next
+          return next
+        })
+      }
+    }
+
+    if (!stock) {
+      setError('Product not available at this location')
+      return
+    }
+
+    if (stock.available_quantity < quantity) {
+      setError(`Only ${stock.available_quantity} available`)
+      return
+    }
+
+    try {
+      setAddingItemId(productId)
+      setError(null)
+
+      const unitPrice = saleType === 'WHOLESALE' ? stock.wholesale_price : stock.retail_price
+
+      await dispatch(
+        addItemToCart({
+          saleId: activeSaleId,
+          product: productId,
+          stockProduct: stock.id,
+          quantity,
+          unitPrice: unitPrice,
+        })
+      ).unwrap()
+
+      // Refresh stock levels
+      await fetchStockLevels([productId])
+      
+      // Clear search on successful add
+      setSearchQuery('')
+      setProducts([])
+    } catch (err) {
+      if (typeof err === 'string') {
+        setError(err)
+      } else if (err && typeof err === 'object') {
+        const errorObject = err as { userMessage?: string; message?: string }
+        setError(errorObject.userMessage || errorObject.message || "We couldn't add that product right now. Please try again.")
+      } else {
+        setError("We couldn't add that product right now. Please try again.")
+      }
+    } finally {
+      setAddingItemId(null)
+    }
+  }
+
+  const handleBarcodeSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (barcodeInput.trim()) {
+      searchByBarcode(barcodeInput.trim())
+    }
+  }
+
+  const getStockStatus = (product: Product) => {
+    const stock = stockData[product.id]
+    
+    // If we have fetched stock data, use it (it has accurate unreserved_quantity)
+    if (stock) {
+      const available = Number.isFinite(stock.available_quantity) ? Math.max(0, Math.floor(stock.available_quantity)) : 0
+      const total = Number.isFinite(stock.quantity) ? Math.max(0, Math.floor(stock.quantity)) : 0
+      
+      console.log('[Stock Status] Using fetched stock data', {
+        productName: product.name,
+        available,
+        total,
+        stock
+      })
+      
+      const color = available === 0 ? 'danger' : available <= 5 ? 'warning' : 'success'
+      
+      return {
+        color,
+        text: available === 0 ? 'Out of Stock' : available <= 5 ? `Low: ${available}` : `${available} in stock`,
+        available,
+        showWarehouseBadge: total > available,
+        warehouseTotal: total - available,
+        totalStock: total
+      }
+    }
+    
+    // Fallback: In multi-storefront mode with locations data but no fetched stock
+    if (product.locations && product.locations.length > 0 && storefrontId) {
+      // Find the current storefront in the locations array
+      const currentLocationStock = product.locations.find(loc => loc.storefront_id === storefrontId)
+      const storefrontAvailable = currentLocationStock?.available_quantity ?? 0
+      const totalAvailable = product.available_quantity ?? 0
+      
+      // Debug logging
+      console.log('[Stock Status] Using catalog locations (no fetched data)', {
+        productName: product.name,
+        storefrontId,
+        currentLocationStock,
+        storefrontAvailable,
+        totalAvailable,
+        allLocations: product.locations
+      })
+      
+      const available = Number.isFinite(storefrontAvailable) ? Math.max(0, Math.floor(storefrontAvailable)) : 0
+      const total = Number.isFinite(totalAvailable) ? Math.max(0, Math.floor(totalAvailable)) : 0
+      
+      const color = available === 0 ? 'danger' : available <= 5 ? 'warning' : 'success'
+      
+      // Return separate badge information
+      return {
+        color,
+        text: available === 0 ? 'Out of Stock' : available <= 5 ? `Low: ${available}` : `${available} in stock`,
+        available,
+        // Additional info for separate badges
+        showWarehouseBadge: total > available,
+        warehouseTotal: total - available,
+        totalStock: total
+      }
+    }
+    
+    // Final fallback: use product.available_quantity from catalog
+    const available = Number.isFinite(product.available_quantity) ? Math.max(0, Math.floor(product.available_quantity)) : 0
+    const color = available === 0 ? 'danger' : available <= 5 ? 'warning' : 'success'
+
+    console.log('[Stock Status] Using product catalog fallback', {
+      productName: product.name,
+      available
+    })
+
+    return {
+      color,
+      text: available === 0 ? 'Out of Stock' : available <= 5 ? `Low: ${available}` : `${available} in stock`,
+      available,
+      showWarehouseBadge: false,
+      warehouseTotal: 0,
+      totalStock: available
+    }
+  }
+
+  const getPrice = (product: Product) => {
+    const stock = stockData[product.id]
+    // Prefer a positive price from the fetched stock record when available.
+    // Some availability / stock endpoints may return 0 for prices; in that case
+    // fall back to the catalog price which is likely the intended unit price.
+    if (saleType === 'WHOLESALE') {
+      const stockPrice = stock?.wholesale_price ?? 0
+      const fallback = product.wholesale_price ?? product.retail_price
+      return robustNumber(stockPrice > 0 ? stockPrice : fallback)
+    }
+
+    const stockPrice = stock?.retail_price ?? 0
+    const fallback = product.retail_price
+    return robustNumber(stockPrice > 0 ? stockPrice : fallback)
+  }
+
+  const getQuantity = (productId: UUID) => {
+    return quantities[productId] || 1
+  }
+
+  const setQuantity = (productId: UUID, quantity: number) => {
+    setQuantities(prev => ({ ...prev, [productId]: quantity }))
+  }
+
+  return (
+    <div>
+      {/* Search Bar */}
+      <Form.Group className="mb-3">
+        <InputGroup>
+          <InputGroup.Text>
+            🔍
+          </InputGroup.Text>
+          <Form.Control
+            type="text"
+            placeholder="Search products by name or SKU..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            disabled={disabled}
+          />
+          {loading && (
+            <InputGroup.Text>
+              <Spinner animation="border" size="sm" />
+            </InputGroup.Text>
+          )}
+        </InputGroup>
+      </Form.Group>
+
+      {/* Barcode Scanner */}
+      <Form onSubmit={handleBarcodeSubmit} className="mb-3">
+        <InputGroup>
+          <InputGroup.Text>
+            📷
+          </InputGroup.Text>
+          <Form.Control
+            type="text"
+            placeholder="Scan or enter barcode..."
+            value={barcodeInput}
+            onChange={(e) => setBarcodeInput(e.target.value)}
+            disabled={disabled}
+            autoFocus
+          />
+          <Button variant="outline-primary" type="submit" disabled={!barcodeInput.trim() || disabled}>
+            Scan
+          </Button>
+        </InputGroup>
+        <Form.Text className="text-muted">
+          Tip: Focus here and use your barcode scanner
+        </Form.Text>
+      </Form>
+
+      {/* Error Message */}
+      {error && (
+        <Alert variant="danger" dismissible onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
+      {/* Product Results */}
+      {products.length > 0 && !catalogLoading && (
+        <Card className="mt-3">
+          <Card.Header>
+            <strong>Search Results</strong> ({products.length} {products.length === 1 ? 'item' : 'items'})
+          </Card.Header>
+          <Card.Body className="p-0">
+            <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+              {products.map((product) => {
+                const stockStatus = getStockStatus(product)
+                const price = getPrice(product)
+                const isAdding = addingItemId === product.id
+
+                // Debug: log computed price sources so we can diagnose why price may show as 0
+                const currentStock = stockData[product.id]
+                console.log('[PRICE DEBUG]', {
+                  productId: product.id,
+                  name: product.name,
+                  saleType,
+                  catalogRetail: product.retail_price,
+                  catalogWholesale: product.wholesale_price,
+                  stockRetail: currentStock?.retail_price,
+                  stockWholesale: currentStock?.wholesale_price,
+                  computedPrice: price,
+                })
+
+                return (
+                  <div
+                    key={product.id}
+                    className="border-bottom p-3 hover-bg-light"
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <Row className="align-items-center">
+                      <Col xs={2}>
+                        {product.image ? (
+                          <img
+                            src={product.image}
+                            alt={product.name}
+                            className="img-fluid rounded"
+                            style={{ maxHeight: '60px' }}
+                          />
+                        ) : (
+                          <div
+                            className="bg-light rounded d-flex align-items-center justify-content-center"
+                            style={{ height: '60px', width: '60px' }}
+                          >
+                            <span style={{ fontSize: '24px' }}>📦</span>
+                          </div>
+                        )}
+                      </Col>
+                      <Col xs={5}>
+                        <div>
+                          <strong>{product.name}</strong>
+                          <br />
+                          <small className="text-muted">
+                            SKU: {product.sku} | {product.category_name}
+                          </small>
+                          <br />
+                          <Badge bg={stockStatus.color as 'secondary' | 'danger' | 'warning' | 'success'} className="me-1">
+                            📍 {stockStatus.text}
+                          </Badge>
+                          {stockStatus.showWarehouseBadge && (
+                            <Badge bg="secondary">
+                              🏪 +{stockStatus.warehouseTotal} at other locations
+                            </Badge>
+                          )}
+                        </div>
+                      </Col>
+                      <Col xs={2} className="text-end">
+                        <div className="fs-5 fw-bold">{formatCurrency(price)}</div>
+                        <small className="text-muted">per {product.unit}</small>
+                      </Col>
+                      <Col xs={3}>
+                        <InputGroup size="sm" className="mb-2">
+                          <Button
+                            variant="outline-secondary"
+                            onClick={() => {
+                              const currentQty = getQuantity(product.id)
+                              if (currentQty > 1) setQuantity(product.id, currentQty - 1)
+                            }}
+                            disabled={disabled || getQuantity(product.id) <= 1}
+                          >
+                            -
+                          </Button>
+                          <Form.Control
+                            type="number"
+                            min="1"
+                            max={stockStatus.available}
+                            value={getQuantity(product.id)}
+                            onChange={(e) => {
+                              const newQty = parseInt(e.target.value) || 1
+                              if (newQty >= 1 && newQty <= stockStatus.available) {
+                                setQuantity(product.id, newQty)
+                              }
+                            }}
+                            className="text-center"
+                            disabled={disabled}
+                            style={{ maxWidth: '60px' }}
+                          />
+                          <Button
+                            variant="outline-secondary"
+                            onClick={() => {
+                              const currentQty = getQuantity(product.id)
+                              if (currentQty < stockStatus.available) {
+                                setQuantity(product.id, currentQty + 1)
+                              }
+                            }}
+                            disabled={disabled || getQuantity(product.id) >= stockStatus.available}
+                          >
+                            +
+                          </Button>
+                        </InputGroup>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          className="w-100"
+                          onClick={() => handleAddToCart(product.id, getQuantity(product.id))}
+                          disabled={
+                            stockStatus.available === 0 ||
+                            isAdding ||
+                            disabled ||
+                            (!saleId && !ensureSaleSession)
+                          }
+                        >
+                          {isAdding ? (
+                            <Spinner animation="border" size="sm" />
+                          ) : (
+                            '+ Add'
+                          )}
+                        </Button>
+                      </Col>
+                    </Row>
+                  </div>
+                )
+              })}
+            </div>
+          </Card.Body>
+        </Card>
+      )}
+
+      {/* No Results */}
+      {!catalogLoading && !loading && searchQuery && products.length === 0 && (
+        <Alert variant="info" className="mt-3">
+          No products found matching "{searchQuery}"
+        </Alert>
+      )}
+
+      {catalogLoading && (
+        <Alert variant="secondary" className="mt-3">
+          Loading storefront catalog…
+        </Alert>
+      )}
+    </div>
+  )
+}
+

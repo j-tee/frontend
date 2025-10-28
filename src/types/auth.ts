@@ -1,4 +1,4 @@
-import type { UUID } from './common'
+import type { MembershipRole, UUID } from './common'
 
 export interface UserProfile {
   id: UUID
@@ -6,8 +6,10 @@ export interface UserProfile {
   email: string
   account_type: AccountType
   email_verified: boolean
+  platform_role?: string | null
   role: string | null
   role_name: string | null
+  final_userRole?: string | null  // Computed field from backend (BusinessMembership.role or UserRole)
   picture_url: string | null
   subscription_status: 'Active' | 'Inactive' | 'Suspended' | string | null
   is_active: boolean
@@ -63,6 +65,43 @@ export interface AuthResponse {
   token?: string
   user?: UserProfile
   business?: BusinessSummary
+  employment?: EmploymentContext | null
+}
+
+export interface InvitationTokenInfo {
+  email: string
+  business_name: string
+  role: string
+  expires_at: string
+}
+
+export interface AcceptInvitationPayload {
+  email: string
+  name: string
+  password: string
+  phone?: string
+}
+
+export type AcceptedMembershipStorefront = UUID | { id: UUID; name?: string }
+
+export interface AcceptedMembershipSummary {
+  id: UUID
+  business: UUID
+  role: string
+  status: string
+  assigned_storefronts: AcceptedMembershipStorefront[]
+}
+
+export interface AcceptInvitationResponse {
+  user: {
+    id: UUID
+    email: string
+    name: string
+  }
+  membership: AcceptedMembershipSummary
+  auth?: {
+    token?: string
+  }
 }
 
 export interface PasswordResetRequestPayload {
@@ -103,6 +142,17 @@ export interface BusinessSummary {
   is_active: boolean
   owner: UUID
   owner_name: string
+  subscription_status?: 'ACTIVE' | 'TRIAL' | 'PAST_DUE' | 'EXPIRED' | 'CANCELLED' | 'SUSPENDED' | 'INACTIVE'
   created_at: string
   updated_at: string
+}
+
+export interface EmploymentContext {
+  id: UUID
+  role: MembershipRole
+  is_admin: boolean
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  business: BusinessSummary
 }

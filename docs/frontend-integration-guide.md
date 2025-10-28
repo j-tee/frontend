@@ -11,6 +11,7 @@
 - **Business logic & data access**: Organise into feature-specific service files inside `src/services`. Naming convention: `<feature>Service.ts` (e.g., `inventoryService.ts`, `salesService.ts`).
 - **Types**: Declare request/response interfaces in `src/types/<feature>.ts`. Export shared enums/constants from `src/types/common.ts`.
 - **UI routing**: Public landing page at `/` with marketing copy and CTAs for registration/login. Authenticated shell under `/app/*` guarded by a token-aware route.
+- **UI routing**: Public landing page at `/` with marketing copy and CTAs for registration/login. Authenticated shell under `/app/*` guarded by a token-aware route. Invitation redemption lives at `/accept-invite?token=<token>` so employees can onboard from emailed links.
 - **Subscription guard**: Maintain subscription status inside a dedicated slice. Surface a blocking banner + redirect to billing when the backend responds with `403` in gated areas.
 
 ```
@@ -183,22 +184,69 @@ UI guidelines:
 - Display backend validation strings verbatim near the relevant inputs.
 - On any `403`, show a permission warning and disable destructive controls for non-owners.
 
-### 4.2 Products & Stock Lots
+### 4.2 Products, Stock Batches & Stock Items
 
-| Resource | Endpoint | Required fields | Read-only |
+With the stock refactor, pricing data moved off the product catalog and into stock records. Treat products as metadata only and drive landed costs from stock items.
+
+| Resource | Endpoint | Required fields | Read-only / derived |
 | --- | --- | --- | --- |
-| Products | `/inventory/api/products/` | `name`, `sku`, `category`, `unit`, `retail_price`, `wholesale_price`, `cost`, optional `description`, `is_active`. | `category_name`, timestamps |
-| Stock lots | `/inventory/api/stock/` | `warehouse`, `product`, `quantity`, `unit_cost`, optional `supplier`, `reference_code`, `arrival_date`, `expiry_date`, `unit_tax_rate`, `unit_tax_amount`, `unit_additional_cost`, `description`. | Derived landed cost metrics |
+| Products | `/inventory/api/products/` | `name`, `sku`, `category`, `unit`, optional `description`, optional `is_active`. | `category_name`, timestamps |
+| Stock batches | `/inventory/api/stock/` | `warehouse`, optional `arrival_date`, optional `description`. | `items` array with nested stock products, timestamps |
+| Stock products (line items) | `/inventory/api/stock-products/` | `stock`, `product`, `quantity`, `unit_cost` (string). Optional: `supplier`, `expiry_date`, `unit_tax_rate`, `unit_tax_amount`, `unit_additional_cost`, `retail_price`, `wholesale_price`, `description`. | Server-calculated totals (`landed_unit_cost`, `total_landed_cost`, etc.), `warehouse_name`, timestamps |
+| Suppliers | `/inventory/api/suppliers/` | `name`, optional `contact_person`, `email`, `phone_number`, `address`, `notes`. | Paginated list, timestamps |
 
-**Landed cost logic**: If `unit_tax_rate` is set and `unit_tax_amount` omitted or zero, backend computes `unit_tax_amount = unit_cost * unit_tax_rate / 100`. Display `landed_unit_cost = unit_cost + unit_tax_amount + unit_additional_cost`.
+**Product listing pagination**
+
+- `/inventory/api/products/` returns a `PaginatedResponse<Product>` shaped payload. The frontend sends `page` (1-indexed) and `page_size` (10, 25, 50, 100) query params; defaults to 25.
+- Use the `count`, `next`, and `previous` fields to drive navigation controls and page summaries.
+- When changing filters or search terms, reset to `page=1` to avoid empty states caused by stale offsets.
+
+**Landed cost logic**
+
+- When `unit_tax_rate` is provided and `unit_tax_amount` is omitted or zero, the backend derives `unit_tax_amount = unit_cost * unit_tax_rate / 100`.
+- `landed_unit_cost = unit_cost + unit_tax_amount + unit_additional_cost`.
+- Totals multiply the landed/base/tax/additional amounts by `quantity` on the line item.
+- Stock batch serializers surface aggregated totals so you can present per-receipt summaries without recomputing client-side.
+
+**Supplier-aware intake & lookup**
+
+- Stock products may link to a supplier to track landed cost differences by vendor.
+- Supplier lookups and the "Manage Stocks" filters both hydrate via `/inventory/api/suppliers/` (paginated, supports `page`, `page_size`, `search`, `ordering`). Cache the first page (25) in Redux for fast selects; request additional pages when the user scrolls.
+- When showing inventory detail views, pair `stock_supplier` metadata (provided by the inventory snapshot endpoint) with supplier records for richer context.
+
+#### 4.2.1 Manage Stocks workspace
+
+- Dedicated page at `/app/inventory/stocks` accessible from the dashboard header.
+- Backed by new Redux state (`inventory.stockProducts*`) and async thunks that call `GET /inventory/api/stock-products/` with server-side pagination.
+- Filter controls:
+   - Search (`search` query param) across product names/SKUs.
+   - Batch selector powered by `GET /inventory/api/stock/?page_size=100`.
+   - Supplier selector using `/inventory/api/suppliers/`.
+   - Toggle for `has_quantity=true` to surface only on-hand stock.
+   - Ordering dropdown (`ordering=-quantity`, `ordering=unit_cost`, etc.).
+- Table columns display product metadata, batch description/arrival date, supplier, quantities, landed cost metrics, expiry date, and last updated timestamp.
+- Pagination mirrors the product catalog controls (page/page_size of 10/25/50/100, count-driven summaries).
+- The slice tracks filters so the UI can persist state across navigations and refresh actions.
+- "Record stock intake" launches a modal workflow that (a) creates a stock record tied to a warehouse via `POST /inventory/api/stock/`, then (b) adds line items through `POST /inventory/api/stock-products/`. Each successful line item refreshes the paginated list so the new quantities appear immediately.
+- Intake modal now includes an **Add supplier** shortcut. When a supplier is missing, launch the embedded modal to call `POST /inventory/api/suppliers/`, then automatically select the newly created supplier for the pending line item and append it to the cached supplier listing.
+- Stock intake captures optional price guidance — `retail_price` and `wholesale_price` feed downstream sales workflows. Leave blank when pricing remains unchanged.
+- Intake flow can reuse an existing stock record: filter by arrival date, pick the relevant batch (sorted newest first), and append additional line items before considering a brand-new stock.
+- Intake requires at least one warehouse; guide users back to the Locations workspace if none exist yet.
+- For profit projection UX (retail vs wholesale mixes, baseline profit columns, bulk simulations), follow the dedicated playbook in `docs/profit-projections-integration.md`.
+
+#### Business scoping guardrails
+
+- Every product, supplier, and stock record is now scoped to a specific business on the backend. The API automatically filters results using the signed-in user’s active business memberships and returns `403` when the user attempts to access a foreign record.
+- Backend uniqueness rules (`business + sku` for products, `business + name` for suppliers) mean the frontend must surface validation errors verbatim and avoid assuming global uniqueness.
+- When crafting payloads or linking entities, always send the IDs returned from the user’s scoped lists—never cache cross-business identifiers client-side.
 
 ### 4.3 Inventory & Transfers
 
 | Feature | Endpoint | Notes |
 | --- | --- | --- |
-| Inventory snapshot | `/inventory/api/inventory/` | Denormalised rows per `(warehouse, product, stock)`.
-| Transfers | `/inventory/api/transfers/` | Fields include `product`, optional `stock`, `from_warehouse`, `to_storefront`, `quantity`, `status`, `requested_by`, optional `approved_by`, `note`.
-| Stock alerts | `/inventory/api/stock-alerts/` | `product`, `warehouse`, `alert_type`, `current_quantity`, `threshold_quantity`, `is_resolved`.
+| Inventory snapshot | `/inventory/api/inventory/` | Denormalised rows per `(warehouse, product, stock_product)` including `stock_arrival_date` and `stock_supplier` convenience fields.
+| Transfers | `/inventory/api/transfers/` | Fields include `product`, optional `stock_product`, `from_warehouse`, `to_storefront`, `quantity`, `status`, `requested_by`, optional `approved_by`, `note`.
+| Stock alerts | `/inventory/api/stock-alerts/` | `product`, `warehouse`, optional `stock_product`, `alert_type`, `current_quantity`, `threshold_quantity`, `is_resolved`.
 | Reports (placeholders) | `/inventory/api/reports/inventory-summary/`, `/inventory/api/reports/stock-arrivals/` | Currently return `[]`; build empty-state UI.
 
 ---
@@ -311,8 +359,9 @@ Implement a global error middleware in Redux to standardise messaging and analyt
    - Staff assignment flows.
 
 6. **Product catalog & stock intake**
-   - Product CRUD.
-   - Stock intake form (cost, tax, additional cost capture).
+   - Product CRUD (metadata only — name, SKU, unit, category).
+   - Stock batch + stock product intake form (quantity, supplier, tax/additional cost capture).
+   - Paginated product list with page-size controls (page/page_size API contract).
    - Inventory list with landed cost metrics.
 
 7. **Transfers & stock alerts**

@@ -6,6 +6,33 @@
 
 @layer base {
   :root {
+    /* Default theme colors (can be overridden by theme.ts) */
+    --color-primary: #2563eb;
+    --color-primary-rgb: 37, 99, 235;
+    --color-secondary: #1d4ed8;
+    --color-accent: #7c3aed;
+    --color-background: #f8fafc;
+    --color-surface: #ffffff;
+    --color-text: #111827;
+    --color-text-secondary: #4b5563;
+    --color-text-muted: #6b7280;
+    --color-border: #e2e8f0;
+    --color-success: #10b981;
+    --color-warning: #f59e0b;
+    --color-error: #ef4444;
+    --color-info: #3b82f6;
+    
+    /* Font size */
+    --font-size-base: 16px;
+    
+    /* Bootstrap theme sync */
+    --bs-primary: var(--color-primary);
+    --bs-secondary: var(--color-secondary);
+    --bs-success: var(--color-success);
+    --bs-warning: var(--color-warning);
+    --bs-danger: var(--color-error);
+    --bs-info: var(--color-info);
+    
     font-synthesis: none;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
@@ -14,11 +41,12 @@
 
   body {
     min-height: 100vh;
-    background-color: #0b1220;
-    background-image: radial-gradient(circle at top right, rgba(124, 58, 237, 0.25), transparent 55%),
-      linear-gradient(135deg, rgba(37, 99, 235, 0.12) 0%, rgba(124, 58, 237, 0.08) 45%, rgba(16, 24, 40, 0.85) 100%);
+    background-color: var(--color-background);
+    background-image: radial-gradient(circle at top right, rgba(124, 58, 237, 0.12), transparent 55%),
+      linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(99, 102, 241, 0.05) 45%, rgba(248, 250, 252, 0.92) 100%);
     font-family: 'Inter', 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    color: rgba(226, 232, 240, 0.96);
+    font-size: var(--font-size-base);
+    color: var(--color-text);
     -webkit-font-smoothing: antialiased;
   }
 
@@ -28,18 +56,18 @@
   h4,
   h5,
   h6 {
-    color: rgba(241, 245, 249, 0.98);
-    font-weight: 600;
+    color: #111827 !important;
+    font-weight: 700;
   }
 
   a {
     font-weight: 500;
-    color: #2563eb;
+    color: var(--color-primary);
     transition: color 200ms ease;
   }
 
   a:hover {
-    color: #1d4ed8;
+    color: var(--color-secondary);
   }
 
   button {
@@ -50,4 +78,338 @@
     background-color: rgba(37, 99, 235, 0.35);
     color: #fff;
   }
+}
+
+/* Compact mode */
+.compact-mode {
+  --spacing-scale: 0.75;
+}
+
+.compact-mode .p-6 {
+  padding: 1.125rem !important;
+}
+
+.compact-mode .space-y-4 > * + * {
+  margin-top: 0.75rem !important;
+}
+
+.compact-mode .gap-4 {
+  gap: 0.75rem !important;
+}
+
+/* Reduce motion */
+.reduce-motion,
+.reduce-motion * {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+/* High contrast mode */
+.high-contrast {
+  --color-border: #94a3b8;
+}
+
+.high-contrast button,
+.high-contrast .btn {
+  border-width: 2px !important;
+}
+
+.high-contrast a {
+  text-decoration: underline;
+}
+
+/* Dark mode support */
+[data-bs-theme="dark"] {
+  --color-background: #0b1220;
+  --color-surface: #1e293b;
+  --color-text: #f1f5f9;
+  --color-text-secondary: #94a3b8;
+  --color-border: #334155;
+}
+
+/* Theme-aware utility classes */
+.bg-surface {
+  background-color: var(--color-surface) !important;
+}
+
+.bg-background {
+  background-color: var(--color-background) !important;
+}
+
+.text-secondary-theme {
+  color: var(--color-text-secondary) !important;
+}
+
+.border-theme {
+  border-color: var(--color-border) !important;
+}
+
+/* Override Bootstrap's hardcoded colors with theme variables */
+.card {
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+.table {
+  color: var(--color-text);
+  --bs-table-bg: transparent;
+  --bs-table-border-color: var(--color-border);
+}
+
+.table-light {
+  --bs-table-bg: var(--color-background);
+  --bs-table-color: var(--color-text);
+}
+
+.table-active {
+  --bs-table-accent-bg: rgba(var(--color-primary-rgb, 37, 99, 235), 0.1);
+}
+
+.bg-light {
+  background-color: var(--color-background) !important;
+}
+
+.bg-white {
+  background-color: var(--color-surface) !important;
+}
+
+.text-muted {
+  color: var(--color-text-secondary) !important;
+}
+
+.border {
+  border-color: var(--color-border) !important;
+}
+
+code {
+  background-color: rgba(var(--color-primary-rgb, 37, 99, 235), 0.1);
+  color: var(--color-text);
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+}
+
+/* Badge theme support */
+.badge {
+  --bs-badge-color: #fff;
+}
+
+/* Form controls */
+.form-control,
+.form-select {
+  background-color: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.form-control:focus,
+.form-select:focus {
+  background-color: var(--color-surface);
+  border-color: var(--color-primary);
+  color: var(--color-text);
+}
+
+.form-control::placeholder {
+  color: var(--color-text-secondary);
+}
+
+/* Dropdown menus */
+.dropdown-menu {
+  background-color: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.dropdown-item {
+  color: var(--color-text);
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+  background-color: rgba(var(--color-primary-rgb, 37, 99, 235), 0.1);
+  color: var(--color-text);
+}
+
+/* Tailwind CSS utilities for theme support */
+@layer utilities {
+  .bg-surface {
+    background-color: var(--color-surface);
+  }
+  
+  .bg-background {
+    background-color: var(--color-background);
+  }
+  
+  .border-theme {
+    border-color: var(--color-border);
+  }
+  
+  .text-theme {
+    color: var(--color-text);
+  }
+  
+  .text-theme-secondary {
+    color: var(--color-text-secondary);
+  }
+  
+  /* Force proper text colors - override any conflicting styles */
+  .text-slate-900 {
+    color: #111827 !important;
+  }
+  
+  .text-slate-800 {
+    color: #1e293b !important;
+  }
+  
+  .text-slate-700 {
+    color: #334155 !important;
+  }
+  
+  .text-slate-600 {
+    color: #475569 !important;
+  }
+  
+  .text-slate-500 {
+    color: #64748b !important;
+  }
+  
+  .text-gray-900 {
+    color: #111827 !important;
+  }
+  
+  .text-gray-800 {
+    color: #1f2937 !important;
+  }
+  
+  .text-gray-700 {
+    color: #374151 !important;
+  }
+  
+  .text-gray-600 {
+    color: #4b5563 !important;
+  }
+  
+  .text-blue-900 {
+    color: #1e3a8a !important;
+  }
+}
+
+/* Animation for expanded sales rows */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Enhanced navigation transitions */
+.nav-link,
+a[class*="nav"],
+a[class*="transition"] {
+  transition-property: all;
+  transition-duration: 200ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Smooth hover effects */
+button,
+.btn {
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+button:hover:not(:disabled),
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+button:active:not(:disabled),
+.btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* Card hover animations */
+.card {
+  transition: all 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.1);
+}
+
+/* Table row hover */
+tbody tr {
+  transition: all 150ms ease;
+}
+
+tbody tr:hover {
+  background-color: rgba(99, 102, 241, 0.03);
+}
+
+/* Modal animations */
+.modal.fade .modal-dialog {
+  transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modal.show .modal-dialog {
+  transform: scale(1);
+}
+
+/* Dropdown animations */
+.dropdown-menu {
+  animation: dropdownSlideIn 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes dropdownSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Alert animations */
+.alert {
+  animation: alertSlideIn 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes alertSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Spinner smooth rotation */
+.spinner-border,
+.spinner-grow {
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-bs-theme="dark"] body {
+  background-color: #0b1220;
+  background-image: radial-gradient(circle at top right, rgba(124, 58, 237, 0.25), transparent 55%),
+    linear-gradient(135deg, rgba(37, 99, 235, 0.12) 0%, rgba(124, 58, 237, 0.08) 45%, rgba(16, 24, 40, 0.85) 100%);
+  color: #f8fafc;
+}
+
+[data-bs-theme="dark"] h1,
+[data-bs-theme="dark"] h2,
+[data-bs-theme="dark"] h3,
+[data-bs-theme="dark"] h4,
+[data-bs-theme="dark"] h5,
+[data-bs-theme="dark"] h6 {
+  color: rgba(241, 245, 249, 0.98);
 }
