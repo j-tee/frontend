@@ -588,3 +588,57 @@ export interface EmployeeWorkspaceResponse {
   incoming_transfers: Transfer[]
   my_transfer_requests: TransferRequest[]
 }
+
+// ============================================================================
+// New Warehouse Transfer System (Phase 4 Backend Integration)
+// ============================================================================
+
+export type WarehouseTransferStatus = 'pending' | 'in_transit' | 'completed' | 'cancelled'
+
+export interface WarehouseTransferItem {
+  id?: UUID
+  product: UUID
+  product_name?: string
+  product_sku?: string
+  quantity: number
+  unit_cost: string
+  total_cost?: string
+}
+
+export interface WarehouseTransfer {
+  id: UUID
+  reference_number: string
+  business: UUID
+  status: WarehouseTransferStatus
+  source_warehouse: UUID
+  source_warehouse_name?: string
+  destination_warehouse: UUID
+  destination_warehouse_name?: string
+  notes: string
+  items: WarehouseTransferItem[]
+  created_by: UUID
+  created_by_name?: string
+  created_at: string
+  completed_by?: UUID | null
+  completed_by_name?: string | null
+  completed_at?: string | null
+}
+
+export interface WarehouseTransferCreatePayload {
+  source_warehouse: UUID
+  destination_warehouse: UUID
+  notes?: string
+  items: Array<{
+    product: UUID
+    quantity: number
+    unit_cost?: string
+  }>
+}
+
+export interface WarehouseTransferCompletePayload {
+  notes?: string
+}
+
+export interface WarehouseTransferCancelPayload {
+  reason: string
+}

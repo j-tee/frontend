@@ -9,6 +9,7 @@ export interface UserProfile {
   platform_role?: string | null
   role: string | null
   role_name: string | null
+  final_userRole?: string | null  // Computed field from backend (BusinessMembership.role or UserRole)
   picture_url: string | null
   subscription_status: 'Active' | 'Inactive' | 'Suspended' | string | null
   is_active: boolean

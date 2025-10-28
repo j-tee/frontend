@@ -10,7 +10,7 @@ interface RequirePermissionProps {
   children?: ReactNode
 }
 
-const PermissionDeniedFallback = () => {
+export const PermissionDeniedFallback = () => {
   const navigate = useNavigate()
 
   return (

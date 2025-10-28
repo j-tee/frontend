@@ -350,8 +350,8 @@ const TransferRequestsPage = () => {
         cancelTransferRequest({
           requestId: activeRequest.id,
           payload: {
+            // API expects a `reason` field for cancellations
             reason: trimText(cancelReason) || undefined,
-            notes: trimText(cancelNotes) || undefined,
           },
         }),
       ).unwrap()
@@ -410,7 +410,8 @@ const TransferRequestsPage = () => {
     if (!activeRequest) return false
     if (!canConfirmTransferArrival) return false
     if (activeRequest.status !== 'ASSIGNED') return false
-    if (!activeRequest.linked_transfer) return false
+    // API exposes linked transfer via `linked_transfer_id` / `linked_transfer_reference`
+    if (!activeRequest.linked_transfer_id) return false
     return isRequester || canManageRequests || canConfirmTransferArrival
   }, [activeRequest, canConfirmTransferArrival, canManageRequests, isRequester])
 
@@ -970,12 +971,16 @@ const RequestFormModal = ({
 
     const payload: TransferRequestCreatePayload = {
       storefront: selectedStorefront,
-      priority: priority ? (priority as TransferRequestCreatePayload['priority']) : undefined,
+      // direction is required: these are storefront-initiated requests (warehouse → storefront)
+      direction: 'FORWARD',
+      // priority is required by the payload type; default to MEDIUM when unset
+      priority: (priority as TransferRequestCreatePayload['priority']) || 'MEDIUM',
       notes: trimText(notes) || undefined,
       line_items: activeLineItems.map((item) => ({
         product: item.product,
         requested_quantity: item.quantity,
-        unit_of_measure: trimText(item.unitOfMeasure) || undefined,
+        // ensure unit_of_measure is a non-undefined string
+        unit_of_measure: item.unitOfMeasure || 'each',
         notes: trimText(item.notes) || undefined,
       })),
     }

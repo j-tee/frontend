@@ -422,7 +422,9 @@ const StockMovementsPage: React.FC = () => {
                   <option value="in">Stock In</option>
                   <option value="out">Stock Out</option>
                   <option value="adjustment">Adjustment</option>
-                  <option value="transfer">Transfer</option>
+                  <option value="transfer">Transfer (Legacy)</option>
+                  <option value="TRANSFER_OUT">Transfer Out</option>
+                  <option value="TRANSFER_IN">Transfer In</option>
                 </select>
               </div>
 
@@ -442,7 +444,9 @@ const StockMovementsPage: React.FC = () => {
                   <option value="">All References</option>
                   <option value="purchase_order">Purchase Order</option>
                   <option value="sale">Sale</option>
-                  <option value="transfer">Transfer</option>
+                  <option value="transfer">Transfer (Legacy)</option>
+                  <option value="TRANSFER_OUT">Transfer Out</option>
+                  <option value="TRANSFER_IN">Transfer In</option>
                   <option value="adjustment">Adjustment</option>
                 </select>
               </div>
