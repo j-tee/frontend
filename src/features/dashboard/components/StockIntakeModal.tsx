@@ -327,7 +327,12 @@ const StockIntakeModal = ({
         description: batchForm.description.trim() ? batchForm.description.trim() : null,
       }
       const batch = await createBatch(payload)
-      setCreatedBatch(batch)
+      const selectedWarehouse = warehouses.find((item) => item.id === batchForm.warehouse)
+      setCreatedBatch({
+        ...batch,
+        warehouse_id: batch.warehouse_id ?? batchForm.warehouse,
+        warehouse_name: batch.warehouse_name ?? selectedWarehouse?.name ?? null,
+      })
       setBatchSuccessMessage('Stock record created. Add line items below to complete the intake.')
     } catch (error) {
       console.error('Failed to create stock batch', error)
@@ -341,11 +346,12 @@ const StockIntakeModal = ({
     if (!lineItemForm.unit_cost.trim()) return
     if (lineItemForm.quantity <= 0) return
 
-  const warehouseId = createdBatch.warehouse_id ?? batchForm.warehouse
+    const warehouseId = createdBatch.warehouse_id ?? batchForm.warehouse
 
     if (!warehouseId) {
       console.error('Missing warehouse on stock batch, cannot create stock product', {
         createdBatch,
+        fallbackWarehouse: batchForm.warehouse,
       })
       return
     }
