@@ -6,6 +6,7 @@ import Spinner from 'react-bootstrap/Spinner'
 import Table from 'react-bootstrap/Table'
 import { useLocation } from 'react-router-dom'
 import { useAppDispatch, useAppSelector } from '../../../hooks/index.js'
+import { selectCurrentBusiness } from '../../../store/slices/authSlice.js'
 import {
   addCategory,
   addProduct,
@@ -61,6 +62,7 @@ const initialProductForm: ProductFormState = {
 const InventoryPage = () => {
   const dispatch = useAppDispatch()
   const location = useLocation()
+  const business = useAppSelector(selectCurrentBusiness)
   const categories = useAppSelector(selectCategories)
   const categoriesStatus = useAppSelector(selectCategoriesStatus)
   const categoriesError = useAppSelector(selectCategoriesError)
@@ -170,16 +172,17 @@ const InventoryPage = () => {
     setProductFormError(null)
     setProductSuccessMessage(null)
 
-    void dispatch(
-      addProduct({
-        name: productForm.name.trim(),
-        sku: productForm.sku.trim(),
-        category: productForm.category,
-        unit: trimmedUnit,
-        description: productForm.description.trim() || undefined,
-        is_active: productForm.is_active,
-      }),
-    )
+    const payload = {
+      name: productForm.name.trim(),
+      sku: productForm.sku.trim(),
+      category: productForm.category,
+      unit: trimmedUnit,
+      description: productForm.description.trim() || undefined,
+      is_active: productForm.is_active,
+      ...(business?.id && { business: business.id }),
+    }
+
+    void dispatch(addProduct(payload))
   }
 
   const isLoadingCategories = categoriesStatus === 'loading'

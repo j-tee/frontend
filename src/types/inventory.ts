@@ -60,6 +60,7 @@ export interface ProductPayload {
   unit: string
   description?: string
   is_active?: boolean
+  business?: UUID
 }
 
 export interface StockBatchItemSummary {
