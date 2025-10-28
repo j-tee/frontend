@@ -939,6 +939,7 @@ export interface ReportFilters {
   compare_previous?: boolean;
   segment?: string;
   movement_type?: 'in' | 'out' | 'adjustment' | 'transfer';
+  reference_type?: 'purchase_order' | 'sale' | 'transfer' | 'adjustment';
   stock_status?: 'in_stock' | 'low_stock' | 'out_of_stock' | 'overstock';
   urgency?: 'critical' | 'warning' | 'watch';
   payment_method?: 'cash' | 'card' | 'credit';
@@ -948,6 +949,7 @@ export interface ReportFilters {
   segmentation_method?: 'rfm' | 'value' | 'behavior';
   min_purchases?: number;
   format?: 'json' | 'csv' | 'excel' | 'pdf';
+  export_format?: 'csv' | 'excel' | 'pdf';
 }
 
 // ========================================

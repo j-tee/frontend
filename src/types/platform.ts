@@ -38,6 +38,12 @@ export interface RevenueByPlan {
 export interface PlatformSubscription extends Subscription {
   business_email?: string
   business_owner?: string
+  plan_details?: {
+    name: string
+    price: string
+    interval: string
+    billing_cycle: string
+  }
 }
 
 export interface CreatePlanPayload {

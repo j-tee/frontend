@@ -13,7 +13,7 @@ export type SubscriptionStatus =
 
 export type PaymentGateway = 'PAYSTACK' | 'STRIPE' | 'MOMO' | 'BANK_TRANSFER'
 
-export type PaymentStatus = 'PAID' | 'PENDING' | 'FAILED' | 'OVERDUE' | 'CANCELLED'
+export type PaymentStatus = 'PAID' | 'PENDING' | 'FAILED' | 'OVERDUE' | 'CANCELLED' | 'SUCCESSFUL' | 'REFUNDED'
 
 export type PaymentMethodType = 'MOMO' | 'PAYSTACK' | 'STRIPE' | 'BANK_TRANSFER'
 
@@ -52,6 +52,7 @@ export interface Plan {
   
   // Limits
   max_users: number | null
+  max_employees?: number | null
   max_storefronts: number | null
   max_products: number | null
   max_transactions_per_month?: number | null
@@ -157,14 +158,17 @@ export interface SubscriptionPayment {
   subscription_business_name?: string
   
   amount: string
+  currency?: string
   payment_method: PaymentMethodType
   status: 'SUCCESSFUL' | 'PENDING' | 'FAILED' | 'CANCELLED' | 'REFUNDED'
   
   transaction_id: string | null
+  transaction_reference?: string
   gateway_reference?: string | null
   gateway_response: Record<string, unknown>
   
   payment_date: string | null
+  paid_at?: string | null
   
   billing_period_start?: string
   billing_period_end?: string
@@ -301,6 +305,7 @@ export interface PaginatedResponse<T> {
   next: string | null
   previous: string | null
   results: T[]
+  data?: T[]  // Alternative field name used by some endpoints
 }
 
 // Plans list response
