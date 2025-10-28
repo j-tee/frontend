@@ -250,9 +250,17 @@ const StockIntakeModal = ({
     if (!selectedExistingBatchId) return
     const batch = stockBatches.find((candidate) => candidate.id === selectedExistingBatchId)
     if (!batch) return
-    setCreatedBatch(batch)
+    const inferredWarehouseId = batch.warehouse_id ?? batch.items?.[0]?.warehouse ?? ''
+    const inferredWarehouseName = batch.warehouse_name ??
+      (inferredWarehouseId ? warehouses.find((item) => item.id === inferredWarehouseId)?.name ?? null : null)
+
+    setCreatedBatch({
+      ...batch,
+      warehouse_id: inferredWarehouseId || undefined,
+      warehouse_name: inferredWarehouseName ?? undefined,
+    })
     setBatchForm({
-      warehouse: batch.warehouse_id ?? '',
+      warehouse: inferredWarehouseId,
       arrival_date: batch.arrival_date ?? '',
       description: batch.description ?? '',
     })
