@@ -1,0 +1,63 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main  # Change this to 'Warehouse-transfers' if needed
+  workflow_dispatch:  # Allows manual deployment from GitHub UI
+
+jobs:
+  deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+        env:
+          # Add your environment variables here
+          # VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          NODE_ENV: production
+
+      - name: Deploy to server
+        uses: easingthemes/ssh-deploy@v5.0.3
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          REMOTE_HOST: ${{ secrets.DEPLOY_HOST }}
+          REMOTE_USER: ${{ secrets.DEPLOY_USER }}
+          REMOTE_PORT: ${{ secrets.DEPLOY_PORT }}
+          SOURCE: "dist/"
+          TARGET: ${{ secrets.DEPLOY_PATH }}
+          EXCLUDE: "/node_modules/, /.git/, /.github/"
+          SCRIPT_BEFORE: |
+            # Backup current deployment
+            if [ -d "${{ secrets.DEPLOY_PATH }}/dist" ]; then
+              cp -r ${{ secrets.DEPLOY_PATH }}/dist ${{ secrets.DEPLOY_PATH }}/dist.backup.$(date +%Y%m%d_%H%M%S)
+              # Keep only last 3 backups
+              cd ${{ secrets.DEPLOY_PATH }}
+              ls -t dist.backup.* 2>/dev/null | tail -n +4 | xargs -r rm -rf
+            fi
+          SCRIPT_AFTER: |
+            echo "Deployment completed successfully!"
+            echo "Deployed at: $(date)"
+
+      - name: Notify deployment status
+        if: always()
+        run: |
+          if [ ${{ job.status }} == 'success' ]; then
+            echo "✅ Deployment successful!"
+          else
+            echo "❌ Deployment failed!"
+          fi
