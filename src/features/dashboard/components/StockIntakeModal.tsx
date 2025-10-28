@@ -130,6 +130,7 @@ const StockIntakeModal = ({
   const [supplierFormError, setSupplierFormError] = useState<string | null>(null)
   const [arrivalDateFilter, setArrivalDateFilter] = useState<string>('')
   const [selectedExistingBatchId, setSelectedExistingBatchId] = useState<string>('')
+  const [isUsingExistingBatch, setIsUsingExistingBatch] = useState(false)
 
   useEffect(() => {
     if (!show) {
@@ -147,6 +148,7 @@ const StockIntakeModal = ({
       setSupplierFormError(null)
       setArrivalDateFilter('')
       setSelectedExistingBatchId('')
+      setIsUsingExistingBatch(false)
     }
   }, [resetBatchState, resetStockProductState, resetSupplierState, show])
 
@@ -225,6 +227,18 @@ const StockIntakeModal = ({
   const handleBatchFieldChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = event.target
     setBatchForm((previous) => ({ ...previous, [name]: value }))
+
+    if (name === 'warehouse' && isUsingExistingBatch) {
+      setCreatedBatch((previous) => {
+        if (!previous) return previous
+        const selectedWarehouse = warehouses.find((item) => item.id === value)
+        return {
+          ...previous,
+          warehouse_id: value ? value : undefined,
+          warehouse_name: selectedWarehouse?.name ?? previous.warehouse_name ?? null,
+        }
+      })
+    }
   }
 
   const handleLineItemFieldChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -264,10 +278,15 @@ const StockIntakeModal = ({
       arrival_date: batch.arrival_date ?? '',
       description: batch.description ?? '',
     })
-    setBatchSuccessMessage('Existing stock selected. Add line items below to continue intake.')
+    setBatchSuccessMessage(
+      inferredWarehouseId
+        ? 'Existing stock selected. Add line items below to continue intake.'
+        : 'Existing stock selected. Pick its warehouse below to continue intake.',
+    )
     setItemSuccessMessage(null)
     setLineItems([])
     resetBatchState()
+    setIsUsingExistingBatch(true)
   }
 
   const handleOpenSupplierModal = () => {
@@ -342,6 +361,7 @@ const StockIntakeModal = ({
         warehouse_name: batch.warehouse_name ?? selectedWarehouse?.name ?? null,
       })
       setBatchSuccessMessage('Stock record created. Add line items below to complete the intake.')
+      setIsUsingExistingBatch(false)
     } catch (error) {
       console.error('Failed to create stock batch', error)
     }
@@ -496,7 +516,7 @@ const StockIntakeModal = ({
                 name="warehouse"
                 value={batchForm.warehouse}
                 onChange={handleBatchFieldChange}
-                disabled={!hasWarehouses || isCreatingBatch || Boolean(createdBatch)}
+                disabled={!hasWarehouses || isCreatingBatch || (Boolean(createdBatch) && !isUsingExistingBatch)}
                 required
               >
                 <option value="">Select warehouse</option>
