@@ -341,9 +341,18 @@ const StockIntakeModal = ({
     if (!lineItemForm.unit_cost.trim()) return
     if (lineItemForm.quantity <= 0) return
 
+    const warehouseId = createdBatch.warehouse ?? batchForm.warehouse
+
+    if (!warehouseId) {
+      console.error('Missing warehouse on stock batch, cannot create stock product', {
+        createdBatch,
+      })
+      return
+    }
+
     const payload: StockProductPayload = {
       stock: createdBatch.id,
-      warehouse: createdBatch.warehouse,
+      warehouse: warehouseId,
       stock_batch: createdBatch.id,
       product: lineItemForm.product,
       supplier: lineItemForm.supplier ? lineItemForm.supplier : null,
