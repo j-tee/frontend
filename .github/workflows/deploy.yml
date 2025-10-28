@@ -3,7 +3,8 @@ name: Deploy to Production
 on:
   push:
     branches:
-      - main  # Change this to 'Warehouse-transfers' if needed
+      - main
+      - Warehouse-transfers  # Deploy from feature branch too
   workflow_dispatch:  # Allows manual deployment from GitHub UI
 
 jobs:
