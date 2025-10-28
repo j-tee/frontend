@@ -31,7 +31,7 @@ export const loadActiveSubscription = createAsyncThunk<
   { rejectValue: RejectValue }
 >('subscription/loadActive', async (_, thunkAPI) => {
   try {
-    const response = await fetchSubscriptions({ status: 'ACTIVE' })
+    const response = await fetchSubscriptions('ACTIVE')
     const [subscription] = response.results
     return subscription ?? null
   } catch (error: unknown) {
@@ -76,7 +76,7 @@ const subscriptionSlice = createSlice({
         loadActiveSubscription.rejected,
         (state: SubscriptionState, action: PayloadAction<RejectValue | undefined>) => {
           state.status = 'failed'
-          state.error = (typeof action.payload === 'string' && action.payload) ?? null
+          state.error = (typeof action.payload === 'string' ? action.payload : null)
         },
       )
   },

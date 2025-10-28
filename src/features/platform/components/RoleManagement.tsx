@@ -122,7 +122,7 @@ export default function RoleManagement() {
     }
   }
 
-  const handleDelete = async (roleId: string) => {
+  const handleDelete = async (roleId: number) => {
     if (!confirm('Are you sure you want to delete this role?')) return
 
     try {

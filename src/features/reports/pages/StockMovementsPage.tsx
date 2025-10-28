@@ -7,11 +7,11 @@ import { ReportContainer } from '../components/ReportContainer';
 import { SummaryCard } from '../components/SummaryCard';
 import { DateRangeFilter } from '../components/DateRangeFilter';
 import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates';
-import { useCurrency } from '../../../hooks/useCurrency';
+// import { useCurrency } from '../../../hooks/useCurrency';
 
 const StockMovementsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { formatCurrency } = useCurrency();
+  // const { formatCurrency } = useCurrency();
   const [data, setData] = useState<StockMovementsResponse['data'] | null>(null);
   const [meta, setMeta] = useState<StockMovementsResponse['meta'] | null>(null);
   const [loading, setLoading] = useState(false);

@@ -26,7 +26,7 @@ const BillingPage = () => {
         <p className="text-sm font-semibold text-brand-secondary">
           Status: {status === 'loading' ? 'Checking…' : subscription?.status ?? 'Inactive'}
         </p>
-        <p className="text-sm text-slate-700">Current plan: {subscription?.plan ?? 'Select a plan'}</p>
+        <p className="text-sm text-slate-700">Current plan: {typeof subscription?.plan === 'string' ? subscription.plan : subscription?.plan?.name ?? 'Select a plan'}</p>
         <Button variant="primary" className="rounded-pill px-4">
           View plans
         </Button>

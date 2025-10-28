@@ -141,10 +141,10 @@ export default function SubscriptionManagement() {
                         <small className="text-muted">Owner: {sub.business_owner}</small>
                       </td>
                       <td>
-                        <strong>{sub.plan_details.name}</strong>
+                        <strong>{sub.plan_details?.name || 'N/A'}</strong>
                         <br />
                         <small className="text-muted">
-                          {sub.plan_details.currency} {sub.plan_details.price} / {sub.plan_details.billing_cycle}
+                          {sub.plan_details?.currency || sub.plan.currency || ''} {sub.plan_details?.price || sub.plan.price} / {sub.plan_details?.billing_cycle || sub.plan.billing_cycle}
                         </small>
                       </td>
                       <td>{getStatusBadge(sub.status)}</td>

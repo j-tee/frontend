@@ -41,6 +41,7 @@ export interface PlatformSubscription extends Subscription {
   plan_details?: {
     name: string
     price: string
+    currency?: string
     interval: string
     billing_cycle: string
   }

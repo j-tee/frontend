@@ -1,6 +1,6 @@
 import { Card, Alert, Button } from 'react-bootstrap'
-import { useAppDispatch } from '../../../hooks'
-import { markAlertRead, dismissAlert } from '../../../store/slices/subscriptionSlice'
+// import { useAppDispatch } from '../../../hooks'
+// import { markAlertRead, dismissAlert } from '../../../store/slices/subscriptionSlice'
 import type { SubscriptionAlert, AlertPriority } from '../../../types/subscriptions'
 
 interface AlertsListProps {
@@ -35,14 +35,18 @@ const getAlertIcon = (alertType: string): string => {
 }
 
 export function AlertsList({ alerts }: AlertsListProps) {
-  const dispatch = useAppDispatch()
+  // const dispatch = useAppDispatch()
   
   const handleMarkRead = async (alertId: string) => {
-    await dispatch(markAlertRead(alertId))
+    // TODO: Implement markAlertRead action
+    // await dispatch(markAlertRead(alertId))
+    console.log('Mark read:', alertId)
   }
-  
+
   const handleDismiss = async (alertId: string) => {
-    await dispatch(dismissAlert(alertId))
+    // TODO: Implement dismissAlert action
+    // await dispatch(dismissAlert(alertId))
+    console.log('Dismiss:', alertId)
   }
   
   if (alerts.length === 0) {

@@ -64,7 +64,7 @@ export default function PlanManagement() {
       setLoading(true)
       setError(null)
       const response = await fetchAllPlans()
-      setPlans(response.results || response.data || [])
+      setPlans(response.results || [])
     } catch (err) {
       console.error('Failed to load plans:', err)
       setError('Failed to load subscription plans')
@@ -136,7 +136,7 @@ export default function PlanManagement() {
       setSubmitting(true)
       
       if (editingPlan) {
-        await updatePlan(editingPlan.id, formData)
+        await updatePlan(editingPlan.id, { ...formData, id: editingPlan.id })
       } else {
         await createPlan(formData)
       }

@@ -8,10 +8,12 @@ interface PaymentHistoryTableProps {
 const getStatusVariant = (status: PaymentStatus): string => {
   const variants: Record<PaymentStatus, string> = {
     PAID: 'success',
+    SUCCESSFUL: 'success',
     PENDING: 'warning',
     FAILED: 'danger',
     OVERDUE: 'danger',
-    CANCELLED: 'secondary'
+    CANCELLED: 'secondary',
+    REFUNDED: 'info'
   }
   return variants[status] || 'secondary'
 }

@@ -74,10 +74,10 @@ const CustomerAnalyticsPage: React.FC = () => {
     return new Intl.NumberFormat('en-US').format(value);
   };
 
-  const formatPercent = (value: number | null | undefined): string => {
-    if (value === null || value === undefined || isNaN(value)) return '0.0%';
-    return `${value.toFixed(1)}%`;
-  };
+  // const formatPercent = (value: number | null | undefined): string => {
+  //   if (value === null || value === undefined || isNaN(value)) return '0.0%';
+  //   return `${value.toFixed(1)}%`;
+  // };
 
   if (loading && !data) return <ReportStates.Loading />;
   if (error) return <ReportStates.Error error={error} onRetry={fetchData} />;
