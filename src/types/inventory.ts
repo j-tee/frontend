@@ -160,6 +160,7 @@ export interface StockProduct {
 
 export interface StockProductPayload {
   stock: UUID
+  warehouse: UUID  // Required - warehouse where stock product is located
   stock_batch?: UUID
   product: UUID
   supplier?: UUID | null

@@ -343,6 +343,7 @@ const StockIntakeModal = ({
 
     const payload: StockProductPayload = {
       stock: createdBatch.id,
+      warehouse: createdBatch.warehouse,
       stock_batch: createdBatch.id,
       product: lineItemForm.product,
       supplier: lineItemForm.supplier ? lineItemForm.supplier : null,
