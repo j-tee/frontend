@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 import Alert from 'react-bootstrap/Alert'
 import Badge from 'react-bootstrap/Badge'
 import Button from 'react-bootstrap/Button'
+import Dropdown from 'react-bootstrap/Dropdown'
 import Form from 'react-bootstrap/Form'
 import Offcanvas from 'react-bootstrap/Offcanvas'
 import Spinner from 'react-bootstrap/Spinner'
@@ -855,18 +856,36 @@ const DashboardLayout = () => {
                 <path d="M13.73 20a2 2 0 0 1-3.46 0" strokeLinecap="round" />
               </svg>
             </Button>
-            <div className="hidden items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm sm:flex">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-secondary font-semibold text-white">
-                {userInitials}
-              </span>
-              <div className="min-w-[140px]">
-                <p className="mb-0 text-sm font-semibold leading-tight">{user?.name ?? 'Team member'}</p>
-                <p className="mb-0 text-xs text-slate-500">{business?.name ?? 'Loading business…'}</p>
-              </div>
-              <Button variant="link" className="text-brand-primary p-0" onClick={handleSignOut}>
-                Sign out
-              </Button>
-            </div>
+            <Dropdown align="end">
+              <Dropdown.Toggle 
+                as="div"
+                className="hidden items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm sm:flex cursor-pointer"
+                style={{ cursor: 'pointer' }}
+              >
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-secondary font-semibold text-white">
+                  {userInitials}
+                </span>
+                <div className="min-w-[140px]">
+                  <p className="mb-0 text-sm font-semibold leading-tight">{user?.name ?? 'Team member'}</p>
+                  <p className="mb-0 text-xs text-slate-500">{business?.name ?? 'Loading business…'}</p>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </Dropdown.Toggle>
+
+              <Dropdown.Menu>
+                <Dropdown.Item onClick={() => navigate('/app/account')}>
+                  <i className="bi bi-person me-2"></i>
+                  Account Settings
+                </Dropdown.Item>
+                <Dropdown.Divider />
+                <Dropdown.Item onClick={handleSignOut}>
+                  <i className="bi bi-box-arrow-right me-2"></i>
+                  Sign out
+                </Dropdown.Item>
+              </Dropdown.Menu>
+            </Dropdown>
             <Button
               variant="outline-primary"
               className="rounded-pill px-3 py-2 sm:hidden"

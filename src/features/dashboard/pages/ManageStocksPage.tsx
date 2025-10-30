@@ -2094,6 +2094,7 @@ const ManageStocksPage = () => {
         stockProduct={selectedStockProduct}
         suppliers={suppliers}
         stockBatches={stockBatches}
+        stockProducts={stockProducts}
         warehouses={warehouses}
         isUpdating={isUpdatingStockProduct}
         updateError={editStockProductError}

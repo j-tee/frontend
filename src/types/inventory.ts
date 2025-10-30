@@ -62,6 +62,14 @@ export interface ProductPayload {
   is_active?: boolean
 }
 
+export interface BatchInfo {
+  id: string
+  batch_identifier: string
+  batch_size: number
+  created_at: string
+  arrival_date: string
+}
+
 export interface StockBatch {
   id: UUID
   business: UUID

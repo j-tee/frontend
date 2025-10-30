@@ -7,7 +7,9 @@ import Stack from 'react-bootstrap/Stack'
 import OverlayTrigger from 'react-bootstrap/OverlayTrigger'
 import Tooltip from 'react-bootstrap/Tooltip'
 import { fetchProductStockReconciliation } from '../../../services/inventoryService'
+import StockFilterPanel, { type StockFilters } from './StockFilterPanel'
 import type {
+  BatchInfo,
   StockBatch,
   StockProduct,
   StockProductPayload,
@@ -34,6 +36,7 @@ interface StockProductDetailModalProps {
   stockProduct: StockProduct | null
   suppliers: Supplier[]
   stockBatches: StockBatch[]
+  stockProducts?: StockProduct[] // Optional: list of all stock products to find batches for same product
   warehouses: Warehouse[]
   isUpdating: boolean
   updateError: string | null
@@ -121,6 +124,7 @@ const StockProductDetailModal = ({
   stockProduct,
   suppliers,
   stockBatches,
+  stockProducts = [], // Default to empty array
   warehouses,
   isUpdating,
   updateError,
@@ -136,6 +140,11 @@ const StockProductDetailModal = ({
   const [reconciliationSnapshot, setReconciliationSnapshot] = useState<StockReconciliationResponse | null>(null)
   const [reconciliationLoading, setReconciliationLoading] = useState(false)
   const [reconciliationError, setReconciliationError] = useState<string | null>(null)
+  const [filters, setFilters] = useState<StockFilters>({
+    batchId: null,
+    warehouseId: null,
+    showExpiredOnly: false,
+  })
   const isMountedRef = useRef(true)
 
   useEffect(() => {
@@ -203,6 +212,71 @@ const StockProductDetailModal = ({
     if (!warehouseId) return null
     return warehouses.find((item) => item.id === warehouseId) ?? null
   }, [stockBatch?.warehouse_id, stockProduct, warehouses])
+
+  // Compute available batches for the same product
+  const availableBatches = useMemo((): BatchInfo[] => {
+    if (!stockProduct?.product) return []
+    
+    console.log('[BatchFilter] Computing batches for product:', stockProduct.product_name)
+    console.log('[BatchFilter] Product ID:', stockProduct.product)
+    console.log('[BatchFilter] StockProducts list:', stockProducts)
+    
+    // Find all stock products with the same product ID
+    const sameProductStocks = stockProducts.filter(sp => sp.product === stockProduct.product)
+    console.log('[BatchFilter] Found stock products for same product:', sameProductStocks)
+    
+    // Get unique batch IDs from those stock products
+    const uniqueBatchIds = new Set<string>()
+    sameProductStocks.forEach(sp => {
+      const batchId = sp.stock_batch ?? sp.stock
+      if (batchId) {
+        uniqueBatchIds.add(batchId)
+      }
+    })
+    
+    console.log('[BatchFilter] Unique batch IDs:', Array.from(uniqueBatchIds))
+    
+    // Map batch IDs to batch info
+    const batches = Array.from(uniqueBatchIds)
+      .map(batchId => {
+        const batch = stockBatches.find(b => b.id === batchId)
+        if (!batch) return null
+        
+        return {
+          id: batch.id,
+          batch_identifier: batch.description || `Batch ${batch.id.slice(0, 8)}`,
+          batch_size: batch.total_quantity || 0,
+          created_at: batch.created_at || '',
+          arrival_date: batch.arrival_date || '',
+        }
+      })
+      .filter((b): b is BatchInfo => b !== null)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    
+    console.log('[BatchFilter] Final batches list:', batches)
+    console.log('[BatchFilter] Batches count:', batches.length, '- Dropdown will', batches.length > 1 ? 'SHOW' : 'HIDE')
+    
+    return batches
+  }, [stockProduct, stockBatches, stockProducts])
+
+  // Compute available warehouses for the same product (for filtering purposes)
+  const availableWarehouses = useMemo(() => {
+    if (!stockProduct?.product) return warehouses
+    
+    // Find unique warehouses where this product exists
+    const sameProductStocks = stockProducts.filter(sp => sp.product === stockProduct.product)
+    const warehouseIds = new Set<string>()
+    
+    sameProductStocks.forEach(sp => {
+      const warehouseId = sp.warehouse
+      if (warehouseId) {
+        warehouseIds.add(warehouseId)
+      }
+    })
+    
+    // Return only warehouses that have this product
+    return warehouses.filter(w => warehouseIds.has(w.id))
+  }, [stockProduct, stockProducts, warehouses])
 
   const reconciliationMetrics = useMemo(() => {
     if (!stockProduct) {
@@ -397,6 +471,11 @@ const StockProductDetailModal = ({
   useEffect(() => {
     if (!show || !stockProduct) {
       resetReconciliationState()
+      setFilters({
+        batchId: null,
+        warehouseId: null,
+        showExpiredOnly: false,
+      })
       return
     }
 
@@ -501,7 +580,7 @@ const StockProductDetailModal = ({
   const disableDeleteButton = !stockProduct || isUpdating
 
   return (
-    <Modal show={show} onHide={onClose} size="lg" backdrop="static" centered>
+    <Modal show={show} onHide={onClose} size="xl" backdrop="static" centered>
       <Form id="stockProductDetailForm" onSubmit={handleSubmit}>
         <Modal.Header closeButton>
           <Modal.Title>Stock item details</Modal.Title>
@@ -552,6 +631,16 @@ const StockProductDetailModal = ({
                     {reconciliationError}
                   </Alert>
                 ) : null}
+
+                {/* Multi-Filter Panel */}
+                <StockFilterPanel
+                  batches={availableBatches}
+                  warehouses={availableWarehouses}
+                  currentWarehouseId={stockProduct.warehouse ?? stockBatch?.warehouse_id}
+                  filters={filters}
+                  onFilterChange={setFilters}
+                  disabled={reconciliationLoading || isUpdating || isDeleting}
+                />
 
                 {/* Key Metrics - Enhanced Cards */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
