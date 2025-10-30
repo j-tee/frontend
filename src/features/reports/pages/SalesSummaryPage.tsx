@@ -134,6 +134,7 @@ const SalesSummaryPage: React.FC = () => {
       title="Sales Summary Report"
       subtitle={`Sales performance from ${startDate} to ${endDate}`}
       icon="📊"
+      backPath="/app/reports/sales"
       actions={
         <>
           <button

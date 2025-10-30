@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Download, RefreshCw, Activity, TrendingUp, TrendingDown, ArrowRight, ArrowLeft, Search, Filter, X, ChevronDown, ChevronUp } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Activity, TrendingUp, TrendingDown, ArrowRight, Search, Filter, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { inventoryReportsService } from '../../../services/reportsService';
 import type { StockMovementsResponse, StockMovement } from '../../../types/reports';
 import { ReportContainer } from '../components/ReportContainer';
@@ -10,7 +9,6 @@ import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates
 // import { useCurrency } from '../../../hooks/useCurrency';
 
 const StockMovementsPage: React.FC = () => {
-  const navigate = useNavigate();
   // const { formatCurrency } = useCurrency();
   const [data, setData] = useState<StockMovementsResponse['data'] | null>(null);
   const [meta, setMeta] = useState<StockMovementsResponse['meta'] | null>(null);
@@ -207,31 +205,24 @@ const StockMovementsPage: React.FC = () => {
       title="Stock Movement History"
       subtitle="Track all inventory transactions"
       icon="📊"
+      backPath="/app/reports/inventory"
       actions={
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={() => navigate('/app/reports/inventory')}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
-          </button>
+        <>
           <button
             onClick={fetchData}
             disabled={loading}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-50"
           >
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
+            {loading ? '⏳ Refreshing...' : '🔄 Refresh'}
           </button>
           <button
             onClick={handleExport}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            disabled={loading}
+            className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-green-700 disabled:opacity-50"
           >
-            <Download className="w-4 h-4 mr-2" />
-            Export CSV
+            📥 Export CSV
           </button>
-        </div>
+        </>
       }
     >
       {/* Date Range Filter */}

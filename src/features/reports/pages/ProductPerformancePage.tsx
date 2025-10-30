@@ -104,21 +104,31 @@ const ProductPerformancePage: React.FC = () => {
       title="Product Performance Report"
       subtitle={`${startDate} to ${endDate}`}
       icon="📦"
+      backPath="/app/reports/sales"
       actions={
-        <div className="d-flex gap-2">
-          <button onClick={handleExportCSV} className="btn btn-sm btn-success">
-            <i className="bi bi-file-earmark-spreadsheet me-2"></i>
-            Export CSV
+        <>
+          <button
+            onClick={fetchData}
+            disabled={loading}
+            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-50"
+          >
+            {loading ? '⏳ Refreshing...' : '🔄 Refresh'}
           </button>
-          <button onClick={handleExportPDF} className="btn btn-sm btn-danger">
-            <i className="bi bi-file-earmark-pdf me-2"></i>
-            Export PDF
+          <button
+            onClick={handleExportCSV}
+            disabled={loading}
+            className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-green-700 disabled:opacity-50"
+          >
+            📥 Export CSV
           </button>
-          <button onClick={fetchData} className="btn btn-sm btn-outline-secondary">
-            <i className="bi bi-arrow-clockwise me-2"></i>
-            Refresh
+          <button
+            onClick={handleExportPDF}
+            disabled={loading}
+            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
+          >
+            📄 Export PDF
           </button>
-        </div>
+        </>
       }
     >
       <div className="mb-4">

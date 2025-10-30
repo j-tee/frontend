@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Download, RefreshCw, Package, ArrowLeft, Search, Filter, ChevronDown, ChevronUp } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Package, Search, Filter, ChevronDown, ChevronUp } from 'lucide-react';
 import { inventoryReportsService } from '../../../services/reportsService';
 import type { StockLevelsResponse, StockLevel } from '../../../types/reports';
 import { useCurrency } from '../../../hooks/useCurrency';
@@ -9,7 +8,6 @@ import { SummaryCard } from '../components/SummaryCard';
 import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates';
 
 const StockLevelsPage: React.FC = () => {
-  const navigate = useNavigate();
   const { formatCurrency } = useCurrency();
   const [data, setData] = useState<StockLevelsResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -174,31 +172,24 @@ const StockLevelsPage: React.FC = () => {
       title="Stock Levels Summary"
       subtitle="Current inventory status across all locations"
       icon="📦"
+      backPath="/app/reports/inventory"
       actions={
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={() => navigate('/app/reports/inventory')}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
-          </button>
+        <>
           <button
             onClick={fetchData}
             disabled={loading}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-50"
           >
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
+            {loading ? '⏳ Refreshing...' : '🔄 Refresh'}
           </button>
           <button
             onClick={handleExport}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            disabled={loading}
+            className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-green-700 disabled:opacity-50"
           >
-            <Download className="w-4 h-4 mr-2" />
-            Export CSV
+            📥 Export CSV
           </button>
-        </div>
+        </>
       }
     >
       {/* Filters Section */}

@@ -78,17 +78,24 @@ const CashFlowPage: React.FC = () => {
     <ReportContainer
       title="💵 Cash Flow Analysis"
       subtitle={`Period: ${startDate} to ${endDate}`}
+      backPath="/app/reports/financial"
       actions={
-        <div className="d-flex gap-2">
-          <button onClick={handleExport} className="btn btn-outline-primary">
-            <i className="bi bi-download me-2"></i>
-            Export CSV
+        <>
+          <button
+            onClick={fetchData}
+            disabled={loading}
+            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-50"
+          >
+            {loading ? '⏳ Refreshing...' : '🔄 Refresh'}
           </button>
-          <button onClick={fetchData} className="btn btn-outline-secondary">
-            <i className="bi bi-arrow-clockwise me-2"></i>
-            Refresh
+          <button
+            onClick={handleExport}
+            disabled={loading}
+            className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-green-700 disabled:opacity-50"
+          >
+            📥 Export CSV
           </button>
-        </div>
+        </>
       }
     >
       {/* Date Filter & Grouping */}
