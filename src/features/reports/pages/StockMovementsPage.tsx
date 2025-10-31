@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Activity, TrendingUp, TrendingDown, ArrowRight, Search, Filter, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Activity, TrendingUp, TrendingDown, ArrowRight, Search, Filter, X, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import { inventoryReportsService } from '../../../services/reportsService';
 import type { StockMovementsResponse, StockMovement } from '../../../types/reports';
 import { ReportContainer } from '../components/ReportContainer';
 import { SummaryCard } from '../components/SummaryCard';
 import { DateRangeFilter } from '../components/DateRangeFilter';
 import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates';
+import { MovementDetailModal } from '../components/MovementDetailModal';
 // import { useCurrency } from '../../../hooks/useCurrency';
 
 const StockMovementsPage: React.FC = () => {
@@ -14,6 +15,10 @@ const StockMovementsPage: React.FC = () => {
   const [meta, setMeta] = useState<StockMovementsResponse['meta'] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Modal state
+  const [selectedMovement, setSelectedMovement] = useState<StockMovement | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Date range (default: last 30 days)
   const [startDate, setStartDate] = useState(() => {
@@ -106,6 +111,12 @@ const StockMovementsPage: React.FC = () => {
     searchQuery || warehouseId || categoryId || movementType || referenceType
   );
 
+  // Handle click-through navigation to source records
+  const handleReferenceClick = (movement: StockMovement) => {
+    setSelectedMovement(movement);
+    setIsModalOpen(true);
+  };
+
   const getMovementIcon = (type: string) => {
     switch (type) {
       case 'in':
@@ -145,7 +156,7 @@ const StockMovementsPage: React.FC = () => {
   if (error) return <ErrorState error={error} onRetry={fetchData} />;
   
   // Support both old and new pagination formats
-  const pagination = meta?.pagination || (data as any)?.pagination;
+  const pagination = meta?.pagination || (data as StockMovementsResponse['data'] & { pagination?: { page: number; page_size: number; total: number; total_pages: number } })?.pagination;
   if (!data || !data.summary || !data.movements || !pagination) return <EmptyState />;
 
   const summary = data.summary;
@@ -171,7 +182,7 @@ const StockMovementsPage: React.FC = () => {
 
   // Pagination helpers
   const totalPages = pagination.total_pages || 0;
-  const totalCount = pagination.total_count || pagination.total || 0;
+  const totalCount = 'total_count' in pagination ? pagination.total_count : ('total' in pagination ? pagination.total : 0);
   const currentPage = pagination.page || page;
 
   const getPageNumbers = () => {
@@ -489,7 +500,7 @@ const StockMovementsPage: React.FC = () => {
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900">
-            Movements ({movements.length} of {formatNumber(pagination.total)})
+            Movements ({movements.length} of {formatNumber(totalCount)})
           </h3>
           <div className="text-sm text-gray-600">
             Page {pagination.page} of {pagination.total_pages}
@@ -575,9 +586,20 @@ const StockMovementsPage: React.FC = () => {
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm">
-                      <div className="font-medium text-gray-900 capitalize">
-                        {movement.reference_type.replace('_', ' ')}
-                      </div>
+                      <button
+                        onClick={() => handleReferenceClick(movement)}
+                        className="group flex items-center space-x-1 text-blue-600 hover:text-blue-800 focus:outline-none focus:underline"
+                      >
+                        <span className="font-medium capitalize">
+                          {movement.reference_type.replace('_', ' ')}
+                        </span>
+                        {movement.reference_number && (
+                          <span className="text-gray-600 group-hover:text-gray-800">
+                            ({movement.reference_number})
+                          </span>
+                        )}
+                        <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </button>
                       {movement.notes && (
                         <div className="text-xs text-gray-500 mt-1">
                           {movement.notes}
@@ -685,6 +707,18 @@ const StockMovementsPage: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Movement Detail Modal */}
+      {selectedMovement && (
+        <MovementDetailModal
+          movement={selectedMovement}
+          isOpen={isModalOpen}
+          onClose={() => {
+            setIsModalOpen(false);
+            setSelectedMovement(null);
+          }}
+        />
       )}
     </ReportContainer>
   );

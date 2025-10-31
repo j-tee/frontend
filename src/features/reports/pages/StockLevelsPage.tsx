@@ -167,6 +167,80 @@ const StockLevelsPage: React.FC = () => {
   const summary = data.data.summary;
   const items = data.data.items || [];
 
+  const totalProducts = summary?.total_products ?? 0;
+  const totalVariants = summary?.total_variants ?? 0;
+  const healthyProducts = summary?.in_stock ?? 0;
+  const lowStockProducts = summary?.low_stock ?? 0;
+  const outOfStockProducts = summary?.out_of_stock ?? 0;
+  const healthyPercent = totalProducts ? (healthyProducts / totalProducts) * 100 : 0;
+  const lowPercent = totalProducts ? (lowStockProducts / totalProducts) * 100 : 0;
+  const outPercent = totalProducts ? (outOfStockProducts / totalProducts) * 100 : 0;
+
+  const aggregateTotals = items.reduce(
+    (acc, item) => {
+      const totalQuantity = item.total_quantity ?? 0;
+      const available = item.total_available ?? 0;
+      const reserved = item.locations.reduce(
+        (sum, location) => sum + (location.reserved ?? 0),
+        0
+      );
+      const isAtRisk = item.locations.some(
+        (location) =>
+          location.status === 'low_stock' || location.status === 'out_of_stock'
+      );
+
+      return {
+        totalUnits: acc.totalUnits + totalQuantity,
+        availableUnits: acc.availableUnits + available,
+        reservedUnits: acc.reservedUnits + reserved,
+        atRiskUnits: isAtRisk ? acc.atRiskUnits + available : acc.atRiskUnits,
+        attentionProducts: isAtRisk
+          ? acc.attentionProducts + 1
+          : acc.attentionProducts,
+      };
+    },
+    {
+      totalUnits: 0,
+      availableUnits: 0,
+      reservedUnits: 0,
+      atRiskUnits: 0,
+      attentionProducts: 0,
+    }
+  );
+
+  const atRiskExample = (() => {
+    const product = items.find((item) =>
+      item.locations.some(
+        (location) =>
+          location.status === 'low_stock' || location.status === 'out_of_stock'
+      )
+    );
+
+    if (!product) {
+      return null;
+    }
+
+    const affectedLocations = product.locations
+      .filter(
+        (location) =>
+          location.status === 'low_stock' || location.status === 'out_of_stock'
+      )
+      .map((location) => ({
+        name: location.warehouse_name,
+        available: location.available ?? 0,
+        reorderPoint: location.reorder_point ?? 0,
+      }));
+
+    const reorderPoints = affectedLocations.map((location) => location.reorderPoint);
+
+    return {
+      product,
+      affectedLocations,
+      minReorderPoint:
+        reorderPoints.length > 0 ? Math.min(...reorderPoints) : undefined,
+    };
+  })();
+
   return (
     <ReportContainer
       title="Stock Levels Summary"
@@ -292,42 +366,110 @@ const StockLevelsPage: React.FC = () => {
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <SummaryCard
-          title="Total Products"
-          value={formatNumber(summary.total_products)}
-          icon="📦"
-          color="bg-blue-50 border-blue-200"
-          subtitle={`${formatNumber(summary.total_variants)} variants`}
+          title="Total products tracked"
+          value={formatNumber(totalProducts)}
+          icon="�️"
+          color="bg-slate-50 border-slate-200"
+          subtitle={`${formatNumber(totalVariants)} variants across ${formatNumber(summary.warehouses_count)} ${summary.warehouses_count === 1 ? 'location' : 'locations'}`}
         />
         <SummaryCard
-          title="In Stock"
-          value={formatNumber(summary.in_stock)}
+          title="Healthy products"
+          value={formatNumber(healthyProducts)}
           icon="✅"
           color="bg-green-50 border-green-200"
-          change={summary.total_products ? ((summary.in_stock / summary.total_products) * 100) : 0}
-          changeLabel="of total"
+          subtitle={`${healthyPercent.toFixed(0)}% of catalogue above reorder levels`}
         />
         <SummaryCard
-          title="Low Stock"
-          value={formatNumber(summary.low_stock)}
+          title="At-risk products"
+          value={formatNumber(lowStockProducts)}
           icon="⚠️"
           color="bg-amber-50 border-amber-200"
-          subtitle="Need attention"
+          subtitle="Below reorder point but still has stock"
         />
         <SummaryCard
-          title="Out of Stock"
-          value={formatNumber(summary.out_of_stock)}
+          title="Out of stock products"
+          value={formatNumber(outOfStockProducts)}
           icon="🚫"
           color="bg-red-50 border-red-200"
-          subtitle="Immediate action"
+          subtitle="No sellable units available"
         />
-        {includeValuation && (
-          <SummaryCard
-            title="Total Value"
-            value={formatCurrency(summary.total_stock_value)}
-            icon="💰"
-            color="bg-purple-50 border-purple-200"
-            subtitle={`${formatNumber(summary.warehouses_count)} locations`}
-          />
+        <SummaryCard
+          title="Sellable units"
+          value={formatNumber(aggregateTotals.availableUnits)}
+          icon="📦"
+          color="bg-blue-50 border-blue-200"
+          subtitle="Units available across all warehouses"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        <SummaryCard
+          title="Total units on hand"
+          value={formatNumber(aggregateTotals.totalUnits)}
+          icon="📊"
+          color="bg-slate-50 border-slate-200"
+          subtitle="Includes available and reserved units"
+        />
+        <SummaryCard
+          title="Units reserved"
+          value={formatNumber(aggregateTotals.reservedUnits)}
+          icon="�"
+          color="bg-purple-50 border-purple-200"
+          subtitle="Committed to orders or holds"
+        />
+        <SummaryCard
+          title={includeValuation ? 'Inventory value' : 'Warehouses tracked'}
+          value={
+            includeValuation
+              ? formatCurrency(summary.total_stock_value)
+              : formatNumber(summary.warehouses_count)
+          }
+          icon={includeValuation ? '💰' : '🏬'}
+          color={includeValuation ? 'bg-indigo-50 border-indigo-200' : 'bg-cyan-50 border-cyan-200'}
+          subtitle={
+            includeValuation
+              ? `Across ${formatNumber(summary.warehouses_count)} ${summary.warehouses_count === 1 ? 'location' : 'locations'}`
+              : 'Warehouses contributing to this report'
+          }
+        />
+      </div>
+
+      <div className="mb-6 rounded-2xl border border-blue-200 bg-blue-50 p-6">
+        <h3 className="text-sm font-semibold text-blue-900">How to read these stock health numbers</h3>
+        <p className="mt-2 text-sm text-blue-800">
+          The status cards count product SKUs, not raw units. A product moves into “At-risk” as soon as its available quantity falls below the reorder point you configured.
+        </p>
+        <p className="mt-2 text-sm text-blue-800">
+          {aggregateTotals.attentionProducts > 0
+            ? `${formatNumber(aggregateTotals.attentionProducts)} product${aggregateTotals.attentionProducts === 1 ? '' : 's'} need attention right now.`
+            : 'All tracked products are currently healthy.'}
+        </p>
+        <ul className="mt-3 space-y-1 text-xs text-blue-900">
+          <li><span className="font-semibold">Healthy products</span>: every warehouse is above its reorder point.</li>
+          <li><span className="font-semibold">At-risk products</span>: at least one warehouse is at or below its reorder point.</li>
+          <li><span className="font-semibold">Out of stock</span>: no sellable units remain in any warehouse.</li>
+        </ul>
+        {atRiskExample && (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm font-semibold text-amber-900">
+              Example: {atRiskExample.product.product_name}
+            </p>
+            <p className="mt-2 text-sm text-amber-800">
+              This product still has {formatNumber(atRiskExample.product.total_available)} units in stock, but it is below the reorder target at the locations below, so we flag it as “At-risk”.
+            </p>
+            <div className="mt-3 space-y-1">
+              {atRiskExample.affectedLocations.map((location) => (
+                <p key={`callout-${location.name}`} className="text-xs text-amber-800">
+                  {location.name}: {formatNumber(location.available)} available vs reorder point {formatNumber(location.reorderPoint)}
+                </p>
+              ))}
+            </div>
+            {typeof atRiskExample.minReorderPoint === 'number' && (
+              <p className="mt-3 text-xs text-amber-700">
+                Restock to at least {formatNumber(atRiskExample.minReorderPoint)} units to move this product back to the healthy range.
+              </p>
+            )}
+          </div>
         )}
       </div>
 
@@ -337,48 +479,48 @@ const StockLevelsPage: React.FC = () => {
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <Package className="w-5 h-5 mr-2 text-blue-600" />
-            Stock Status Distribution
+            Stock Health Distribution
           </h3>
           <div className="space-y-3">
             <div>
               <div className="flex justify-between text-sm mb-1">
-                <span className="text-gray-600">In Stock</span>
+                <span className="text-gray-600">Healthy products</span>
                 <span className="font-semibold text-green-600">
-                  {formatNumber(summary.in_stock)} ({summary.total_products ? ((summary.in_stock / summary.total_products) * 100).toFixed(1) : 0}%)
+                  {formatNumber(healthyProducts)} ({healthyPercent.toFixed(1)}%)
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-green-500 h-2 rounded-full transition-all duration-300" 
-                  style={{ width: `${summary.total_products ? (summary.in_stock / summary.total_products) * 100 : 0}%` }}
+                <div
+                  className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${healthyPercent}%` }}
                 ></div>
               </div>
             </div>
             <div>
               <div className="flex justify-between text-sm mb-1">
-                <span className="text-gray-600">Low Stock</span>
+                <span className="text-gray-600">At-risk (low stock)</span>
                 <span className="font-semibold text-amber-600">
-                  {formatNumber(summary.low_stock)} ({summary.total_products ? ((summary.low_stock / summary.total_products) * 100).toFixed(1) : 0}%)
+                  {formatNumber(lowStockProducts)} ({lowPercent.toFixed(1)}%)
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-amber-500 h-2 rounded-full transition-all duration-300" 
-                  style={{ width: `${summary.total_products ? (summary.low_stock / summary.total_products) * 100 : 0}%` }}
+                <div
+                  className="bg-amber-500 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${lowPercent}%` }}
                 ></div>
               </div>
             </div>
             <div>
               <div className="flex justify-between text-sm mb-1">
-                <span className="text-gray-600">Out of Stock</span>
+                <span className="text-gray-600">Out of stock</span>
                 <span className="font-semibold text-red-600">
-                  {formatNumber(summary.out_of_stock)} ({summary.total_products ? ((summary.out_of_stock / summary.total_products) * 100).toFixed(1) : 0}%)
+                  {formatNumber(outOfStockProducts)} ({outPercent.toFixed(1)}%)
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-red-500 h-2 rounded-full transition-all duration-300" 
-                  style={{ width: `${summary.total_products ? (summary.out_of_stock / summary.total_products) * 100 : 0}%` }}
+                <div
+                  className="bg-red-500 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${outPercent}%` }}
                 ></div>
               </div>
             </div>
@@ -391,36 +533,56 @@ const StockLevelsPage: React.FC = () => {
           <div className="space-y-4">
             <div className="flex items-start">
               <div className="flex-shrink-0 w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                <span className="text-green-600 text-lg">✓</span>
+                <span className="text-green-600 text-lg">🩺</span>
               </div>
               <div className="ml-3">
-                <p className="text-sm font-medium text-gray-900">Stock Health</p>
+                <p className="text-sm font-medium text-gray-900">Catalogue health</p>
                 <p className="text-sm text-gray-600">
-                  {summary.in_stock > summary.low_stock + summary.out_of_stock 
-                    ? 'Healthy - Most products well stocked' 
-                    : 'Needs Attention - Many products low or out'}
+                  {totalProducts
+                    ? `${formatNumber(healthyProducts)} of ${formatNumber(totalProducts)} products are healthy (${healthyPercent.toFixed(0)}%).`
+                    : 'Add products to start tracking stock health.'}
                 </p>
               </div>
             </div>
             <div className="flex items-start">
-              <div className="flex-shrink-0 w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                <span className="text-purple-600 text-lg">💎</span>
+              <div className="flex-shrink-0 w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+                <span className="text-amber-600 text-lg">⚠️</span>
               </div>
               <div className="ml-3">
-                <p className="text-sm font-medium text-gray-900">Inventory Value</p>
-                <p className="text-sm text-gray-600">
-                  {includeValuation ? formatCurrency(summary.total_stock_value) : 'Enable valuation to see'}
-                </p>
+                <p className="text-sm font-medium text-gray-900">Why items show “Low stock”</p>
+                {atRiskExample ? (
+                  <>
+                    <p className="text-sm text-gray-600">
+                      {atRiskExample.product.product_name} is flagged because at least one warehouse fell below its reorder point.
+                    </p>
+                    <div className="mt-2 space-y-1">
+                      {atRiskExample.affectedLocations.map((location) => (
+                        <p key={`insight-${location.name}`} className="text-xs text-gray-500">
+                          {location.name}: {formatNumber(location.available)} available vs reorder {formatNumber(location.reorderPoint)}
+                        </p>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-600">
+                    All products are currently above their reorder points.
+                  </p>
+                )}
               </div>
             </div>
             <div className="flex items-start">
               <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <span className="text-blue-600 text-lg">📍</span>
+                <span className="text-blue-600 text-lg">�</span>
               </div>
               <div className="ml-3">
-                <p className="text-sm font-medium text-gray-900">Coverage</p>
+                <p className="text-sm font-medium text-gray-900">Sellable inventory</p>
                 <p className="text-sm text-gray-600">
-                  Stock across {formatNumber(summary.warehouses_count)} {summary.warehouses_count === 1 ? 'location' : 'locations'}
+                  {`You have ${formatNumber(aggregateTotals.availableUnits)} sellable units and ${formatNumber(aggregateTotals.reservedUnits)} reserved.`}
+                </p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {aggregateTotals.atRiskUnits > 0
+                    ? `${formatNumber(aggregateTotals.atRiskUnits)} sellable units belong to products flagged as at risk.`
+                    : 'None of the sellable units are flagged as at risk right now.'}
                 </p>
               </div>
             </div>
@@ -489,7 +651,7 @@ const StockLevelsPage: React.FC = () => {
             </h3>
             {items.length > 0 && (
               <p className="text-sm text-gray-600 mt-1">
-                Showing detailed stock levels for each product across all locations
+                Showing detailed stock levels for each product across all locations. Status badges compare available units with each warehouse's reorder point.
               </p>
             )}
           </div>
