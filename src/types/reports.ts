@@ -925,6 +925,7 @@ export interface ReportFilters {
   customer_type?: 'retail' | 'wholesale';
   customer_id?: string;
   product_id?: string;
+  product_ids?: string; // Phase 1: Comma-separated UUIDs for multi-product filtering
   group_by?: 'day' | 'week' | 'month';
   period_type?: 'daily' | 'weekly' | 'monthly';
   interval?: 'hourly' | 'daily' | 'weekly' | 'monthly';

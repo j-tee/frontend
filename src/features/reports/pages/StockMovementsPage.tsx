@@ -31,6 +31,7 @@ const StockMovementsPage: React.FC = () => {
 
   // Filters
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]); // Phase 1: Multi-product filtering
   const [warehouseId, setWarehouseId] = useState<string>('');
   const [categoryId, setCategoryId] = useState<string>('');
   const [movementType, setMovementType] = useState<'in' | 'out' | 'adjustment' | 'transfer' | ''>('');
@@ -61,6 +62,7 @@ const StockMovementsPage: React.FC = () => {
         sort_order: sortOrder
       };
       if (searchQuery.trim()) params.search = searchQuery.trim();
+      if (selectedProducts.length > 0) params.product_ids = selectedProducts.join(','); // Phase 1: Multi-product filter
       if (warehouseId) params.warehouse_id = warehouseId;
       if (categoryId) params.category_id = categoryId;
       if (movementType) params.movement_type = movementType;
@@ -78,7 +80,7 @@ const StockMovementsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate, searchQuery, warehouseId, categoryId, movementType, referenceType, page, pageSize, sortBy, sortOrder]);
+  }, [startDate, endDate, searchQuery, selectedProducts, warehouseId, categoryId, movementType, referenceType, page, pageSize, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchData();
@@ -102,6 +104,7 @@ const StockMovementsPage: React.FC = () => {
 
   const clearFilters = () => {
     setSearchQuery('');
+    setSelectedProducts([]); // Phase 1: Clear product selection
     setWarehouseId('');
     setCategoryId('');
     setMovementType('');
@@ -110,7 +113,7 @@ const StockMovementsPage: React.FC = () => {
   };
 
   const hasActiveFilters = Boolean(
-    searchQuery || warehouseId || categoryId || movementType || referenceType
+    searchQuery || selectedProducts.length > 0 || warehouseId || categoryId || movementType || referenceType
   );
 
   // Handle click-through navigation to source records
@@ -824,6 +827,47 @@ const StockMovementsPage: React.FC = () => {
                   </button>
                 )}
               </div>
+            </div>
+
+            {/* Phase 1: Product IDs Filter (Multi-select) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Filter by Product IDs (comma-separated)
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={selectedProducts.join(',')}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value.trim()) {
+                      setSelectedProducts(value.split(',').map(id => id.trim()).filter(Boolean));
+                    } else {
+                      setSelectedProducts([]);
+                    }
+                  }}
+                  placeholder="Enter product UUIDs separated by commas..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                {selectedProducts.length > 0 && (
+                  <button
+                    onClick={() => {
+                      setSelectedProducts([]);
+                      setPage(1);
+                    }}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
+              {selectedProducts.length > 0 && (
+                <div className="mt-2">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    {selectedProducts.length} product{selectedProducts.length > 1 ? 's' : ''} selected
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Filter Dropdowns */}
