@@ -27,6 +27,7 @@ import type {
   ProductSearchResponse,
   QuickFiltersResponse,
   ProductMovementSummaryResponse,
+  MovementAnalyticsResponse,
 } from '../types/reports';
 
 // Use the existing httpClient which handles authentication via Redux store
@@ -379,6 +380,33 @@ export const inventoryReportsService = {
     const response = await reportsApi.get<ProductMovementSummaryResponse>(
       `/reports/api/inventory/movements/product-summary/`,
       { params: { product_id: productId, start_date: startDate, end_date: endDate } }
+    );
+    return response.data;
+  },
+
+  // ========================================
+  // PHASE 4: Movement Analytics Dashboard
+  // ========================================
+
+  /**
+   * Get comprehensive movement analytics for dashboard (Phase 4)
+   */
+  getMovementAnalytics: async (
+    startDate: string,
+    endDate: string,
+    warehouseId?: string,
+    categoryId?: string
+  ): Promise<MovementAnalyticsResponse> => {
+    const params: Record<string, string> = {
+      start_date: startDate,
+      end_date: endDate,
+    };
+    if (warehouseId) params.warehouse_id = warehouseId;
+    if (categoryId) params.category_id = categoryId;
+
+    const response = await reportsApi.get<MovementAnalyticsResponse>(
+      `/reports/api/inventory/movements/analytics/`,
+      { params }
     );
     return response.data;
   },

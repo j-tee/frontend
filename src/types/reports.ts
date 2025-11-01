@@ -571,6 +571,65 @@ export interface ProductMovementSummaryResponse {
   data: ProductMovementSummary;
 }
 
+// ========================================
+// PHASE 4: Movement Analytics Dashboard
+// ========================================
+
+/**
+ * Movement Analytics Response (Phase 4)
+ */
+export interface TopSellerProduct {
+  product_name: string;
+  sku: string;
+  quantity_sold: number;
+}
+
+export interface MovementBreakdown {
+  sales: number;
+  transfers: number;
+  adjustments: number;
+  sales_percentage: number;
+  transfers_percentage: number;
+  adjustments_percentage: number;
+}
+
+export interface DailyTrendData {
+  date: string;
+  sales: number;
+  transfers: number;
+  adjustments: number;
+  total: number;
+}
+
+export interface ShrinkageLeader {
+  product_name: string;
+  sku: string;
+  quantity: number;
+  value_impact: number;
+}
+
+export interface MovementMetrics {
+  avg_daily_movement: number;
+  total_movement_value: number;
+  unique_products: number;
+  stock_velocity_days: number;
+  total_movements: number;
+  date_range_days: number;
+}
+
+export interface MovementAnalytics {
+  top_sellers: TopSellerProduct[];
+  movement_breakdown: MovementBreakdown;
+  daily_trend: DailyTrendData[];
+  shrinkage_leaders: ShrinkageLeader[];
+  metrics: MovementMetrics;
+}
+
+export interface MovementAnalyticsResponse {
+  success: boolean;
+  data: MovementAnalytics;
+}
+
 export interface WarehouseAnalytics {
   warehouse_id: string;
   warehouse_name: string;
