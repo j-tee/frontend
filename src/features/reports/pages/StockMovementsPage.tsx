@@ -8,6 +8,8 @@ import { SummaryCard } from '../components/SummaryCard';
 import { DateRangeFilter } from '../components/DateRangeFilter';
 import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates';
 import { MovementDetailModal } from '../components/MovementDetailModal';
+import { ProductSearchAutocomplete } from '../components/ProductSearchAutocomplete';
+import { QuickFiltersBar } from '../components/QuickFiltersBar';
 // import { useCurrency } from '../../../hooks/useCurrency';
 
 const StockMovementsPage: React.FC = () => {
@@ -32,6 +34,7 @@ const StockMovementsPage: React.FC = () => {
   // Filters
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]); // Phase 1: Multi-product filtering
+  const [activeQuickFilter, setActiveQuickFilter] = useState<string>(''); // Phase 2: Track active quick filter
   const [warehouseId, setWarehouseId] = useState<string>('');
   const [categoryId, setCategoryId] = useState<string>('');
   const [movementType, setMovementType] = useState<'in' | 'out' | 'adjustment' | 'transfer' | ''>('');
@@ -105,6 +108,7 @@ const StockMovementsPage: React.FC = () => {
   const clearFilters = () => {
     setSearchQuery('');
     setSelectedProducts([]); // Phase 1: Clear product selection
+    setActiveQuickFilter(''); // Phase 2: Clear quick filter
     setWarehouseId('');
     setCategoryId('');
     setMovementType('');
@@ -113,7 +117,7 @@ const StockMovementsPage: React.FC = () => {
   };
 
   const hasActiveFilters = Boolean(
-    searchQuery || selectedProducts.length > 0 || warehouseId || categoryId || movementType || referenceType
+    searchQuery || selectedProducts.length > 0 || activeQuickFilter || warehouseId || categoryId || movementType || referenceType
   );
 
   // Handle click-through navigation to source records
@@ -693,6 +697,17 @@ const StockMovementsPage: React.FC = () => {
         onApply={fetchData}
       />
 
+      {/* Phase 2: Quick Filters Bar */}
+      <QuickFiltersBar
+        startDate={startDate}
+        endDate={endDate}
+        onFilterApplied={(productIds, filterType) => {
+          setSelectedProducts(productIds);
+          setActiveQuickFilter(filterType);
+          setPage(1);
+        }}
+      />
+
       {/* Info Banner */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
         <div className="flex items-start gap-3">
@@ -829,46 +844,54 @@ const StockMovementsPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Phase 1: Product IDs Filter (Multi-select) */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Filter by Product IDs (comma-separated)
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={selectedProducts.join(',')}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value.trim()) {
-                      setSelectedProducts(value.split(',').map(id => id.trim()).filter(Boolean));
-                    } else {
-                      setSelectedProducts([]);
-                    }
-                  }}
-                  placeholder="Enter product UUIDs separated by commas..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                {selectedProducts.length > 0 && (
+            {/* Phase 2: Product Search Autocomplete */}
+            <ProductSearchAutocomplete
+              selectedProductIds={selectedProducts}
+              onSelectProducts={(productIds) => {
+                setSelectedProducts(productIds);
+                setPage(1);
+              }}
+            />
+
+            {/* Selected Products Display */}
+            {selectedProducts.length > 0 && (
+              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-blue-900">
+                    Selected Products ({selectedProducts.length})
+                  </span>
                   <button
                     onClick={() => {
                       setSelectedProducts([]);
+                      setActiveQuickFilter('');
                       setPage(1);
                     }}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="text-xs text-red-600 hover:text-red-800 font-medium"
                   >
-                    <X className="w-5 h-5" />
+                    Clear All
                   </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {selectedProducts.map((productId, index) => (
+                    <span 
+                      key={productId}
+                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                    >
+                      Product {index + 1}
+                      <X 
+                        className="w-3 h-3 ml-1 cursor-pointer hover:text-blue-900" 
+                        onClick={() => setSelectedProducts(prev => prev.filter(id => id !== productId))}
+                      />
+                    </span>
+                  ))}
+                </div>
+                {activeQuickFilter && (
+                  <div className="mt-2 text-xs text-blue-700">
+                    Active Quick Filter: <strong>{activeQuickFilter.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>
+                  </div>
                 )}
               </div>
-              {selectedProducts.length > 0 && (
-                <div className="mt-2">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                    {selectedProducts.length} product{selectedProducts.length > 1 ? 's' : ''} selected
-                  </span>
-                </div>
-              )}
-            </div>
+            )}
 
             {/* Filter Dropdowns */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

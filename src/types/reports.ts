@@ -491,6 +491,48 @@ export interface StockMovementsResponse {
   pagination?: PaginationInfo;
 }
 
+// ========================================
+// PHASE 2: Product Search & Quick Filters
+// ========================================
+
+/**
+ * Product Search Response (Phase 2)
+ */
+export interface ProductSearchResult {
+  id: string;
+  name: string;
+  sku: string;
+  category: string | null;
+  current_stock: number;
+}
+
+export interface ProductSearchResponse {
+  success: boolean;
+  data: ProductSearchResult[];
+}
+
+/**
+ * Quick Filters Response (Phase 2)
+ */
+export interface QuickFilterDetail {
+  product_id: string;
+  product_name: string;
+  sku: string;
+  metric_value: number;
+  metric_label: string;
+  value_impact?: number;
+}
+
+export interface QuickFiltersResponse {
+  success: boolean;
+  data: {
+    filter_type: 'top_sellers' | 'most_adjusted' | 'high_transfers' | 'shrinkage';
+    product_ids: string[];
+    details?: QuickFilterDetail[];
+    count: number;
+  };
+}
+
 export interface WarehouseAnalytics {
   warehouse_id: string;
   warehouse_name: string;

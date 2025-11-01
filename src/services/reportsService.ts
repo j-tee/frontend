@@ -24,6 +24,8 @@ import type {
   PurchasePatternsResponse,
   CreditUtilizationResponse,
   SegmentationResponse,
+  ProductSearchResponse,
+  QuickFiltersResponse,
 } from '../types/reports';
 
 // Use the existing httpClient which handles authentication via Redux store
@@ -328,6 +330,37 @@ export const inventoryReportsService = {
       { responseType: 'blob' }
     );
     downloadFile(response.data, `warehouse-analytics-${new Date().toISOString()}.pdf`);
+  },
+
+  // ========================================
+  // PHASE 2: Product Search & Quick Filters
+  // ========================================
+
+  /**
+   * Search products for movement filtering (Phase 2)
+   */
+  searchProducts: async (query: string, limit: number = 10): Promise<ProductSearchResponse> => {
+    const response = await reportsApi.get<ProductSearchResponse>(
+      `/reports/api/inventory/products/search/`,
+      { params: { q: query, limit } }
+    );
+    return response.data;
+  },
+
+  /**
+   * Get quick filter product lists (Phase 2)
+   */
+  getQuickFilters: async (
+    filterType: 'top_sellers' | 'most_adjusted' | 'high_transfers' | 'shrinkage',
+    startDate: string,
+    endDate: string,
+    limit: number = 10
+  ): Promise<QuickFiltersResponse> => {
+    const response = await reportsApi.get<QuickFiltersResponse>(
+      `/reports/api/inventory/movements/quick-filters/`,
+      { params: { filter_type: filterType, start_date: startDate, end_date: endDate, limit } }
+    );
+    return response.data;
   },
 };
 
