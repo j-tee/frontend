@@ -10,6 +10,7 @@ import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates
 import { MovementDetailModal } from '../components/MovementDetailModal';
 import { ProductSearchAutocomplete } from '../components/ProductSearchAutocomplete';
 import { QuickFiltersBar } from '../components/QuickFiltersBar';
+import { ProductMovementSummaryModal } from '../components/ProductMovementSummaryModal';
 // import { useCurrency } from '../../../hooks/useCurrency';
 
 const StockMovementsPage: React.FC = () => {
@@ -22,6 +23,11 @@ const StockMovementsPage: React.FC = () => {
   // Modal state
   const [selectedMovement, setSelectedMovement] = useState<StockMovement | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // Phase 3: Product Movement Summary Modal state
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [selectedProductId, setSelectedProductId] = useState<string>('');
+  const [selectedProductName, setSelectedProductName] = useState<string>('');
 
   // Date range (default: last 30 days)
   const [startDate, setStartDate] = useState(() => {
@@ -126,6 +132,13 @@ const StockMovementsPage: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  // Phase 3: Handle product click to show movement summary
+  const handleProductClick = (movement: StockMovement) => {
+    setSelectedProductId(movement.product_id);
+    setSelectedProductName(movement.product_name);
+    setShowSummaryModal(true);
+  };
+
   const getMovementIcon = (type: string) => {
     switch (type) {
       case 'in':
@@ -200,9 +213,12 @@ const StockMovementsPage: React.FC = () => {
             </td>
             <td className="px-6 py-4">
               <div>
-                <div className="text-sm font-medium text-gray-900">
+                <button
+                  onClick={() => handleProductClick(movement)}
+                  className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer text-left"
+                >
                   {movement.product_name}
-                </div>
+                </button>
                 <div className="text-sm text-gray-500">
                   SKU: {movement.sku}
                 </div>
@@ -286,9 +302,12 @@ const StockMovementsPage: React.FC = () => {
               </td>
               <td className="px-6 py-4">
                 <div>
-                  <div className="text-sm font-medium text-gray-900">
+                  <button
+                    onClick={() => handleProductClick(movement)}
+                    className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer text-left"
+                  >
                     {movement.product_name}
-                  </div>
+                  </button>
                   <div className="text-sm text-gray-500">
                     SKU: {movement.sku}
                   </div>
@@ -401,9 +420,12 @@ const StockMovementsPage: React.FC = () => {
             </td>
             <td className="px-6 py-4">
               <div>
-                <div className="text-sm font-medium text-gray-900">
+                <button
+                  onClick={() => handleProductClick(movement)}
+                  className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer text-left"
+                >
                   {movement.product_name}
-                </div>
+                </button>
                 <div className="text-sm text-gray-500">
                   SKU: {movement.sku}
                 </div>
@@ -512,9 +534,12 @@ const StockMovementsPage: React.FC = () => {
               </td>
               <td className="px-6 py-4">
                 <div>
-                  <div className="text-sm font-medium text-gray-900">
+                  <button
+                    onClick={() => handleProductClick(movement)}
+                    className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer text-left"
+                  >
                     {movement.product_name}
-                  </div>
+                  </button>
                   <div className="text-sm text-gray-500">
                     SKU: {movement.sku}
                   </div>
@@ -1235,6 +1260,20 @@ const StockMovementsPage: React.FC = () => {
           }}
         />
       )}
+
+      {/* Phase 3: Product Movement Summary Modal */}
+      <ProductMovementSummaryModal
+        show={showSummaryModal}
+        onHide={() => {
+          setShowSummaryModal(false);
+          setSelectedProductId('');
+          setSelectedProductName('');
+        }}
+        productId={selectedProductId}
+        productName={selectedProductName}
+        startDate={startDate}
+        endDate={endDate}
+      />
     </ReportContainer>
   );
 };

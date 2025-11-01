@@ -26,6 +26,7 @@ import type {
   SegmentationResponse,
   ProductSearchResponse,
   QuickFiltersResponse,
+  ProductMovementSummaryResponse,
 } from '../types/reports';
 
 // Use the existing httpClient which handles authentication via Redux store
@@ -359,6 +360,25 @@ export const inventoryReportsService = {
     const response = await reportsApi.get<QuickFiltersResponse>(
       `/reports/api/inventory/movements/quick-filters/`,
       { params: { filter_type: filterType, start_date: startDate, end_date: endDate, limit } }
+    );
+    return response.data;
+  },
+
+  // ========================================
+  // PHASE 3: Product Movement Summary
+  // ========================================
+
+  /**
+   * Get product movement summary with breakdown and warehouse distribution (Phase 3)
+   */
+  getProductMovementSummary: async (
+    productId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<ProductMovementSummaryResponse> => {
+    const response = await reportsApi.get<ProductMovementSummaryResponse>(
+      `/reports/api/inventory/movements/product-summary/`,
+      { params: { product_id: productId, start_date: startDate, end_date: endDate } }
     );
     return response.data;
   },

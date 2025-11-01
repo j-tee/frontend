@@ -533,6 +533,44 @@ export interface QuickFiltersResponse {
   };
 }
 
+// ========================================
+// PHASE 3: Product Movement Summary
+// ========================================
+
+/**
+ * Product Movement Summary Response (Phase 3)
+ */
+export interface ProductMovementBreakdown {
+  sales: number;
+  transfers_in: number;
+  transfers_out: number;
+  adjustments_up: number;
+  adjustments_down: number;
+  net_change: number;
+}
+
+export interface WarehouseDistribution {
+  warehouse_id: string;
+  warehouse_name: string;
+  quantity: number;
+  percentage: number;
+}
+
+export interface ProductMovementSummary {
+  product_id: string;
+  product_name: string;
+  sku: string;
+  current_stock: number;
+  movements: ProductMovementBreakdown;
+  net_change: number;
+  by_warehouse: WarehouseDistribution[];
+}
+
+export interface ProductMovementSummaryResponse {
+  success: boolean;
+  data: ProductMovementSummary;
+}
+
 export interface WarehouseAnalytics {
   warehouse_id: string;
   warehouse_name: string;
