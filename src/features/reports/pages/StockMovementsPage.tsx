@@ -877,6 +877,7 @@ const StockMovementsPage: React.FC = () => {
               selectedProducts={selectedProducts}
               onSelectProducts={(products) => {
                 setSelectedProducts(products);
+                setActiveQuickFilter('');
                 setPage(1);
               }}
             />
@@ -911,7 +912,10 @@ const StockMovementsPage: React.FC = () => {
                       key={product.id}
                       className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
                     >
-                      {product.name} <span className="text-blue-600 ml-1">({product.sku})</span>
+                      <span>{product.name}</span>
+                      {product.sku && product.sku !== 'N/A' && (
+                        <span className="text-blue-600 ml-1">({product.sku})</span>
+                      )}
                       <X 
                         className="w-3 h-3 ml-1.5 cursor-pointer hover:text-blue-900" 
                         onClick={() => {

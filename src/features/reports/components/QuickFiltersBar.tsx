@@ -58,24 +58,89 @@ export const QuickFiltersBar: React.FC<QuickFiltersBarProps> = ({
       );
 
       if (response.success && response.data.product_ids.length > 0) {
-        // Fetch product details for the returned IDs
-        const productDetails = await Promise.all(
-          response.data.product_ids.map(async (id) => {
-            try {
-              // Use the search endpoint to get product details
-              const searchResponse = await inventoryReportsService.searchProducts(id, 1);
-              if (searchResponse.success && searchResponse.data.length > 0) {
-                const product = searchResponse.data[0];
-                return { id: product.id, name: product.name, sku: product.sku };
+        let productDetails: Array<{ id: string; name: string; sku: string }> = [];
+
+        if (response.data.details && response.data.details.length > 0) {
+          const detailMap = new Map(
+            response.data.details.map((detail) => [
+              detail.product_id,
+              {
+                id: detail.product_id,
+                name: detail.product_name,
+                sku: detail.sku || 'N/A'
               }
-              // Fallback if product not found
-              return { id, name: 'Unknown Product', sku: 'N/A' };
-            } catch (err) {
-              console.error(`Failed to fetch details for product ${id}:`, err);
-              return { id, name: 'Unknown Product', sku: 'N/A' };
-            }
-          })
-        );
+            ])
+          );
+
+          const missingIds: string[] = [];
+
+          productDetails = response.data.product_ids.reduce<Array<{ id: string; name: string; sku: string }>>(
+            (acc, id) => {
+              const detail = detailMap.get(id);
+              if (detail) {
+                acc.push(detail);
+              } else {
+                missingIds.push(id);
+              }
+              return acc;
+            },
+            []
+          );
+
+          if (missingIds.length > 0) {
+            const fallbackDetails = await Promise.all(
+              missingIds.map(async (id) => {
+                try {
+                  const summaryResponse = await inventoryReportsService.getProductMovementSummary(
+                    id,
+                    startDate,
+                    endDate
+                  );
+
+                  if (summaryResponse.success && summaryResponse.data) {
+                    return {
+                      id,
+                      name: summaryResponse.data.product_name,
+                      sku: summaryResponse.data.sku || 'N/A'
+                    };
+                  }
+
+                  return { id, name: `Product ${id.slice(0, 8)}`, sku: 'N/A' };
+                } catch (err) {
+                  console.error(`Failed to fetch details for product ${id}:`, err);
+                  return { id, name: `Product ${id.slice(0, 8)}`, sku: 'N/A' };
+                }
+              })
+            );
+
+            productDetails = [...productDetails, ...fallbackDetails];
+          }
+        } else {
+          productDetails = await Promise.all(
+            response.data.product_ids.map(async (id) => {
+              try {
+                const summaryResponse = await inventoryReportsService.getProductMovementSummary(
+                  id,
+                  startDate,
+                  endDate
+                );
+
+                if (summaryResponse.success && summaryResponse.data) {
+                  return {
+                    id,
+                    name: summaryResponse.data.product_name,
+                    sku: summaryResponse.data.sku || 'N/A'
+                  };
+                }
+
+                return { id, name: `Product ${id.slice(0, 8)}`, sku: 'N/A' };
+              } catch (err) {
+                console.error(`Failed to fetch details for product ${id}:`, err);
+                return { id, name: `Product ${id.slice(0, 8)}`, sku: 'N/A' };
+              }
+            })
+          );
+        }
 
         onFilterApplied(productDetails, filterType);
         setActiveFilter(filterType);
