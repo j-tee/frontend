@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { TrendingUp, AlertTriangle, Settings, Truck } from 'lucide-react';
 import { inventoryReportsService } from '../../../services/reportsService';
+import { toast } from 'react-toastify';
 
 interface QuickFiltersBarProps {
   startDate: string;
@@ -145,11 +146,11 @@ export const QuickFiltersBar: React.FC<QuickFiltersBarProps> = ({
         onFilterApplied(productDetails, filterType);
         setActiveFilter(filterType);
       } else {
-        alert(`No products found for "${filterType}" filter`);
+        toast.info(`No products found for "${filterType.replace(/_/g, ' ')}" filter in the selected range.`);
       }
     } catch (error) {
       console.error('Quick filter error:', error);
-      alert('Failed to apply filter. Make sure the backend endpoint is available.');
+      toast.error('Failed to apply quick filter. Please try again.');
     } finally {
       setLoading(false);
     }
