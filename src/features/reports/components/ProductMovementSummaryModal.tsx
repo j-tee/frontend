@@ -238,7 +238,7 @@ export const ProductMovementSummaryModal: React.FC<ProductMovementSummaryModalPr
                           fill="#8884d8"
                           dataKey="value"
                         >
-                          {warehouseChartData.map((entry, index) => (
+                          {warehouseChartData.map((_entry, index) => (
                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                           ))}
                         </Pie>
