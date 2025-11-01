@@ -6,6 +6,7 @@ import { SummaryCard } from '../components/SummaryCard';
 import { DateRangeFilter } from '../components/DateRangeFilter';
 import { ReportStates } from '../components/ReportStates';
 import { customerReportsService } from '../../../services/reportsService';
+import { useCurrency } from '../../../hooks/useCurrency';
 import type { TopCustomersResponse, TopCustomer } from '../../../types/reports';
 
 const TopCustomersPage: React.FC = () => {
@@ -13,6 +14,7 @@ const TopCustomersPage: React.FC = () => {
   const [data, setData] = useState<TopCustomersResponse['data'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
+  const { formatCurrency } = useCurrency();
 
   // Filters
   const [startDate] = useState(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
@@ -133,7 +135,7 @@ const TopCustomersPage: React.FC = () => {
         />
         <SummaryCard
           title="Top 10 Revenue"
-          value={`₦${data.summary.top_10_revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          value={formatCurrency(data.summary.top_10_revenue)}
         />
         <SummaryCard
           title="Top 10 %"
@@ -142,7 +144,7 @@ const TopCustomersPage: React.FC = () => {
         />
         <SummaryCard
           title="Avg Customer Value"
-          value={`₦${data.summary.average_customer_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          value={formatCurrency(data.summary.average_customer_value)}
         />
       </div>
 
@@ -217,7 +219,7 @@ const TopCustomersPage: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
                     <div className="text-sm font-semibold text-gray-900">
-                      ₦{customer.total_revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {formatCurrency(customer.total_revenue)}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
@@ -227,7 +229,7 @@ const TopCustomersPage: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
                     <div className="text-sm text-gray-900">
-                      ₦{customer.average_order_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {formatCurrency(customer.average_order_value)}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Target, Download, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import { ReportContainer } from '../components/ReportContainer';
@@ -6,10 +6,12 @@ import { SummaryCard } from '../components/SummaryCard';
 import { DateRangeFilter } from '../components/DateRangeFilter';
 import { ReportStates } from '../components/ReportStates';
 import { customerReportsService } from '../../../services/reportsService';
+import { useCurrency } from '../../../hooks/useCurrency';
 import type { SegmentationResponse, RFMSegment } from '../../../types/reports';
 
 const CustomerSegmentationPage: React.FC = () => {
   const navigate = useNavigate();
+  const { formatCurrency } = useCurrency();
   const [data, setData] = useState<SegmentationResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
@@ -19,11 +21,7 @@ const CustomerSegmentationPage: React.FC = () => {
   const [startDate] = useState(new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
   const [endDate] = useState(new Date().toISOString().split('T')[0]);
 
-  useEffect(() => {
-    loadData();
-  }, [startDate, endDate]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
@@ -38,7 +36,11 @@ const CustomerSegmentationPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [startDate, endDate]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleExport = async () => {
     try {
@@ -190,13 +192,13 @@ const CustomerSegmentationPage: React.FC = () => {
                     <div>
                       <div className="text-xs text-gray-600">Total Revenue</div>
                       <div className="text-lg font-bold text-gray-900">
-                        ₦{segment.total_revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {formatCurrency(segment.total_revenue)}
                       </div>
                     </div>
                     <div>
                       <div className="text-xs text-gray-600">Avg Order Value</div>
                       <div className="text-lg font-bold text-gray-900">
-                        ₦{segment.average_order_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {formatCurrency(segment.average_order_value)}
                       </div>
                     </div>
                     <div>
@@ -250,7 +252,7 @@ const CustomerSegmentationPage: React.FC = () => {
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Avg Total Spend:</span>
                         <span className="font-medium text-gray-900">
-                          ₦{segment.characteristics.avg_total_spend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          {formatCurrency(segment.characteristics.avg_total_spend)}
                         </span>
                       </div>
                     </div>

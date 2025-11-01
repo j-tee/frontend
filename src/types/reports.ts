@@ -26,14 +26,14 @@ export interface ReportMetadata {
   generated_at: string;
   period: string;
   total_records: number;
-  filters_applied: Record<string, any>;
+  filters_applied: Record<string, unknown>;
 }
 
-export interface BaseReportResponse<T = any> {
+export interface BaseReportResponse<T = unknown> {
   success: boolean;
   data: {
     results?: T[];
-    summary?: Record<string, any>;
+    summary?: Record<string, unknown>;
     metadata?: ReportMetadata;
   };
   error: string | null;
@@ -317,7 +317,7 @@ export interface RevenueTrendsResponse {
       generated_at: string;
       start_date: string;
       end_date: string;
-      filters: Record<string, any>;
+  filters: Record<string, unknown>;
     };
   };
 }
@@ -775,7 +775,7 @@ export interface ARCustomer {
   '1_30_days': number;
   '31_60_days': number;
   '61_90_days': number;
-  over_90_days: number;
+  last_payment_date: string | null;
   risk_level: 'low' | 'medium' | 'high';
   retail_balance: number;
   wholesale_balance: number;
@@ -992,7 +992,7 @@ export interface CreditCustomer {
   payment_history_score: number;
   risk_level: 'high' | 'medium' | 'low';
   recommended_action: 'reduce_limit' | 'monitor' | 'increase_limit';
-  last_payment_date: string;
+  last_payment_date: string | null;
   last_payment_amount: number;
 }
 
@@ -1013,6 +1013,17 @@ export interface CreditUtilizationResponse {
       low: number;
       medium: number;
       high: number;
+    };
+  };
+  error?: string | null;
+  message?: string | null;
+  meta?: {
+    pagination?: {
+      page: number;
+      page_size: number;
+      total_pages: number;
+      total?: number;
+      total_count?: number;
     };
   };
 }
@@ -1099,7 +1110,7 @@ export interface ReportFilters {
 export interface ReportError {
   code: string;
   message: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 }
 
 export interface ReportErrorResponse {

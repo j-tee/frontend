@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Users, Download, RefreshCw, TrendingUp, ShoppingBag, Clock, Heart } from 'lucide-react';
 import { ReportContainer } from '../components/ReportContainer';
 import { DateRangeFilter } from '../components/DateRangeFilter';
 import { ReportStates } from '../components/ReportStates';
 import { customerReportsService } from '../../../services/reportsService';
+import { useCurrency } from '../../../hooks/useCurrency';
 import type { PurchasePatternsResponse, ProductPreference } from '../../../types/reports';
 
 const PurchasePatternsPage: React.FC = () => {
@@ -12,17 +13,14 @@ const PurchasePatternsPage: React.FC = () => {
   const [data, setData] = useState<PurchasePatternsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
+  const { formatCurrency } = useCurrency();
 
   // Filters
   const [startDate] = useState(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
   const [endDate] = useState(new Date().toISOString().split('T')[0]);
   const [segment] = useState<'' | 'new' | 'returning' | 'vip' | 'at-risk'>('');
 
-  useEffect(() => {
-    loadData();
-  }, [startDate, endDate, segment]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
@@ -39,7 +37,11 @@ const PurchasePatternsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [endDate, segment, startDate]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleExport = async () => {
     try {
@@ -111,10 +113,10 @@ const PurchasePatternsPage: React.FC = () => {
               {data.data.segments.new_customers.count}
             </div>
             <div className="text-sm text-gray-600">
-              ₦{data.data.segments.new_customers.total_revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {formatCurrency(data.data.segments.new_customers.total_revenue)}
             </div>
             <div className="text-xs text-gray-500">
-              Avg: ₦{data.data.segments.new_customers.average_order_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              Avg: {formatCurrency(data.data.segments.new_customers.average_order_value)}
             </div>
           </div>
         </div>
@@ -129,7 +131,7 @@ const PurchasePatternsPage: React.FC = () => {
               {data.data.segments.returning_customers.count}
             </div>
             <div className="text-sm text-gray-600">
-              ₦{data.data.segments.returning_customers.total_revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {formatCurrency(data.data.segments.returning_customers.total_revenue)}
             </div>
             <div className="text-xs text-gray-500">
               Retention: {data.data.segments.returning_customers.retention_rate?.toFixed(1) ?? '0'}%
@@ -147,7 +149,7 @@ const PurchasePatternsPage: React.FC = () => {
               {data.data.segments.vip_customers.count}
             </div>
             <div className="text-sm text-gray-600">
-              ₦{data.data.segments.vip_customers.total_revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {formatCurrency(data.data.segments.vip_customers.total_revenue)}
             </div>
             <div className="text-xs text-gray-500">
               {data.data.segments.vip_customers.percentage_of_total?.toFixed(1) ?? '0'}% of total
@@ -165,7 +167,7 @@ const PurchasePatternsPage: React.FC = () => {
               {data.data.segments.at_risk_customers.count}
             </div>
             <div className="text-sm text-gray-600">
-              Potential Loss: ₦{(data.data.segments.at_risk_customers.potential_lost_revenue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              Potential Loss: {formatCurrency(data.data.segments.at_risk_customers.potential_lost_revenue ?? 0)}
             </div>
             <div className="text-xs text-gray-500">
               Avg {data.data.segments.at_risk_customers.last_purchase_days_avg} days
@@ -257,12 +259,12 @@ const PurchasePatternsPage: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
                     <div className="text-sm font-semibold text-gray-900">
-                      ₦{pref.total_revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {formatCurrency(pref.total_revenue)}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
                     <div className="text-sm text-gray-900">
-                      ₦{pref.average_spend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {formatCurrency(pref.average_spend)}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
