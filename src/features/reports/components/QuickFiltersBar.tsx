@@ -5,7 +5,7 @@ import { inventoryReportsService } from '../../../services/reportsService';
 interface QuickFiltersBarProps {
   startDate: string;
   endDate: string;
-  onFilterApplied: (productIds: string[], filterType: string) => void;
+  onFilterApplied: (products: Array<{ id: string; name: string; sku: string }>, filterType: string) => void;
 }
 
 export const QuickFiltersBar: React.FC<QuickFiltersBarProps> = ({
@@ -58,7 +58,26 @@ export const QuickFiltersBar: React.FC<QuickFiltersBarProps> = ({
       );
 
       if (response.success && response.data.product_ids.length > 0) {
-        onFilterApplied(response.data.product_ids, filterType);
+        // Fetch product details for the returned IDs
+        const productDetails = await Promise.all(
+          response.data.product_ids.map(async (id) => {
+            try {
+              // Use the search endpoint to get product details
+              const searchResponse = await inventoryReportsService.searchProducts(id, 1);
+              if (searchResponse.success && searchResponse.data.length > 0) {
+                const product = searchResponse.data[0];
+                return { id: product.id, name: product.name, sku: product.sku };
+              }
+              // Fallback if product not found
+              return { id, name: 'Unknown Product', sku: 'N/A' };
+            } catch (err) {
+              console.error(`Failed to fetch details for product ${id}:`, err);
+              return { id, name: 'Unknown Product', sku: 'N/A' };
+            }
+          })
+        );
+
+        onFilterApplied(productDetails, filterType);
         setActiveFilter(filterType);
       } else {
         alert(`No products found for "${filterType}" filter`);
