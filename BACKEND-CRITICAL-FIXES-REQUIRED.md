@@ -25,7 +25,12 @@
 **Current Response:** Generic `from_warehouse` and `to_warehouse`  
 **Required Fix:** Use specific field combinations based on transfer type
 
-**Note:** ✅ Legacy TRANSFER_IN/TRANSFER_OUT system has been migrated (Jan 2025). All transfers now use unified Transfer model with `TRF-*` reference format. Legacy `IWT-*` references excluded from MovementTracker.
+**✅ Legacy System Status (Oct 2025):**
+- Migration COMPLETE: All TRANSFER_IN/TRANSFER_OUT records deleted from production
+- Historical data preserved: 2 legacy transfers migrated to Transfer model
+- API protection: 3-layer blocking (queryset filter + serializer validation + endpoint deprecation)
+- Frontend impact: Zero legacy references will ever appear (deleted at database level)
+- Reference formats: Only `TRF-*` (no more `IWT-*`)
 
 ---
 
@@ -87,7 +92,12 @@ class SaleDetailView(APIView):
 
 **Endpoint:** `GET /inventory/api/transfers/{id}/`
 
-**Migration Status:** ✅ All transfers now use unified Transfer model (legacy TRANSFER_IN/OUT system deprecated Jan 2025)
+**✅ Migration Status (Production Ready):**
+- All transfers use unified Transfer model exclusively
+- Legacy TRANSFER_IN/TRANSFER_OUT system: **DELETED** (Oct 2025)
+- Database: 0 legacy records (all migrated + original records deleted)
+- API: Cannot return or create legacy types (multi-layer protection)
+- Frontend: Will never encounter `IWT-*` references
 
 **Problem:** Need to distinguish between 3 transfer types:
 1. **Warehouse → Warehouse** (inter-warehouse transfers)
@@ -297,14 +307,21 @@ The frontend has been updated to handle:
 
 **Testing (HIGH):**
 1. Verify all three transfer types return correct fields
-2. Test frontend modal with updated backend responses
-3. Confirm business logic accuracy (sales at storefronts, not warehouses)
-
-**Estimated Time:** 1-2 hours for all fixes
-
-**Document Version:** 1.1  
+**Document Version:** 1.2  
 **Created:** October 31, 2025  
-**Updated:** October 31, 2025 (Added legacy transfer migration notes)  
+**Updated:** October 31, 2025  
+**Changelog:**
+- v1.0: Initial requirements
+- v1.1: Added legacy transfer migration notes
+- v1.2: Updated to reflect complete legacy system cleanup (production ready)
+
+**Status:** 🚨 URGENT - Backend Fixes Required  
+**Frontend Status:** ✅ READY (already updated to handle correct fields)  
+**Migration Status:** ✅ COMPLETE & PRODUCTION READY
+- Legacy TRANSFER_IN/TRANSFER_OUT: **DELETED** (0 records)
+- Historical data: Preserved in Transfer model (2 migrated records)
+- API protection: Multi-layer (queryset + serializer + endpoint)
+- Frontend: Zero legacy references possible
 **Status:** 🚨 URGENT - Backend Fixes Required  
 **Frontend Status:** ✅ READY (already updated to handle correct fields)  
 **Migration Status:** ✅ Legacy transfer system migrated (Jan 2025) - all transfers use Transfer model

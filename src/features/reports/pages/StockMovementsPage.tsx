@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Activity, TrendingUp, TrendingDown, ArrowRight, Search, Filter, X, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import { Activity, TrendingUp, TrendingDown, ArrowRight, Search, Filter, X, ChevronDown, ChevronUp, ExternalLink, Package, Warehouse, ShoppingCart } from 'lucide-react';
+import { Tab, Tabs } from 'react-bootstrap';
 import { inventoryReportsService } from '../../../services/reportsService';
 import type { StockMovementsResponse, StockMovement } from '../../../types/reports';
 import { ReportContainer } from '../components/ReportContainer';
@@ -45,6 +46,7 @@ const StockMovementsPage: React.FC = () => {
 
   // UI State
   const [showFilters, setShowFilters] = useState(true);
+  const [activeTab, setActiveTab] = useState<string>('all');
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -152,6 +154,426 @@ const StockMovementsPage: React.FC = () => {
     return value.toLocaleString();
   };
 
+  // Render functions for different movement types
+  const renderSalesTable = (movements: StockMovement[]) => (
+    <table className="min-w-full divide-y divide-gray-200">
+      <thead className="bg-gray-50">
+        <tr>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Date & Time
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Product
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <div className="flex items-center space-x-1">
+              <Package className="w-4 h-4" />
+              <span>Storefront</span>
+            </div>
+          </th>
+          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Quantity Sold
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Sale Reference
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Performed By
+          </th>
+        </tr>
+      </thead>
+      <tbody className="bg-white divide-y divide-gray-200">
+        {movements.map((movement) => (
+          <tr key={movement.movement_id} className="hover:bg-gray-50">
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+              <div>{new Date(movement.created_at).toLocaleDateString()}</div>
+              <div className="text-xs text-gray-500">
+                {new Date(movement.created_at).toLocaleTimeString()}
+              </div>
+            </td>
+            <td className="px-6 py-4">
+              <div>
+                <div className="text-sm font-medium text-gray-900">
+                  {movement.product_name}
+                </div>
+                <div className="text-sm text-gray-500">
+                  SKU: {movement.sku}
+                </div>
+              </div>
+            </td>
+            <td className="px-6 py-4 whitespace-nowrap">
+              <div className="flex items-center space-x-2">
+                <Package className="w-4 h-4 text-blue-600" />
+                <span className="text-sm text-gray-900">{movement.warehouse_name}</span>
+              </div>
+            </td>
+            <td className="px-6 py-4 whitespace-nowrap text-center">
+              <span className="text-sm font-bold text-red-600">
+                -{formatNumber(movement.quantity)}
+              </span>
+            </td>
+            <td className="px-6 py-4">
+              <button
+                onClick={() => handleReferenceClick(movement)}
+                className="group flex items-center space-x-1 text-blue-600 hover:text-blue-800 focus:outline-none focus:underline"
+              >
+                <ShoppingCart className="w-4 h-4" />
+                <span className="font-medium">Sale</span>
+                {movement.reference_number && (
+                  <span className="text-gray-600 group-hover:text-gray-800">
+                    ({movement.reference_number})
+                  </span>
+                )}
+                <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </button>
+            </td>
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+              {movement.performed_by}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+
+  const renderTransfersTable = (movements: StockMovement[]) => (
+    <table className="min-w-full divide-y divide-gray-200">
+      <thead className="bg-gray-50">
+        <tr>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Date & Time
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Product
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <div className="flex items-center space-x-1">
+              <Warehouse className="w-4 h-4" />
+              <span>Location</span>
+            </div>
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Direction
+          </th>
+          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Quantity
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Transfer Reference
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Performed By
+          </th>
+        </tr>
+      </thead>
+      <tbody className="bg-white divide-y divide-gray-200">
+        {movements.map((movement) => {
+          const isIncoming = movement.movement_type === 'in';
+          return (
+            <tr key={movement.movement_id} className="hover:bg-gray-50">
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                <div>{new Date(movement.created_at).toLocaleDateString()}</div>
+                <div className="text-xs text-gray-500">
+                  {new Date(movement.created_at).toLocaleTimeString()}
+                </div>
+              </td>
+              <td className="px-6 py-4">
+                <div>
+                  <div className="text-sm font-medium text-gray-900">
+                    {movement.product_name}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    SKU: {movement.sku}
+                  </div>
+                </div>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <div className="flex items-center space-x-2">
+                  <Warehouse className="w-4 h-4 text-gray-600" />
+                  <span className="text-sm text-gray-900">{movement.warehouse_name}</span>
+                </div>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <div className="flex items-center space-x-2">
+                  {isIncoming ? (
+                    <>
+                      <TrendingDown className="w-4 h-4 text-green-600" />
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        Incoming
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <TrendingUp className="w-4 h-4 text-blue-600" />
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        Outgoing
+                      </span>
+                    </>
+                  )}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {isIncoming ? 'Received from transfer' : 'Sent via transfer'}
+                </div>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-center">
+                <span className={`text-sm font-bold ${
+                  isIncoming ? 'text-green-600' : 'text-blue-600'
+                }`}>
+                  {isIncoming ? '+' : '-'}
+                  {formatNumber(movement.quantity)}
+                </span>
+              </td>
+              <td className="px-6 py-4">
+                <button
+                  onClick={() => handleReferenceClick(movement)}
+                  className="group flex items-center space-x-1 text-blue-600 hover:text-blue-800 focus:outline-none focus:underline"
+                >
+                  <ArrowRight className="w-4 h-4" />
+                  <span className="font-medium">View Details</span>
+                  {movement.reference_number && (
+                    <span className="text-gray-600 group-hover:text-gray-800">
+                      ({movement.reference_number})
+                    </span>
+                  )}
+                  <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </button>
+                {movement.notes && (
+                  <div className="text-xs text-gray-500 mt-1">
+                    {movement.notes}
+                  </div>
+                )}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                {movement.performed_by}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+
+  const renderAdjustmentsTable = (movements: StockMovement[]) => (
+    <table className="min-w-full divide-y divide-gray-200">
+      <thead className="bg-gray-50">
+        <tr>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Date & Time
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Product
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <div className="flex items-center space-x-1">
+              <Warehouse className="w-4 h-4" />
+              <span>Warehouse</span>
+            </div>
+          </th>
+          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Before → After
+          </th>
+          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Change
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Adjustment Reference
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Performed By
+          </th>
+        </tr>
+      </thead>
+      <tbody className="bg-white divide-y divide-gray-200">
+        {movements.map((movement) => (
+          <tr key={movement.movement_id} className="hover:bg-gray-50">
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+              <div>{new Date(movement.created_at).toLocaleDateString()}</div>
+              <div className="text-xs text-gray-500">
+                {new Date(movement.created_at).toLocaleTimeString()}
+              </div>
+            </td>
+            <td className="px-6 py-4">
+              <div>
+                <div className="text-sm font-medium text-gray-900">
+                  {movement.product_name}
+                </div>
+                <div className="text-sm text-gray-500">
+                  SKU: {movement.sku}
+                </div>
+              </div>
+            </td>
+            <td className="px-6 py-4 whitespace-nowrap">
+              <div className="flex items-center space-x-2">
+                <Warehouse className="w-4 h-4 text-gray-600" />
+                <span className="text-sm text-gray-900">{movement.warehouse_name}</span>
+              </div>
+            </td>
+            <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
+              <span className="text-gray-600">{formatNumber(movement.quantity_before)}</span>
+              <span className="mx-2 text-gray-400">→</span>
+              <span className="font-medium text-gray-900">{formatNumber(movement.quantity_after)}</span>
+            </td>
+            <td className="px-6 py-4 whitespace-nowrap text-center">
+              <span className={`text-sm font-bold ${
+                movement.movement_type === 'in' 
+                  ? 'text-green-600' 
+                  : movement.movement_type === 'out'
+                  ? 'text-red-600'
+                  : 'text-amber-600'
+              }`}>
+                {movement.movement_type === 'in' ? '+' : movement.movement_type === 'out' ? '-' : '±'}
+                {formatNumber(movement.quantity)}
+              </span>
+            </td>
+            <td className="px-6 py-4">
+              <button
+                onClick={() => handleReferenceClick(movement)}
+                className="group flex items-center space-x-1 text-blue-600 hover:text-blue-800 focus:outline-none focus:underline"
+              >
+                <Activity className="w-4 h-4" />
+                <span className="font-medium">Adjustment</span>
+                {movement.reference_number && (
+                  <span className="text-gray-600 group-hover:text-gray-800">
+                    ({movement.reference_number})
+                  </span>
+                )}
+                <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </button>
+              {movement.notes && (
+                <div className="text-xs text-gray-500 mt-1">
+                  {movement.notes}
+                </div>
+              )}
+            </td>
+            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+              {movement.performed_by}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+
+  const renderAllMovementsTable = (movements: StockMovement[]) => (
+    <table className="min-w-full divide-y divide-gray-200">
+      <thead className="bg-gray-50">
+        <tr>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Date & Time
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Type
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Product
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Location
+          </th>
+          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Quantity
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Reference
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Performed By
+          </th>
+        </tr>
+      </thead>
+      <tbody className="bg-white divide-y divide-gray-200">
+        {movements.map((movement) => {
+          const isSale = movement.reference_type === 'sale';
+          const isTransfer = movement.reference_type === 'transfer';
+          const isAdjustment = movement.reference_type === 'adjustment';
+
+          return (
+            <tr key={movement.movement_id} className="hover:bg-gray-50">
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                <div>{new Date(movement.created_at).toLocaleDateString()}</div>
+                <div className="text-xs text-gray-500">
+                  {new Date(movement.created_at).toLocaleTimeString()}
+                </div>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <div className="flex items-center space-x-2">
+                  {getMovementIcon(movement.movement_type)}
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getMovementColor(movement.movement_type)}`}>
+                    {isSale ? 'SALE' : isTransfer ? 'TRANSFER' : isAdjustment ? 'ADJUSTMENT' : movement.movement_type.toUpperCase()}
+                  </span>
+                </div>
+              </td>
+              <td className="px-6 py-4">
+                <div>
+                  <div className="text-sm font-medium text-gray-900">
+                    {movement.product_name}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    SKU: {movement.sku}
+                  </div>
+                </div>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <div className="flex items-center space-x-2">
+                  {isSale ? (
+                    <>
+                      <Package className="w-4 h-4 text-blue-600" />
+                      <span className="text-sm text-gray-900">{movement.warehouse_name}</span>
+                    </>
+                  ) : isAdjustment ? (
+                    <>
+                      <Warehouse className="w-4 h-4 text-gray-600" />
+                      <span className="text-sm text-gray-900">{movement.warehouse_name}</span>
+                    </>
+                  ) : (
+                    <>
+                      <ArrowRight className="w-4 h-4 text-gray-400" />
+                      <span className="text-sm text-gray-700">{movement.warehouse_name}</span>
+                    </>
+                  )}
+                </div>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-center">
+                <span className={`text-sm font-bold ${
+                  movement.movement_type === 'in' 
+                    ? 'text-green-600' 
+                    : movement.movement_type === 'out'
+                    ? 'text-red-600'
+                    : 'text-amber-600'
+                }`}>
+                  {movement.movement_type === 'in' ? '+' : movement.movement_type === 'out' ? '-' : '±'}
+                  {formatNumber(movement.quantity)}
+                </span>
+              </td>
+              <td className="px-6 py-4">
+                <button
+                  onClick={() => handleReferenceClick(movement)}
+                  className="group flex items-center space-x-1 text-blue-600 hover:text-blue-800 focus:outline-none focus:underline"
+                >
+                  {isSale ? <ShoppingCart className="w-4 h-4" /> : 
+                   isTransfer ? <ArrowRight className="w-4 h-4" /> : 
+                   <Activity className="w-4 h-4" />}
+                  <span className="font-medium capitalize">
+                    {movement.reference_type.replace('_', ' ')}
+                  </span>
+                  {movement.reference_number && (
+                    <span className="text-gray-600 group-hover:text-gray-800">
+                      ({movement.reference_number})
+                    </span>
+                  )}
+                  <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </button>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                {movement.performed_by}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+
   if (loading && !data) return <LoadingState />;
   if (error) return <ErrorState error={error} onRetry={fetchData} />;
   
@@ -161,6 +583,29 @@ const StockMovementsPage: React.FC = () => {
 
   const summary = data.summary;
   const movements = data.movements;
+
+  // Filter movements by reference type for tabs
+  const getFilteredMovements = () => {
+    switch (activeTab) {
+      case 'sales':
+        return movements.filter(m => m.reference_type === 'sale');
+      case 'transfers':
+        return movements.filter(m => m.reference_type === 'transfer');
+      case 'adjustments':
+        return movements.filter(m => m.reference_type === 'adjustment');
+      default:
+        return movements;
+    }
+  };
+
+  const filteredMovements = getFilteredMovements();
+
+  // Count movements by type
+  const countsByType = {
+    sales: movements.filter(m => m.reference_type === 'sale').length,
+    transfers: movements.filter(m => m.reference_type === 'transfer').length,
+    adjustments: movements.filter(m => m.reference_type === 'adjustment').length
+  };
 
   // Build warehouse options from by_warehouse grouping
   const warehouseOptions = data.by_warehouse
@@ -245,6 +690,25 @@ const StockMovementsPage: React.FC = () => {
         onApply={fetchData}
       />
 
+      {/* Info Banner */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+        <div className="flex items-start gap-3">
+          <Package className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <h4 className="text-sm font-semibold text-blue-900 mb-1">
+              About Stock Movements
+            </h4>
+            <p className="text-sm text-blue-800">
+              This page tracks inventory <strong>movements after acquisition</strong> (sales, transfers, adjustments). 
+              Initial stock purchases are tracked separately in{' '}
+              <a href="/app/inventory/stocks" className="underline font-medium hover:text-blue-900">
+                Stock Items
+              </a>.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
         <SummaryCard
@@ -252,35 +716,36 @@ const StockMovementsPage: React.FC = () => {
           value={formatNumber(summary.total_movements)}
           icon="📊"
           color="bg-blue-50 border-blue-200"
-          subtitle="All transactions"
+          subtitle="Post-acquisition activity"
         />
         <SummaryCard
-          title="Stock In"
+          title="Inbound Movements"
           value={formatNumber(summary.total_in)}
           icon="📥"
           color="bg-green-50 border-green-200"
-          subtitle="Inbound movements"
+          subtitle="Transfers in & adjustments up"
+          tooltip="Note: Initial stock purchases tracked separately in Stock Items"
         />
         <SummaryCard
-          title="Stock Out"
+          title="Outbound Movements"
           value={formatNumber(summary.total_out)}
           icon="📤"
           color="bg-red-50 border-red-200"
-          subtitle="Outbound movements"
+          subtitle="Sales, transfers out & shrinkage"
         />
         <SummaryCard
           title="Adjustments"
           value={formatNumber(summary.total_adjustments)}
           icon="⚖️"
           color="bg-amber-50 border-amber-200"
-          subtitle="Manual adjustments"
+          subtitle="Manual corrections"
         />
         <SummaryCard
-          title="Transfers"
+          title="Internal Transfers"
           value={formatNumber(summary.total_transfers)}
           icon="🔄"
           color="bg-purple-50 border-purple-200"
-          subtitle="Inter-warehouse"
+          subtitle="Warehouse relocations"
         />
       </div>
 
@@ -496,132 +961,115 @@ const StockMovementsPage: React.FC = () => {
         )}
       </div>
 
-      {/* Movements Table */}
+      {/* Movements Table with Tabs */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
           <h3 className="text-lg font-semibold text-gray-900">
-            Movements ({movements.length} of {formatNumber(totalCount)})
+            Movements ({filteredMovements.length} of {formatNumber(totalCount)})
           </h3>
-          <div className="text-sm text-gray-600">
-            Page {pagination.page} of {pagination.total_pages}
-          </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Date & Time
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Type
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Product
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Warehouse
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Quantity Change
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Before → After
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Reference
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Performed By
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {movements.map((movement: StockMovement) => (
-                <tr key={movement.movement_id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    <div>{new Date(movement.created_at).toLocaleDateString()}</div>
-                    <div className="text-xs text-gray-500">
-                      {new Date(movement.created_at).toLocaleTimeString()}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-2">
-                      {getMovementIcon(movement.movement_type)}
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getMovementColor(movement.movement_type)}`}>
-                        {movement.movement_type.toUpperCase()}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">
-                        {movement.product_name}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        SKU: {movement.sku}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {movement.warehouse_name}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <span className={`text-sm font-bold ${
-                      movement.movement_type === 'in' 
-                        ? 'text-green-600' 
-                        : movement.movement_type === 'out'
-                        ? 'text-red-600'
-                        : 'text-amber-600'
-                    }`}>
-                      {movement.movement_type === 'in' ? '+' : movement.movement_type === 'out' ? '-' : '±'}
-                      {formatNumber(movement.quantity)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
-                    <span className="text-gray-600">{formatNumber(movement.quantity_before)}</span>
-                    <span className="mx-2 text-gray-400">→</span>
-                    <span className="font-medium text-gray-900">{formatNumber(movement.quantity_after)}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm">
-                      <button
-                        onClick={() => handleReferenceClick(movement)}
-                        className="group flex items-center space-x-1 text-blue-600 hover:text-blue-800 focus:outline-none focus:underline"
-                      >
-                        <span className="font-medium capitalize">
-                          {movement.reference_type.replace('_', ' ')}
-                        </span>
-                        {movement.reference_number && (
-                          <span className="text-gray-600 group-hover:text-gray-800">
-                            ({movement.reference_number})
-                          </span>
-                        )}
-                        <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </button>
-                      {movement.notes && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          {movement.notes}
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {movement.performed_by}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Tabs
+          activeKey={activeTab}
+          onSelect={(k) => setActiveTab(k || 'all')}
+          className="stock-movements-tabs"
+        >
+          {/* All Movements Tab */}
+          <Tab 
+            eventKey="all" 
+            title={
+              <span className="flex items-center space-x-2">
+                <Activity className="w-4 h-4" />
+                <span>All Movements</span>
+                <span className="ml-1 px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">
+                  {movements.length}
+                </span>
+              </span>
+            }
+          >
+            <div className="overflow-x-auto">
+              {renderAllMovementsTable(filteredMovements)}
+              {filteredMovements.length === 0 && (
+                <div className="text-center py-12">
+                  <Activity className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">No movements found</p>
+                </div>
+              )}
+            </div>
+          </Tab>
 
-        {movements.length === 0 && (
-          <div className="text-center py-12">
-            <Activity className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500">No stock movements found</p>
-          </div>
-        )}
+          {/* Sales Tab */}
+          <Tab 
+            eventKey="sales" 
+            title={
+              <span className="flex items-center space-x-2">
+                <ShoppingCart className="w-4 h-4" />
+                <span>Sales</span>
+                <span className="ml-1 px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700">
+                  {countsByType.sales}
+                </span>
+              </span>
+            }
+          >
+            <div className="overflow-x-auto">
+              {renderSalesTable(filteredMovements)}
+              {filteredMovements.length === 0 && (
+                <div className="text-center py-12">
+                  <ShoppingCart className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">No sales found</p>
+                </div>
+              )}
+            </div>
+          </Tab>
+
+          {/* Transfers Tab */}
+          <Tab 
+            eventKey="transfers" 
+            title={
+              <span className="flex items-center space-x-2">
+                <ArrowRight className="w-4 h-4" />
+                <span>Transfers</span>
+                <span className="ml-1 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">
+                  {countsByType.transfers}
+                </span>
+              </span>
+            }
+          >
+            <div className="overflow-x-auto">
+              {renderTransfersTable(filteredMovements)}
+              {filteredMovements.length === 0 && (
+                <div className="text-center py-12">
+                  <ArrowRight className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">No transfers found</p>
+                </div>
+              )}
+            </div>
+          </Tab>
+
+          {/* Adjustments Tab */}
+          <Tab 
+            eventKey="adjustments" 
+            title={
+              <span className="flex items-center space-x-2">
+                <Activity className="w-4 h-4" />
+                <span>Adjustments</span>
+                <span className="ml-1 px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700">
+                  {countsByType.adjustments}
+                </span>
+              </span>
+            }
+          >
+            <div className="overflow-x-auto">
+              {renderAdjustmentsTable(filteredMovements)}
+              {filteredMovements.length === 0 && (
+                <div className="text-center py-12">
+                  <Activity className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">No adjustments found</p>
+                </div>
+              )}
+            </div>
+          </Tab>
+        </Tabs>
       </div>
 
       {/* Pagination */}

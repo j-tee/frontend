@@ -413,3 +413,52 @@ tbody tr:hover {
 [data-bs-theme="dark"] h6 {
   color: rgba(241, 245, 249, 0.98);
 }
+
+/* Stock Movements Tabs Styling */
+.stock-movements-tabs .nav-tabs {
+  border-bottom: 2px solid #e5e7eb;
+  padding: 0 1.5rem;
+  background-color: #f9fafb;
+}
+
+.stock-movements-tabs .nav-link {
+  border: none;
+  color: #6b7280;
+  font-weight: 500;
+  padding: 1rem 1.5rem;
+  transition: all 0.2s;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+}
+
+.stock-movements-tabs .nav-link:hover {
+  color: #2563eb;
+  background-color: transparent;
+  border-bottom-color: #93c5fd;
+}
+
+.stock-movements-tabs .nav-link.active {
+  color: #2563eb;
+  background-color: #ffffff;
+  border-bottom-color: #2563eb;
+  font-weight: 600;
+}
+
+.stock-movements-tabs .tab-content {
+  padding: 0;
+}
+
+.stock-movements-tabs .tab-pane {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

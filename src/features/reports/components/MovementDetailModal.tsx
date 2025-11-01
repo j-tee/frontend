@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { X, Package, ArrowRight, Calendar, User, FileText, Hash, Warehouse } from 'lucide-react';
 import type { StockMovement } from '../../../types/reports';
 import httpClient from '../../../services/httpClient';
+import { useCurrency } from '../../../hooks/useCurrency';
 
 interface MovementDetailModalProps {
   movement: StockMovement;
@@ -96,6 +97,7 @@ export const MovementDetailModal: React.FC<MovementDetailModalProps> = ({
   isOpen,
   onClose,
 }) => {
+  const { formatCurrency } = useCurrency();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saleDetail, setSaleDetail] = useState<SaleDetail | null>(null);
@@ -133,13 +135,6 @@ export const MovementDetailModal: React.FC<MovementDetailModalProps> = ({
       fetchDetails();
     }
   }, [isOpen, movement.reference_id, fetchDetails]);
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount);
-  };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('en-US', {
@@ -256,22 +251,27 @@ export const MovementDetailModal: React.FC<MovementDetailModalProps> = ({
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {(saleDetail.items_detail || saleDetail.items || []).map((item, idx) => (
-                          <tr key={idx}>
-                            <td className="px-4 py-3 text-sm text-gray-900">{item.product_name}</td>
-                            <td className="px-4 py-3 text-sm text-gray-900 text-right">{item.quantity}</td>
-                            <td className="px-4 py-3 text-sm text-gray-900 text-right">{formatCurrency(item.unit_price)}</td>
-                            <td className="px-4 py-3 text-sm font-medium text-gray-900 text-right">{formatCurrency(item.total)}</td>
-                            {'tax' in item && item.tax !== undefined && (
-                              <td className="px-4 py-3 text-sm text-gray-600 text-right">{formatCurrency(item.tax)}</td>
-                            )}
-                            {'profit' in item && item.profit !== undefined && (
-                              <td className={`px-4 py-3 text-sm font-medium text-right ${item.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {formatCurrency(item.profit)}
-                              </td>
-                            )}
-                          </tr>
-                        ))}
+                        {(saleDetail.items_detail || saleDetail.items || []).map((item, idx) => {
+                          // Fallback: calculate total if backend doesn't provide it
+                          const itemTotal = item.total || (item.quantity * item.unit_price);
+                          
+                          return (
+                            <tr key={idx}>
+                              <td className="px-4 py-3 text-sm text-gray-900">{item.product_name}</td>
+                              <td className="px-4 py-3 text-sm text-gray-900 text-right">{item.quantity}</td>
+                              <td className="px-4 py-3 text-sm text-gray-900 text-right">{formatCurrency(item.unit_price)}</td>
+                              <td className="px-4 py-3 text-sm font-medium text-gray-900 text-right">{formatCurrency(itemTotal)}</td>
+                              {'tax' in item && item.tax !== undefined && (
+                                <td className="px-4 py-3 text-sm text-gray-600 text-right">{formatCurrency(item.tax)}</td>
+                              )}
+                              {'profit' in item && item.profit !== undefined && (
+                                <td className={`px-4 py-3 text-sm font-medium text-right ${item.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {formatCurrency(item.profit)}
+                                </td>
+                              )}
+                            </tr>
+                          );
+                        })}
                       </tbody>
                       <tfoot className="bg-gray-50">
                         <tr>
