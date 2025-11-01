@@ -4,13 +4,13 @@ import { inventoryReportsService } from '../../../services/reportsService';
 import type { ProductSearchResult } from '../../../types/reports';
 
 interface ProductSearchAutocompleteProps {
-  onSelectProducts: (productIds: string[]) => void;
-  selectedProductIds: string[];
+  onSelectProducts: (products: Array<{ id: string; name: string; sku: string }>) => void;
+  selectedProducts: Array<{ id: string; name: string; sku: string }>;
 }
 
 export const ProductSearchAutocomplete: React.FC<ProductSearchAutocompleteProps> = ({
   onSelectProducts,
-  selectedProductIds
+  selectedProducts
 }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ProductSearchResult[]>([]);
@@ -61,8 +61,8 @@ export const ProductSearchAutocomplete: React.FC<ProductSearchAutocompleteProps>
   }, [query, searchProducts]);
 
   const handleSelectProduct = (product: ProductSearchResult) => {
-    if (!selectedProductIds.includes(product.id)) {
-      onSelectProducts([...selectedProductIds, product.id]);
+    if (!selectedProducts.some(p => p.id === product.id)) {
+      onSelectProducts([...selectedProducts, { id: product.id, name: product.name, sku: product.sku }]);
     }
     setQuery('');
     setShowDropdown(false);
@@ -97,7 +97,7 @@ export const ProductSearchAutocomplete: React.FC<ProductSearchAutocompleteProps>
               key={product.id}
               onClick={() => handleSelectProduct(product)}
               className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-0"
-              disabled={selectedProductIds.includes(product.id)}
+              disabled={selectedProducts.some(p => p.id === product.id)}
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -114,7 +114,7 @@ export const ProductSearchAutocomplete: React.FC<ProductSearchAutocompleteProps>
                   Stock: {product.current_stock}
                 </div>
               </div>
-              {selectedProductIds.includes(product.id) && (
+              {selectedProducts.some(p => p.id === product.id) && (
                 <div className="mt-2 text-xs text-blue-600">✓ Already selected</div>
               )}
             </button>

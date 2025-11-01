@@ -39,7 +39,8 @@ const StockMovementsPage: React.FC = () => {
 
   // Filters
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedProducts, setSelectedProducts] = useState<string[]>([]); // Phase 1: Multi-product filtering
+  const [selectedProducts, setSelectedProducts] = useState<Array<{ id: string; name: string; sku: string }>>( []); // Phase 1: Multi-product filtering with names
+  const [quickFilterProductIds, setQuickFilterProductIds] = useState<string[]>([]); // Phase 2: IDs from quick filters
   const [activeQuickFilter, setActiveQuickFilter] = useState<string>(''); // Phase 2: Track active quick filter
   const [warehouseId, setWarehouseId] = useState<string>('');
   const [categoryId, setCategoryId] = useState<string>('');
@@ -70,8 +71,12 @@ const StockMovementsPage: React.FC = () => {
         sort_by: sortBy,
         sort_order: sortOrder
       };
-      if (searchQuery.trim()) params.search = searchQuery.trim();
-      if (selectedProducts.length > 0) params.product_ids = selectedProducts.join(','); // Phase 1: Multi-product filter
+      if (searchQuery) params.search = searchQuery;
+      if (selectedProducts.length > 0) {
+        params.product_ids = selectedProducts.map(p => p.id).join(','); // Phase 1: Multi-product filter from search
+      } else if (quickFilterProductIds.length > 0) {
+        params.product_ids = quickFilterProductIds.join(','); // Phase 2: Product IDs from quick filters
+      }
       if (warehouseId) params.warehouse_id = warehouseId;
       if (categoryId) params.category_id = categoryId;
       if (movementType) params.movement_type = movementType;
@@ -89,7 +94,7 @@ const StockMovementsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate, searchQuery, selectedProducts, warehouseId, categoryId, movementType, referenceType, page, pageSize, sortBy, sortOrder]);
+  }, [startDate, endDate, searchQuery, selectedProducts, quickFilterProductIds, warehouseId, categoryId, movementType, referenceType, page, pageSize, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchData();
@@ -114,6 +119,7 @@ const StockMovementsPage: React.FC = () => {
   const clearFilters = () => {
     setSearchQuery('');
     setSelectedProducts([]); // Phase 1: Clear product selection
+    setQuickFilterProductIds([]); // Phase 2: Clear quick filter products
     setActiveQuickFilter(''); // Phase 2: Clear quick filter
     setWarehouseId('');
     setCategoryId('');
@@ -123,7 +129,7 @@ const StockMovementsPage: React.FC = () => {
   };
 
   const hasActiveFilters = Boolean(
-    searchQuery || selectedProducts.length > 0 || activeQuickFilter || warehouseId || categoryId || movementType || referenceType
+    searchQuery || selectedProducts.length > 0 || quickFilterProductIds.length > 0 || activeQuickFilter || warehouseId || categoryId || movementType || referenceType
   );
 
   // Handle click-through navigation to source records
@@ -727,8 +733,10 @@ const StockMovementsPage: React.FC = () => {
         startDate={startDate}
         endDate={endDate}
         onFilterApplied={(productIds, filterType) => {
-          setSelectedProducts(productIds);
+          // Store product IDs from quick filter
+          setQuickFilterProductIds(productIds);
           setActiveQuickFilter(filterType);
+          setSelectedProducts([]); // Clear manually selected products
           setPage(1);
         }}
       />
@@ -871,9 +879,9 @@ const StockMovementsPage: React.FC = () => {
 
             {/* Phase 2: Product Search Autocomplete */}
             <ProductSearchAutocomplete
-              selectedProductIds={selectedProducts}
-              onSelectProducts={(productIds) => {
-                setSelectedProducts(productIds);
+              selectedProducts={selectedProducts}
+              onSelectProducts={(products) => {
+                setSelectedProducts(products);
                 setPage(1);
               }}
             />
@@ -888,7 +896,6 @@ const StockMovementsPage: React.FC = () => {
                   <button
                     onClick={() => {
                       setSelectedProducts([]);
-                      setActiveQuickFilter('');
                       setPage(1);
                     }}
                     className="text-xs text-red-600 hover:text-red-800 font-medium"
@@ -897,24 +904,45 @@ const StockMovementsPage: React.FC = () => {
                   </button>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {selectedProducts.map((productId, index) => (
+                  {selectedProducts.map((product) => (
                     <span 
-                      key={productId}
+                      key={product.id}
                       className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
                     >
-                      Product {index + 1}
+                      {product.name}
                       <X 
                         className="w-3 h-3 ml-1 cursor-pointer hover:text-blue-900" 
-                        onClick={() => setSelectedProducts(prev => prev.filter(id => id !== productId))}
+                        onClick={() => setSelectedProducts(prev => prev.filter(p => p.id !== product.id))}
                       />
                     </span>
                   ))}
                 </div>
-                {activeQuickFilter && (
-                  <div className="mt-2 text-xs text-blue-700">
-                    Active Quick Filter: <strong>{activeQuickFilter.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>
+              </div>
+            )}
+
+            {/* Active Quick Filter Display */}
+            {activeQuickFilter && quickFilterProductIds.length > 0 && (
+              <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-green-900">
+                      Active Quick Filter: <strong>{activeQuickFilter.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>
+                    </span>
+                    <span className="text-xs text-green-700">
+                      ({quickFilterProductIds.length} products)
+                    </span>
                   </div>
-                )}
+                  <button
+                    onClick={() => {
+                      setQuickFilterProductIds([]);
+                      setActiveQuickFilter('');
+                      setPage(1);
+                    }}
+                    className="text-xs text-red-600 hover:text-red-800 font-medium"
+                  >
+                    Clear Filter
+                  </button>
+                </div>
               </div>
             )}
 
