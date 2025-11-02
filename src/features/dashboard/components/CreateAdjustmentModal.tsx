@@ -86,7 +86,6 @@ export default function CreateAdjustmentModal({
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to search products'
         setSearchError(errorMessage)
-        console.error('Failed to search products:', err)
       } finally {
         setIsSearching(false)
       }
@@ -154,7 +153,6 @@ export default function CreateAdjustmentModal({
       handleClose()
     } catch (err) {
       // Error is handled by parent component
-      console.error('Failed to create adjustment:', err)
     }
   }
 

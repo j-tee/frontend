@@ -55,50 +55,7 @@ export async function getSale(saleId: UUID): Promise<Sale> {
  * GET /sales/api/sales/
  */
 export async function listSales(params?: Record<string, unknown>): Promise<PaginatedResponse<Sale>> {
-  console.log('📡 ===================== API REQUEST ====================')
-  console.log('📡 salesService.listSales called with params:', params)
-  console.log('📡 typeof params:', typeof params)
-  console.log('📡 params keys:', params ? Object.keys(params) : 'undefined')
-  console.log('📡 params.status:', params?.status)
-  console.log('📡 params.page:', params?.page)
-  console.log('📡 params.page_size:', params?.page_size)
-  
-  // Build query string for logging
-  const queryString = params ? new URLSearchParams(params as Record<string, string>).toString() : ''
-  console.log('📡 🌐 FULL URL: http://localhost:8000/sales/api/sales/?' + queryString)
-  console.log('📡 ======================================================')
-  
   const response = await httpClient.get<PaginatedResponse<Sale>>('/sales/api/sales/', { params })
-  
-  console.log('📡 ==================== API RESPONSE ====================')
-  console.log('📡 Response HTTP status:', response.status)
-  console.log('📡 Response data count:', response.data.count)
-  console.log('📡 Response results length:', response.data.results?.length)
-  console.log('📡 First 5 result statuses:', response.data.results?.slice(0, 5).map(s => s.status))
-  console.log('📡 Unique statuses in response:', [...new Set(response.data.results?.map(s => s.status))])
-  console.log('📡 Actual request URL:', response.config?.url)
-  console.log('📡 Actual request params:', response.config?.params)
-  console.log('📡 ======================================================')
-  
-  // CRITICAL CHECK: If status filter was sent but response has mixed statuses, backend is broken
-  if (params?.status && response.data.results) {
-    const requestedStatus = params.status as string
-    const uniqueStatuses = [...new Set(response.data.results.map(s => s.status))]
-    const statusesArray = uniqueStatuses as string[]
-    if (uniqueStatuses.length > 1 || !statusesArray.includes(requestedStatus)) {
-      console.error('🚨 ==================== FILTER FAILURE ====================')
-      console.error('🚨 Backend filter is NOT working!')
-      console.error('🚨 Requested status:', requestedStatus)
-      console.error('🚨 Received statuses:', uniqueStatuses)
-      console.error('🚨 This is a BACKEND ISSUE - filter is being ignored!')
-      console.error('🚨 Frontend is sending the filter correctly.')
-      console.error('🚨 Share docs/BACKEND-FILTER-NOT-WORKING.md with backend team')
-      console.error('🚨 ======================================================')
-    } else {
-      console.log('✅ Filter working correctly - all results match requested status:', requestedStatus)
-    }
-  }
-  
   return response.data
 }
 

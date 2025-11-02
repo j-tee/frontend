@@ -67,13 +67,11 @@ export function CreateCustomerModal({ show, saleType, onHide, onCustomerCreated 
         notes: notes.trim() || undefined,
       }
 
-      console.log('🧑‍💼 Creating customer with payload:', payload)
 
       const customer = await createCustomer(payload)
       onCustomerCreated(customer)
       onHide()
     } catch (err) {
-      console.error('Failed to create customer', err)
       setError('Could not create customer. Please try again.')
     } finally {
       setSubmitting(false)

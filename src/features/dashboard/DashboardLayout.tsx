@@ -10,7 +10,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import PageTransition from '../../components/PageTransition.tsx'
 import { useAppDispatch, useAppSelector, usePermissions } from '../../hooks/index.js'
 import { fetchCurrentUser, loadUserStorefronts, logout, selectAuthState } from '../../store/slices/authSlice.js'
-import { selectActiveSubscription } from '../../store/slices/subscriptionSlice.js'
+import { loadActiveSubscription, selectActiveSubscription } from '../../store/slices/subscriptionSlice.js'
 import {
   addStorefront,
   addWarehouse,
@@ -262,12 +262,12 @@ const DashboardLayout = () => {
     }
   }, [dispatch, user])
 
+  // Load active subscription
   useEffect(() => {
-    if (import.meta.env.DEV) {
-      console.debug('[locations] createStorefrontStatus', createStorefrontStatus, createStorefrontError)
-      console.debug('[locations] createWarehouseStatus', createWarehouseStatus, createWarehouseError)
+    if (user) {
+      void dispatch(loadActiveSubscription())
     }
-  }, [createStorefrontStatus, createStorefrontError, createWarehouseStatus, createWarehouseError])
+  }, [dispatch, user])
 
   useEffect(() => {
     if (locationStatus === 'idle' && user) {
@@ -455,13 +455,20 @@ const DashboardLayout = () => {
 
   // Use business subscription status (business-centric architecture)
   const subscriptionStatusLabel = business?.subscription_status ?? activeSubscription?.status ?? 'Inactive'
+  
   const subscriptionVariant = (() => {
     const normalized = subscriptionStatusLabel.toLowerCase()
     if (normalized === 'active') return 'success'
     if (normalized === 'trial') return 'info'
-    if (normalized === 'suspended') return 'warning'
+    if (normalized === 'suspended' || normalized === 'past_due') return 'warning'
+    if (normalized === 'inactive') return 'secondary'
     return 'danger'
   })()
+  
+  // Make the message more actionable for inactive status
+  const subscriptionDisplayLabel = subscriptionStatusLabel === 'Inactive' 
+    ? 'No Active Plan' 
+    : subscriptionStatusLabel
 
   const handleSelectLocation = (
     type: 'storefront' | 'warehouse',
@@ -917,7 +924,7 @@ const DashboardLayout = () => {
                 <Badge 
                   bg={subscriptionVariant} 
                   className="rounded-pill px-3 py-2 text-sm"
-                  title={`Business Subscription: ${subscriptionStatusLabel}${activeSubscription?.plan?.name ? ` (${activeSubscription.plan.name})` : ''} - Click to manage`}
+                  title={`Business Subscription: ${subscriptionStatusLabel}${activeSubscription?.plan?.name ? ` (${activeSubscription.plan.name})` : ''} - Click to ${subscriptionStatusLabel === 'Inactive' ? 'choose a plan' : 'manage'}`}
                   style={{ cursor: 'pointer' }}
                   onClick={() => navigate('/app/subscription')}
                   role="button"
@@ -929,7 +936,7 @@ const DashboardLayout = () => {
                     }
                   }}
                 >
-                  {subscriptionStatusLabel}
+                  {subscriptionDisplayLabel}
                 </Badge>
                 
                 {/* Platform Admin Access */}

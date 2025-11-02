@@ -93,10 +93,6 @@ const StockRequestForm = ({
   }
 
   const canSubmit = storefront && lineItems.length > 0 && !isSubmitting
-  console.log('canSubmit=====>', canSubmit)
-  console.log("storefront", storefront)
-  console.log("line Items",lineItems.length)
-  console.log('siSubmitting', isSubmitting)
 
   return (
     <Form onSubmit={handleSubmit}>

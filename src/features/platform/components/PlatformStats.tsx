@@ -26,7 +26,6 @@ export default function PlatformStats() {
       setStats(statsData)
       setRevenue(revenueData)
     } catch (err) {
-      console.error('Failed to load platform stats:', err)
       setError('Failed to load platform statistics')
     } finally {
       setLoading(false)
@@ -164,12 +163,12 @@ export default function PlatformStats() {
                                 <div
                                   className="progress-bar bg-primary"
                                   role="progressbar"
-                                  style={{ width: `${item.percentage}%` }}
-                                  aria-valuenow={item.percentage}
+                                  style={{ width: `${item.percentage || 0}%` }}
+                                  aria-valuenow={item.percentage || 0}
                                   aria-valuemin={0}
                                   aria-valuemax={100}
                                 >
-                                  {item.percentage.toFixed(1)}%
+                                  {(item.percentage || 0).toFixed(1)}%
                                 </div>
                               </div>
                             </div>

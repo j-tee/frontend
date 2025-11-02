@@ -4,6 +4,7 @@ import { useAppSelector } from '../../../hooks'
 import { selectCurrentBusiness } from '../../../store/slices/authSlice'
 import httpClient from '../../../services/httpClient'
 import type { Plan, Subscription } from '../../../types/subscriptions'
+import { PricingBreakdown } from '../components/PricingBreakdown'
 
 export default function SubscriptionPortal() {
   const currentBusiness = useAppSelector(selectCurrentBusiness)
@@ -14,6 +15,7 @@ export default function SubscriptionPortal() {
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
   const [paymentGateway, setPaymentGateway] = useState<'PAYSTACK' | 'STRIPE'>('PAYSTACK')
   const [processing, setProcessing] = useState(false)
+  const [selectedStorefronts, setSelectedStorefronts] = useState(1)
 
   useEffect(() => {
     loadData()
@@ -25,7 +27,6 @@ export default function SubscriptionPortal() {
       
       // Load plans
       const plansRes = await httpClient.get('/subscriptions/api/plans/')
-      console.log('Plans response:', plansRes.data)
       
       // Handle different response formats
       const plansData = Array.isArray(plansRes.data) 
@@ -38,15 +39,14 @@ export default function SubscriptionPortal() {
       // IMPORTANT: /me/ endpoint returns an array!
       try {
         const subRes = await httpClient.get<Subscription[]>('/subscriptions/api/subscriptions/me/')
-        console.log('Subscription response:', subRes.data)
         // Get the first subscription if any exist
         setSubscription(subRes.data.length > 0 ? subRes.data[0] : null)
       } catch {
         // No subscription yet - that's ok
         setSubscription(null)
       }
-    } catch (error) {
-      console.error('Failed to load data:', error)
+    } catch {
+      // Failed to load data
     } finally {
       setLoading(false)
     }
@@ -54,6 +54,8 @@ export default function SubscriptionPortal() {
 
   const handleSelectPlan = (plan: Plan) => {
     setSelectedPlan(plan)
+    // Set initial storefronts to the plan's minimum or 1
+    setSelectedStorefronts(plan.max_storefronts || 1)
     setShowPaymentModal(true)
   }
 
@@ -81,8 +83,7 @@ export default function SubscriptionPortal() {
       // we'll show instructions to contact support
       alert('To subscribe to this plan, please contact support at alphalogiquetechnologies@gmail.com with your business details.')
       
-    } catch (error) {
-      console.error('Payment initialization failed:', error)
+    } catch {
       alert('Failed to initialize payment. Please try again.')
     } finally {
       setProcessing(false)
@@ -210,18 +211,54 @@ export default function SubscriptionPortal() {
       </Row>
 
       {/* Payment Modal */}
-      <Modal show={showPaymentModal} onHide={() => setShowPaymentModal(false)}>
+      <Modal show={showPaymentModal} onHide={() => setShowPaymentModal(false)} size="lg">
         <Modal.Header closeButton>
           <Modal.Title>Subscribe to {selectedPlan?.name}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <p>
-            <strong>Plan:</strong> {selectedPlan?.name}<br/>
-            <strong>Price:</strong> {selectedPlan?.currency} {selectedPlan?.price} / {selectedPlan?.billing_cycle}
-          </p>
-          
+          {/* Plan Details */}
+          <div className="mb-4">
+            <h6 className="text-muted mb-3">Plan Details</h6>
+            <p className="mb-2">
+              <strong>Plan:</strong> {selectedPlan?.name}
+            </p>
+            <p className="text-muted mb-0">{selectedPlan?.description}</p>
+          </div>
+
+          {/* Storefront Selection */}
+          <Form.Group className="mb-4">
+            <Form.Label>
+              <strong>Number of Storefronts</strong>
+            </Form.Label>
+            <Form.Control
+              type="number"
+              min="1"
+              max={selectedPlan?.max_storefronts || 100}
+              value={selectedStorefronts}
+              onChange={(e) => setSelectedStorefronts(Math.max(1, parseInt(e.target.value) || 1))}
+            />
+            <Form.Text className="text-muted">
+              {selectedPlan?.max_storefronts 
+                ? `Choose between 1 and ${selectedPlan.max_storefronts} storefronts`
+                : 'Choose number of storefronts for your subscription'
+              }
+            </Form.Text>
+          </Form.Group>
+
+          {/* Pricing Breakdown - Shows complete cost with taxes */}
+          <div className="mb-4">
+            <PricingBreakdown
+              storefronts={selectedStorefronts}
+              gateway={paymentGateway}
+              showTierBreakdown={true}
+            />
+          </div>
+
+          {/* Payment Method Selection */}
           <Form.Group className="mb-3">
-            <Form.Label>Payment Method</Form.Label>
+            <Form.Label>
+              <strong>Payment Method</strong>
+            </Form.Label>
             <Form.Select 
               value={paymentGateway} 
               onChange={(e) => setPaymentGateway(e.target.value as 'PAYSTACK' | 'STRIPE')}
@@ -231,7 +268,7 @@ export default function SubscriptionPortal() {
             </Form.Select>
           </Form.Group>
 
-          <Alert variant="info">
+          <Alert variant="info" className="mb-0">
             <strong>Note:</strong> Backend API endpoint for creating subscriptions is being implemented. 
             For now, please contact support to activate your subscription.
           </Alert>
@@ -241,7 +278,7 @@ export default function SubscriptionPortal() {
             Cancel
           </Button>
           <Button variant="primary" onClick={handleSubscribe} disabled={processing}>
-            {processing ? 'Processing...' : 'Contact Support'}
+            {processing ? 'Processing...' : 'Proceed to Payment'}
           </Button>
         </Modal.Footer>
       </Modal>

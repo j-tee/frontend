@@ -68,7 +68,6 @@ const StockLevelsPage: React.FC = () => {
       }
       
       setError(errorMessage);
-      console.error('Stock levels fetch error:', err);
     } finally {
       setLoading(false);
     }

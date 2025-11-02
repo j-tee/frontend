@@ -108,7 +108,6 @@ export const QuickFiltersBar: React.FC<QuickFiltersBarProps> = ({
 
                   return { id, name: `Product ${id.slice(0, 8)}`, sku: 'N/A' };
                 } catch (err) {
-                  console.error(`Failed to fetch details for product ${id}:`, err);
                   return { id, name: `Product ${id.slice(0, 8)}`, sku: 'N/A' };
                 }
               })
@@ -136,7 +135,6 @@ export const QuickFiltersBar: React.FC<QuickFiltersBarProps> = ({
 
                 return { id, name: `Product ${id.slice(0, 8)}`, sku: 'N/A' };
               } catch (err) {
-                console.error(`Failed to fetch details for product ${id}:`, err);
                 return { id, name: `Product ${id.slice(0, 8)}`, sku: 'N/A' };
               }
             })
@@ -149,7 +147,6 @@ export const QuickFiltersBar: React.FC<QuickFiltersBarProps> = ({
         toast.info(`No products found for "${filterType.replace(/_/g, ' ')}" filter in the selected range.`);
       }
     } catch (error) {
-      console.error('Quick filter error:', error);
       toast.error('Failed to apply quick filter. Please try again.');
     } finally {
       setLoading(false);

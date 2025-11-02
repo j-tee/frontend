@@ -122,7 +122,6 @@ export const MovementDetailModal: React.FC<MovementDetailModalProps> = ({
         setAdjustmentDetail(response.data);
       }
     } catch (err) {
-      console.error('Error fetching movement details:', err);
       const error = err as { response?: { data?: { message?: string } } };
       setError(error.response?.data?.message || 'Failed to load details');
     } finally {

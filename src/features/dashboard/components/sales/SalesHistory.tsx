@@ -344,7 +344,6 @@ export function SalesHistory() {
 
       await abandonDrafts(allDraftIds)
     } catch (err) {
-      console.error('Failed to abandon all draft sales', err)
       setAbandonFeedback({
         variant: 'danger',
         message: 'Failed to load draft sales. Please try again.',
@@ -521,7 +520,6 @@ export function SalesHistory() {
           setSalesSummary(transformSummaryResponse(response))
         }
       } catch (err) {
-        console.error('Failed to load sales summary', err)
         if (isActive) {
           setSummaryError('Unable to load sales summary. Showing latest known values.')
         }

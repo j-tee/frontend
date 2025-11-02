@@ -8,6 +8,7 @@ import PlanManagement from '../components/PlanManagement'
 import SubscriptionManagement from '../components/SubscriptionManagement'
 import RoleManagement from '../components/RoleManagement'
 import UserRoleAssignment from '../components/UserRoleAssignment'
+import { TaxConfigPage } from '../../subscriptions/pages/TaxConfigPage'
 
 export default function PlatformDashboard() {
   const user = useAppSelector(selectCurrentUser)
@@ -54,6 +55,9 @@ export default function PlatformDashboard() {
                   <Nav.Item>
                     <Nav.Link eventKey="subscriptions">Subscriptions</Nav.Link>
                   </Nav.Item>
+                  <Nav.Item>
+                    <Nav.Link eventKey="taxes">Tax Management</Nav.Link>
+                  </Nav.Item>
                   {isSuperAdmin(user) && (
                     <>
                       <Nav.Item>
@@ -81,6 +85,10 @@ export default function PlatformDashboard() {
 
           <Tab.Pane eventKey="subscriptions">
             <SubscriptionManagement />
+          </Tab.Pane>
+
+          <Tab.Pane eventKey="taxes">
+            <TaxConfigPage />
           </Tab.Pane>
 
           {isSuperAdmin(user) && (

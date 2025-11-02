@@ -48,7 +48,6 @@ const SalesSummaryPage: React.FC = () => {
                           error.message || 
                           'Failed to load sales summary report';
       setError(errorMessage);
-      console.error('Error fetching sales summary:', err);
     } finally {
       setLoading(false);
     }
@@ -64,7 +63,6 @@ const SalesSummaryPage: React.FC = () => {
         period_type: 'daily',
       });
     } catch (err) {
-      console.error('Error exporting CSV:', err);
       alert('Failed to export CSV. Please try again.');
     } finally {
       setExporting(false);
@@ -81,7 +79,6 @@ const SalesSummaryPage: React.FC = () => {
         period_type: 'daily',
       });
     } catch (err) {
-      console.error('Error exporting PDF:', err);
       alert('Failed to export PDF. Please try again.');
     } finally {
       setExporting(false);

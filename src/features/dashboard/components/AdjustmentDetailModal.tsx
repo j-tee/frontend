@@ -44,10 +44,6 @@ export default function AdjustmentDetailModal({
 
   // Debug: Log adjustment data to console
   if (adjustment) {
-    console.log('=== Adjustment Detail Debug ===')
-    console.log('Status:', adjustment.status)
-    console.log('Requires Approval:', adjustment.requires_approval)
-    console.log('Full adjustment:', adjustment)
   }
 
   const canApprove = adjustment?.status === 'PENDING' && adjustment?.requires_approval

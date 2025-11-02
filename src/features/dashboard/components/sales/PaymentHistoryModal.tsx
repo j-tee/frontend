@@ -34,7 +34,6 @@ export function PaymentHistoryModal({ show, sale, onHide }: PaymentHistoryModalP
         const response = await CreditService.getPaymentHistory(sale.id)
         setPayments(response.results)
       } catch (e) {
-        console.error('Failed to load payment history', e)
         setError('Unable to load payment history. Please try again later.')
       } finally {
         setLoading(false)

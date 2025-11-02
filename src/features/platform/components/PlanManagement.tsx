@@ -66,7 +66,6 @@ export default function PlanManagement() {
       const response = await fetchAllPlans()
       setPlans(response.results || [])
     } catch (err) {
-      console.error('Failed to load plans:', err)
       setError('Failed to load subscription plans')
     } finally {
       setLoading(false)
@@ -144,7 +143,6 @@ export default function PlanManagement() {
       await loadPlans()
       handleCloseModal()
     } catch (err) {
-      console.error('Failed to save plan:', err)
       alert('Failed to save plan. Please try again.')
     } finally {
       setSubmitting(false)
@@ -160,7 +158,6 @@ export default function PlanManagement() {
       }
       await loadPlans()
     } catch (err) {
-      console.error('Failed to toggle plan status:', err)
       alert('Failed to update plan status')
     }
   }
@@ -174,7 +171,6 @@ export default function PlanManagement() {
       await deletePlan(plan.id)
       await loadPlans()
     } catch (err) {
-      console.error('Failed to delete plan:', err)
       alert('Failed to delete plan')
     }
   }

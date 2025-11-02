@@ -47,18 +47,6 @@ export default function TransferDetailModal({
   if (!show) return null
 
   // Permission checks
-  console.log('=== TransferDetailModal Debug ===')
-  console.log('transfer?.status:', transfer?.status)
-  console.log('userRole:', userRole)
-  console.log('userRole type:', typeof userRole)
-  console.log('onComplete exists:', !!onComplete)
-  console.log('onCancel exists:', !!onCancel)
-  console.log('onDelete exists:', !!onDelete)
-  console.log('Role check OWNER:', userRole === 'OWNER')
-  console.log('Role check ADMIN:', userRole === 'ADMIN')
-  console.log('Role check MANAGER:', userRole === 'MANAGER')
-  console.log('Includes check:', ['OWNER', 'ADMIN', 'MANAGER'].includes(userRole as string))
-  
   const canComplete = 
     transfer?.status === 'pending' &&
     userRole &&
@@ -78,11 +66,6 @@ export default function TransferDetailModal({
     userRole &&
     ['OWNER', 'ADMIN'].includes(userRole) &&
     onDelete
-  
-  console.log('canComplete:', canComplete)
-  console.log('canCancel:', canCancel)
-  console.log('canDelete:', canDelete)
-  console.log('===================================')
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, string> = {
@@ -119,20 +102,9 @@ export default function TransferDetailModal({
   }
 
   const handleCompleteClick = () => {
-    console.log('=== TransferDetailModal.handleCompleteClick ===')
-    console.log('transfer:', transfer)
-    console.log('transfer?.id:', transfer?.id)
-    console.log('onComplete:', onComplete)
-    console.log('completeNotes:', completeNotes)
-    
     if (transfer && onComplete) {
-      console.log('Calling onComplete with:', transfer.id, completeNotes.trim() || undefined)
       onComplete(transfer.id, completeNotes.trim() || undefined)
       setCompleteNotes('')
-    } else {
-      console.error('Cannot complete - missing transfer or onComplete handler')
-      console.error('transfer exists:', !!transfer)
-      console.error('onComplete exists:', !!onComplete)
     }
   }
 

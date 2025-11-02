@@ -44,7 +44,6 @@ const ProductPerformancePage: React.FC = () => {
       setData(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load product performance report');
-      console.error('Error fetching product performance:', err);
     } finally {
       setLoading(false);
     }
@@ -67,7 +66,6 @@ const ProductPerformancePage: React.FC = () => {
       
       await salesReportsService.exportProductPerformanceCSV(filters);
     } catch (err) {
-      console.error('CSV export failed:', err);
       alert('Failed to export CSV. Please try again.');
     }
   };
@@ -84,7 +82,6 @@ const ProductPerformancePage: React.FC = () => {
       
       await salesReportsService.exportProductPerformancePDF(filters);
     } catch (err) {
-      console.error('PDF export failed:', err);
       alert('Failed to export PDF. Please try again.');
     }
   };

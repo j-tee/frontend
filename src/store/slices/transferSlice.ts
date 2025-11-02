@@ -130,9 +130,6 @@ const sanitizeMessage = (value: string, fallback = GENERIC_SERVER_ERROR): string
   const trimmed = value.trim()
   if (!trimmed) return fallback
   if (looksLikeHtml(trimmed)) {
-    if (typeof window !== 'undefined' && import.meta.env.DEV) {
-      console.error('[transfers] HTML error response received', trimmed)
-    }
     return fallback
   }
   const singleLine = trimmed.replace(/\s+/g, ' ')

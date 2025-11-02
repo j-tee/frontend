@@ -180,13 +180,8 @@ const StockProductDetailModal = ({
       if (isMountedRef.current && stockProduct?.product === productId) {
         setReconciliationSnapshot(snapshot)
       }
-    } catch (error) {
-      console.error('[StockProductDetailModal] Failed to fetch stock reconciliation snapshot', {
-        stockProductId: stockProduct?.id,
-        productId: stockProduct?.product,
-        error,
-      })
-
+    } catch {
+      // Failed to fetch reconciliation snapshot
       if (isMountedRef.current) {
         setReconciliationSnapshot(null)
         setReconciliationError('Unable to fetch reconciliation snapshot right now.')
@@ -217,13 +212,9 @@ const StockProductDetailModal = ({
   const availableBatches = useMemo((): BatchInfo[] => {
     if (!stockProduct?.product) return []
     
-    console.log('[BatchFilter] Computing batches for product:', stockProduct.product_name)
-    console.log('[BatchFilter] Product ID:', stockProduct.product)
-    console.log('[BatchFilter] StockProducts list:', stockProducts)
     
     // Find all stock products with the same product ID
     const sameProductStocks = stockProducts.filter(sp => sp.product === stockProduct.product)
-    console.log('[BatchFilter] Found stock products for same product:', sameProductStocks)
     
     // Get unique batch IDs from those stock products
     const uniqueBatchIds = new Set<string>()
@@ -234,7 +225,6 @@ const StockProductDetailModal = ({
       }
     })
     
-    console.log('[BatchFilter] Unique batch IDs:', Array.from(uniqueBatchIds))
     
     // Map batch IDs to batch info
     const batches = Array.from(uniqueBatchIds)
@@ -253,8 +243,6 @@ const StockProductDetailModal = ({
       .filter((b): b is BatchInfo => b !== null)
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     
-    console.log('[BatchFilter] Final batches list:', batches)
-    console.log('[BatchFilter] Batches count:', batches.length, '- Dropdown will', batches.length > 1 ? 'SHOW' : 'HIDE')
     
     return batches
   }, [stockProduct, stockBatches, stockProducts])

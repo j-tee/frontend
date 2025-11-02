@@ -42,7 +42,6 @@ export function SaleCart({ cart, onCheckout, disabled, checkoutLoading }: SaleCa
       ).unwrap()
       setEditingItem(null)
     } catch (err) {
-      console.error('Failed to update quantity:', err)
     } finally {
       setUpdatingItem(null)
     }
@@ -62,7 +61,6 @@ export function SaleCart({ cart, onCheckout, disabled, checkoutLoading }: SaleCa
         })
       ).unwrap()
     } catch (err) {
-      console.error('Failed to update discount:', err)
     } finally {
       setUpdatingItem(null)
     }
@@ -76,7 +74,6 @@ export function SaleCart({ cart, onCheckout, disabled, checkoutLoading }: SaleCa
       setRemovingItem(itemId)
       await dispatch(removeCartItem({ saleId, itemId })).unwrap()
     } catch (err) {
-      console.error('Failed to remove item:', err)
     } finally {
       setRemovingItem(null)
     }

@@ -34,10 +34,9 @@ export default function SubscriptionManagement() {
         status: statusFilter || undefined,
         search: searchTerm || undefined
       })
-      setSubscriptions(response.results || [])
-    } catch (err) {
-      console.error('Failed to load subscriptions:', err)
-      setError('Failed to load subscriptions')
+      setSubscriptions(response.results)
+    } catch {
+      setError('Failed to load subscriptions. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -57,6 +56,17 @@ export default function SubscriptionManagement() {
       SUSPENDED: 'dark'
     }
     return <Badge bg={variants[status] || 'secondary'}>{status}</Badge>
+  }
+
+  const formatDate = (dateString: string | null | undefined): string => {
+    if (!dateString) return 'N/A'
+    try {
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) return 'Invalid Date'
+      return date.toLocaleDateString()
+    } catch {
+      return 'Invalid Date'
+    }
   }
 
   if (loading) {
@@ -131,32 +141,45 @@ export default function SubscriptionManagement() {
                   </tr>
                 </thead>
                 <tbody>
-                  {subscriptions.map((sub) => (
-                    <tr key={sub.id}>
-                      <td>
-                        <strong>{sub.business_name}</strong>
-                        <br />
-                        <small className="text-muted">{sub.business_email}</small>
-                        <br />
-                        <small className="text-muted">Owner: {sub.business_owner}</small>
-                      </td>
-                      <td>
-                        <strong>{sub.plan_details?.name || 'N/A'}</strong>
-                        <br />
-                        <small className="text-muted">
-                          {sub.plan_details?.currency || sub.plan.currency || ''} {sub.plan_details?.price || sub.plan.price} / {sub.plan_details?.billing_cycle || sub.plan.billing_cycle}
-                        </small>
-                      </td>
-                      <td>{getStatusBadge(sub.status)}</td>
-                      <td>{new Date(sub.current_period_start).toLocaleDateString()}</td>
-                      <td>{new Date(sub.current_period_end).toLocaleDateString()}</td>
-                      <td>
-                        <Badge bg={sub.auto_renew ? 'success' : 'secondary'}>
-                          {sub.auto_renew ? 'Yes' : 'No'}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
+                  {subscriptions.map((sub) => {
+                    // Extract plan name from different possible sources
+                    const planName = sub.plan_details?.name || sub.plan?.name || 'No Plan'
+                    const planPrice = sub.plan_details?.price || sub.plan?.price
+                    const planCurrency = sub.plan_details?.currency || sub.plan?.currency
+                    const planCycle = sub.plan_details?.billing_cycle || sub.plan?.billing_cycle
+                    
+                    return (
+                      <tr key={sub.id}>
+                        <td>
+                          <strong>{sub.business_name}</strong>
+                          <br />
+                          <small className="text-muted">{sub.business_email}</small>
+                          <br />
+                          <small className="text-muted">Owner: {sub.business_owner}</small>
+                        </td>
+                        <td>
+                          <strong>{planName}</strong>
+                          {planPrice && (
+                            <>
+                              <br />
+                              <small className="text-muted">
+                                {planCurrency} {planPrice}
+                                {planCycle && ` / ${planCycle}`}
+                              </small>
+                            </>
+                          )}
+                        </td>
+                        <td>{getStatusBadge(sub.status)}</td>
+                        <td>{formatDate(sub.current_period_start)}</td>
+                        <td>{formatDate(sub.current_period_end)}</td>
+                        <td>
+                          <Badge bg={sub.auto_renew ? 'success' : 'secondary'}>
+                            {sub.auto_renew ? 'Yes' : 'No'}
+                          </Badge>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </Table>
 

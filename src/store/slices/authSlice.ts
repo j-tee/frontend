@@ -314,10 +314,8 @@ export const loadUserStorefronts = createAsyncThunk<
 >('auth/loadUserStorefronts', async (_, thunkAPI) => {
   try {
     const response = await fetchUserStorefronts()
-    console.log('✅ Loaded user storefronts:', response)
     return response
   } catch (error: unknown) {
-    console.error('❌ Failed to load user storefronts:', error)
     return thunkAPI.rejectWithValue(extractErrorPayload(error) as RejectValue)
   }
 })
@@ -595,7 +593,6 @@ const authSlice = createSlice({
         (state: AuthState, action) => {
           state.storefrontsLoading = false
           state.accessibleStorefronts = action.payload.storefronts
-          console.log('📍 Storefronts loaded into state:', action.payload.storefronts.length)
         },
       )
       .addCase(

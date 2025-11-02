@@ -32,7 +32,6 @@ const ARAgingPage: React.FC = () => {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load AR aging report');
-      console.error('Error fetching AR aging:', err);
     } finally {
       setLoading(false);
     }
@@ -49,7 +48,6 @@ const ARAgingPage: React.FC = () => {
         as_of_date: asOfDate,
       });
     } catch (err) {
-      console.error('Export failed:', err);
       alert('Failed to export report. Please try again.');
     }
   };

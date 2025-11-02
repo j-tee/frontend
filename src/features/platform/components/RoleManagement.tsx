@@ -53,7 +53,6 @@ export default function RoleManagement() {
       setRoles(rolesData)
       setPermissions(permsData)
     } catch (err) {
-      console.error('Failed to load roles and permissions:', err)
       setMessage({
         type: 'error',
         text: 'Failed to load roles and permissions'
