@@ -143,7 +143,7 @@ export function ReceiptModal({ show, saleId, onHide }: ReceiptModalProps) {
           <div id="receipt-print-content">
             {/* Business Header */}
             <div className="text-center mb-3 border-bottom pb-3">
-              <h4 className="mb-1">DIALOGUES SYSTEMS</h4>
+              <h4 className="mb-1">{sale.business_name || 'Business Name'}</h4>
               <div className="text-muted">{sale.storefront_name || 'Store'}</div>
               <div className="text-muted small mt-2">
                 Thank you for your business
