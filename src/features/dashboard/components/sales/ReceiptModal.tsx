@@ -28,18 +28,8 @@ export function ReceiptModal({ show, saleId, onHide }: ReceiptModalProps) {
     
     try {
       const data = await getSale(saleId)
-      console.log('📝 Receipt sale data:', data)
-      console.log('💰 Amounts:', {
-        subtotal: data.subtotal,
-        tax: data.tax_amount,
-        discount: data.discount_amount,
-        total: data.total_amount,
-        paid: data.amount_paid,
-        due: data.amount_due
-      })
       setSale(data)
-    } catch (err) {
-      console.error('Failed to load sale details', err)
+    } catch {
       setError('Failed to load receipt details. Please try again.')
     } finally {
       setLoading(false)

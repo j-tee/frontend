@@ -44,7 +44,6 @@ const CashFlowPage: React.FC = () => {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load cash flow report');
-      console.error('Error fetching cash flow:', err);
     } finally {
       setLoading(false);
     }
@@ -63,7 +62,6 @@ const CashFlowPage: React.FC = () => {
         grouping: grouping,
       });
     } catch (err) {
-      console.error('Export failed:', err);
       alert('Failed to export report. Please try again.');
     }
   };

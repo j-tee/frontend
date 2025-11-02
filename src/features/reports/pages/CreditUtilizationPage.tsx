@@ -129,7 +129,6 @@ const CreditUtilizationPage: React.FC = () => {
         setPagination(null);
       }
     } catch (err) {
-      console.error('CreditUtilizationPage: fetchData failed', err);
       setError(err instanceof Error ? err.message : 'Failed to load credit utilization data');
       setData(null);
       setPagination(null);
@@ -154,7 +153,6 @@ const CreditUtilizationPage: React.FC = () => {
       delete exportFilters.page_size;
       await customerReportsService.exportCreditUtilizationCSV(exportFilters);
     } catch (err) {
-      console.error('CreditUtilizationPage: export CSV failed', err);
       alert('Export failed. Please try again.');
     }
   };
@@ -166,7 +164,6 @@ const CreditUtilizationPage: React.FC = () => {
       delete exportFilters.page_size;
       await customerReportsService.exportCreditUtilizationPDF(exportFilters);
     } catch (err) {
-      console.error('CreditUtilizationPage: export PDF failed', err);
       alert('Export failed. Please try again.');
     }
   };

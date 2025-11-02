@@ -103,7 +103,6 @@ export function NotificationSettingsPanel() {
       setSuccessMessage('Notification settings updated successfully!')
       setTimeout(() => setSuccessMessage(null), 3000)
     } catch (err) {
-      console.error('Failed to update notification settings:', err)
       // Error is handled by Redux and shown in Alert
     } finally {
       setSubmitting(false)

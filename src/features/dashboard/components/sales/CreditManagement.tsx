@@ -105,7 +105,6 @@ export function CreditManagement() {
       const data = await CreditService.getSummary(storefrontId)
       setSummary(data)
     } catch (error) {
-      console.error('Failed to load credit summary', error)
       setSummaryError('Unable to load credit summary. Please try again later.')
     } finally {
       setSummaryLoading(false)
@@ -169,7 +168,6 @@ export function CreditManagement() {
         setSales(response.results)
         setTotalCount(response.count)
       } catch (error) {
-        console.error('Failed to load credit sales', error)
         setSalesError('Unable to load credit sales. Please try again later.')
       } finally {
         setSalesLoading(false)
@@ -184,7 +182,6 @@ export function CreditManagement() {
       const data = await fetchCustomers({ page_size: 100 })
       setCustomers(data.results)
     } catch (error) {
-      console.error('Failed to load customers', error)
     } finally {
       setCustomersLoading(false)
     }

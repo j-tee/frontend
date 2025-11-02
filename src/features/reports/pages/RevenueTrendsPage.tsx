@@ -40,7 +40,6 @@ const RevenueTrendsPage: React.FC = () => {
       setData(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load revenue trends report');
-      console.error('Error fetching revenue trends:', err);
     } finally {
       setLoading(false);
     }
@@ -59,7 +58,6 @@ const RevenueTrendsPage: React.FC = () => {
         interval: interval,
       });
     } catch (err) {
-      console.error('Export failed:', err);
       alert('Failed to export report. Please try again.');
     }
   };

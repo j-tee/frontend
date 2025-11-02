@@ -1,23 +1,21 @@
 import { useEffect, useState } from 'react'
 import { Container, Row, Col, Card, Button, Badge, Alert, Spinner, Modal, Form } from 'react-bootstrap'
 import { useAppSelector } from '../../../hooks'
-import { useCurrency } from '../../../hooks/useCurrency'
 import { selectCurrentBusiness } from '../../../store/slices/authSlice'
-import { createSubscription, initializePayment } from '../../../services/subscriptionService'
 import httpClient from '../../../services/httpClient'
-import type { Plan, Subscription, PaymentGateway } from '../../../types/subscriptions'
+import type { Plan, Subscription } from '../../../types/subscriptions'
+import { PricingBreakdown } from '../components/PricingBreakdown'
 
 export default function SubscriptionPortal() {
   const currentBusiness = useAppSelector(selectCurrentBusiness)
-  const { formatCurrency } = useCurrency()
   const [plans, setPlans] = useState<Plan[]>([])
   const [subscription, setSubscription] = useState<Subscription | null>(null)
   const [loading, setLoading] = useState(true)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
-  const [paymentGateway, setPaymentGateway] = useState<PaymentGateway>('PAYSTACK')
+  const [paymentGateway, setPaymentGateway] = useState<'PAYSTACK' | 'STRIPE'>('PAYSTACK')
   const [processing, setProcessing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [selectedStorefronts, setSelectedStorefronts] = useState(1)
 
   useEffect(() => {
     loadData()
@@ -29,7 +27,6 @@ export default function SubscriptionPortal() {
       
       // Load plans
       const plansRes = await httpClient.get('/subscriptions/api/plans/')
-      console.log('Plans response:', plansRes.data)
       
       // Handle different response formats
       const plansData = Array.isArray(plansRes.data) 
@@ -42,15 +39,14 @@ export default function SubscriptionPortal() {
       // IMPORTANT: /me/ endpoint returns an array!
       try {
         const subRes = await httpClient.get<Subscription[]>('/subscriptions/api/subscriptions/me/')
-        console.log('Subscription response:', subRes.data)
         // Get the first subscription if any exist
         setSubscription(subRes.data.length > 0 ? subRes.data[0] : null)
       } catch {
         // No subscription yet - that's ok
         setSubscription(null)
       }
-    } catch (error) {
-      console.error('Failed to load data:', error)
+    } catch {
+      // Failed to load data
     } finally {
       setLoading(false)
     }
@@ -58,6 +54,8 @@ export default function SubscriptionPortal() {
 
   const handleSelectPlan = (plan: Plan) => {
     setSelectedPlan(plan)
+    // Set initial storefronts to the plan's minimum or 1
+    setSelectedStorefronts(plan.max_storefronts || 1)
     setShowPaymentModal(true)
   }
 
@@ -66,85 +64,30 @@ export default function SubscriptionPortal() {
     
     try {
       setProcessing(true)
-      setError(null)
       
-      // Step 1: Create subscription
-      console.log('Creating subscription...', {
-        plan_id: selectedPlan.id,
-        business_id: currentBusiness.id,
-        payment_method: paymentGateway
-      })
+      // Initialize payment - will be implemented when backend endpoint is ready
+      // const frontendUrl = window.location.origin
+      // Payload for when subscription creation is available
+      // const payload = paymentGateway === 'PAYSTACK'
+      //   ? {
+      //       gateway: 'PAYSTACK',
+      //       callback_url: `${frontendUrl}/payment/callback`
+      //     }
+      //   : {
+      //       gateway: 'STRIPE',
+      //       success_url: `${frontendUrl}/payment/success`,
+      //       cancel_url: `${frontendUrl}/payment/cancelled`
+      //     }
       
-      const newSubscription = await createSubscription({
-        plan_id: selectedPlan.id,
-        business_id: currentBusiness.id,
-        payment_method: paymentGateway
-      })
+      // For now, we'll need a subscription ID. Since we can't create one via API yet,
+      // we'll show instructions to contact support
+      alert('To subscribe to this plan, please contact support at alphalogiquetechnologies@gmail.com with your business details.')
       
-      console.log('Subscription created:', newSubscription)
-      
-      // Step 2: Initialize payment
-      const frontendUrl = window.location.origin
-      
-      console.log('Initializing payment...', {
-        subscriptionId: newSubscription.id,
-        gateway: paymentGateway
-      })
-      
-      const paymentInit = await initializePayment(newSubscription.id, {
-        gateway: paymentGateway,
-        callback_url: `${frontendUrl}/app/subscription/payment/callback`,
-        success_url: `${frontendUrl}/app/subscription/payment/success`,
-        cancel_url: `${frontendUrl}/app/subscription/payment/cancelled`
-      })
-      
-      console.log('Payment initialized:', paymentInit)
-      
-      // Store subscription ID in session storage for callback
-      sessionStorage.setItem('pending_subscription_id', newSubscription.id)
-      
-      // Step 3: Redirect to payment gateway
-      if (paymentInit.authorization_url) {
-        window.location.href = paymentInit.authorization_url
-      } else {
-        throw new Error('No authorization URL received from payment gateway')
-      }
-      
-    } catch (err: unknown) {
-      console.error('Subscription/Payment error:', err)
-      const error = err as { 
-        response?: { 
-          status?: number
-          data?: { error?: string; detail?: string } 
-        }
-        message?: string 
-      }
-      
-      let errorMessage = ''
-      
-      // Check if it's a 404 (endpoint not found)
-      if (error?.response?.status === 404) {
-        errorMessage = '⚠️ Backend API Not Ready\n\n' +
-                      'The subscription creation endpoint has not been implemented yet.\n\n' +
-                      'Next Steps:\n' +
-                      '1. Backend team needs to implement:\n' +
-                      '   • POST /subscriptions/api/subscriptions/\n' +
-                      '   • POST /subscriptions/api/subscriptions/{id}/initialize_payment/\n' +
-                      '   • POST /subscriptions/api/subscriptions/{id}/verify_payment/\n\n' +
-                      '2. See PAYMENT-INFRASTRUCTURE-IMPLEMENTATION.md for complete code\n\n' +
-                      'For now, please contact support at:\n' +
-                      'alphalogiquetechnologies@gmail.com'
-      } else {
-        errorMessage = error?.response?.data?.error || 
-                      error?.response?.data?.detail || 
-                      error?.message || 
-                      'Failed to initialize subscription. Please try again.'
-      }
-      
-      setError(errorMessage)
-      alert(errorMessage)
+    } catch {
+      alert('Failed to initialize payment. Please try again.')
     } finally {
       setProcessing(false)
+      setShowPaymentModal(false)
     }
   }
 
@@ -193,7 +136,7 @@ export default function SubscriptionPortal() {
                 <div>
                   <h5>Current Plan: {subscription.plan.name}</h5>
                   <p>
-                    <strong>Price:</strong> {formatCurrency(parseFloat(subscription.plan.price))} / {subscription.plan.billing_cycle}<br/>
+                    <strong>Price:</strong> {subscription.plan.currency} {subscription.plan.price} / {subscription.plan.billing_cycle}<br/>
                     <strong>Storefronts:</strong> {subscription.plan.max_storefronts || 'Unlimited'}<br/>
                     <strong>Users:</strong> {subscription.plan.max_users || 'Unlimited'}<br/>
                     <strong>Products:</strong> {subscription.plan.max_products || 'Unlimited'}
@@ -236,7 +179,7 @@ export default function SubscriptionPortal() {
                 <p className="text-muted">{plan.description}</p>
                 
                 <h3 className="mb-3">
-                  {formatCurrency(parseFloat(plan.price))}
+                  {plan.currency} {plan.price}
                   <small className="text-muted"> / {plan.billing_cycle}</small>
                 </h3>
                 
@@ -268,63 +211,74 @@ export default function SubscriptionPortal() {
       </Row>
 
       {/* Payment Modal */}
-      <Modal show={showPaymentModal} onHide={() => setShowPaymentModal(false)}>
+      <Modal show={showPaymentModal} onHide={() => setShowPaymentModal(false)} size="lg">
         <Modal.Header closeButton>
           <Modal.Title>Subscribe to {selectedPlan?.name}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <p>
-            <strong>Plan:</strong> {selectedPlan?.name}<br/>
-            <strong>Price:</strong> {selectedPlan && formatCurrency(parseFloat(selectedPlan.price))} / {selectedPlan?.billing_cycle}
-          </p>
-          
+          {/* Plan Details */}
+          <div className="mb-4">
+            <h6 className="text-muted mb-3">Plan Details</h6>
+            <p className="mb-2">
+              <strong>Plan:</strong> {selectedPlan?.name}
+            </p>
+            <p className="text-muted mb-0">{selectedPlan?.description}</p>
+          </div>
+
+          {/* Storefront Selection */}
+          <Form.Group className="mb-4">
+            <Form.Label>
+              <strong>Number of Storefronts</strong>
+            </Form.Label>
+            <Form.Control
+              type="number"
+              min="1"
+              max={selectedPlan?.max_storefronts || 100}
+              value={selectedStorefronts}
+              onChange={(e) => setSelectedStorefronts(Math.max(1, parseInt(e.target.value) || 1))}
+            />
+            <Form.Text className="text-muted">
+              {selectedPlan?.max_storefronts 
+                ? `Choose between 1 and ${selectedPlan.max_storefronts} storefronts`
+                : 'Choose number of storefronts for your subscription'
+              }
+            </Form.Text>
+          </Form.Group>
+
+          {/* Pricing Breakdown - Shows complete cost with taxes */}
+          <div className="mb-4">
+            <PricingBreakdown
+              storefronts={selectedStorefronts}
+              gateway={paymentGateway}
+              showTierBreakdown={true}
+            />
+          </div>
+
+          {/* Payment Method Selection */}
           <Form.Group className="mb-3">
-            <Form.Label>Payment Method</Form.Label>
+            <Form.Label>
+              <strong>Payment Method</strong>
+            </Form.Label>
             <Form.Select 
               value={paymentGateway} 
-              onChange={(e) => setPaymentGateway(e.target.value as PaymentGateway)}
+              onChange={(e) => setPaymentGateway(e.target.value as 'PAYSTACK' | 'STRIPE')}
             >
               <option value="PAYSTACK">Mobile Money / Card (Paystack)</option>
+              <option value="STRIPE">Credit/Debit Card (Stripe)</option>
             </Form.Select>
           </Form.Group>
 
-          {error && (
-            <Alert variant="danger" className="mb-3" style={{ whiteSpace: 'pre-line' }}>
-              {error}
-            </Alert>
-          )}
-
-          <Alert variant="info">
-            <strong>📋 Payment Flow:</strong>
-            <ol className="mb-0 mt-2 ps-3">
-              <li>Subscription will be created via backend API</li>
-              <li>Payment initialized with Paystack</li>
-              <li>You'll be redirected to Paystack checkout</li>
-              <li>After payment, verification happens automatically</li>
-            </ol>
-          </Alert>
-          
-          <Alert variant="warning" className="mb-0">
-            <small>
-              <strong>Note:</strong> If you see a "Not found" error, the backend API endpoints 
-              are not yet implemented. See <code>PAYMENT-INFRASTRUCTURE-IMPLEMENTATION.md</code> for 
-              backend implementation code.
-            </small>
+          <Alert variant="info" className="mb-0">
+            <strong>Note:</strong> Backend API endpoint for creating subscriptions is being implemented. 
+            For now, please contact support to activate your subscription.
           </Alert>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowPaymentModal(false)} disabled={processing}>
+          <Button variant="secondary" onClick={() => setShowPaymentModal(false)}>
             Cancel
           </Button>
           <Button variant="primary" onClick={handleSubscribe} disabled={processing}>
-            {processing ? (
-              <>
-                <Spinner as="span" animation="border" size="sm" className="me-2" />
-                Processing...
-              </>
-            ) : (
-              'Proceed to Payment'
-            )}
+            {processing ? 'Processing...' : 'Proceed to Payment'}
           </Button>
         </Modal.Footer>
       </Modal>

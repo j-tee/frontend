@@ -34,7 +34,6 @@ const StockMovementsAnalytics: React.FC = () => {
         setError('Failed to load analytics data');
       }
     } catch (err) {
-      console.error('Error fetching analytics:', err);
       setError('Failed to load analytics. Make sure the backend endpoint is available.');
     } finally {
       setLoading(false);

@@ -37,16 +37,14 @@ const getAlertIcon = (alertType: string): string => {
 export function AlertsList({ alerts }: AlertsListProps) {
   // const dispatch = useAppDispatch()
   
-  const handleMarkRead = async (alertId: string) => {
+  const handleMarkRead = async () => {
     // TODO: Implement markAlertRead action
     // await dispatch(markAlertRead(alertId))
-    console.log('Mark read:', alertId)
   }
 
-  const handleDismiss = async (alertId: string) => {
+  const handleDismiss = async () => {
     // TODO: Implement dismissAlert action
     // await dispatch(dismissAlert(alertId))
-    console.log('Dismiss:', alertId)
   }
   
   if (alerts.length === 0) {
@@ -108,7 +106,7 @@ export function AlertsList({ alerts }: AlertsListProps) {
                       variant="link" 
                       size="sm" 
                       className="p-0 text-decoration-none"
-                      onClick={() => handleMarkRead(alert.id)}
+                      onClick={() => handleMarkRead()}
                     >
                       Mark as read
                     </Button>
@@ -118,7 +116,7 @@ export function AlertsList({ alerts }: AlertsListProps) {
                       variant="link" 
                       size="sm" 
                       className="p-0 text-decoration-none text-danger"
-                      onClick={() => handleDismiss(alert.id)}
+                      onClick={() => handleDismiss()}
                     >
                       Dismiss
                     </Button>

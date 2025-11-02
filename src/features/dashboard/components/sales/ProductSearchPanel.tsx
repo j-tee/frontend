@@ -177,12 +177,6 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
 
           const primaryStockId = product.stock_product_ids[0]
           
-          console.log('⚠️ [SEEDING INITIAL STOCK] Using catalog data (INACCURATE - will be updated by fetchStockLevels)', {
-            productName: product.name,
-            catalogQuantity: product.available_quantity,
-            note: 'This is just transferred quantity, not accounting for sold items'
-          })
-          
           seededStock[product.id] = {
             id: primaryStockId,
             product: product.id,
@@ -200,7 +194,6 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
         setStockData(seededStock)
         stockDataRef.current = seededStock
       } catch (err) {
-        console.error('[ProductSearch] Failed to load sale catalog', err)
         if (isMounted) {
           setCatalog([])
           setProducts([])
@@ -235,13 +228,6 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
     // REMOVED: No longer skip in multi-storefront mode
     // We need accurate unreserved_quantity which accounts for sold items
     // The catalog's available_quantity only shows transferred quantity, not available to sell
-    
-    console.log('[fetchStockLevels] Starting fetch', {
-      productIds,
-      storefrontId,
-      multiStorefront,
-      productCount: productIds.length
-    })
 
     try {
       const shouldTryAvailability = availabilitySupportedRef.current
@@ -250,9 +236,7 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
         try {
           if (shouldTryAvailability) {
             const url = `/inventory/api/storefronts/${storefrontId}/stock-products/${productId}/availability/`
-            console.log('[fetchStockLevels] Fetching availability', { productId, url })
             const response = await httpClient.get(url)
-            console.log('[fetchStockLevels] API Response:', { productId, data: response.data })
             return {
               productId,
               data: response.data,
@@ -264,8 +248,6 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
           const error = err as { response?: { status?: number }; message?: string }
 
           if (error.message !== 'AVAILABILITY_DISABLED') {
-            console.warn(`Availability endpoint not available for product ${productId}, falling back to stock-products`, err)
-
             if (shouldTryAvailability && error.response && [404, 405, 500].includes(error.response.status ?? 0)) {
               availabilitySupportedRef.current = false
             }
@@ -319,11 +301,8 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
                 },
                 source: 'warehouse-availability' as const,
               }
-            } catch (warehouseFallbackError) {
-              console.warn(
-                `[ProductSearch] Warehouse availability fallback failed for product ${productId}`,
-                warehouseFallbackError,
-              )
+            } catch {
+              // Warehouse fallback failed - silently continue to next fallback
             }
 
             const fallbackResponse = await httpClient.get('/inventory/api/stock-products/', {
@@ -342,8 +321,8 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
                 source: 'fallback' as const,
               }
             }
-          } catch (fallbackErr) {
-            console.warn(`Fallback also failed for product ${productId}:`, fallbackErr)
+          } catch {
+            // All fallbacks failed
           }
           return null
         }
@@ -360,8 +339,6 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
         const { productId, data, source } = result
         const existingStock = stockDataRef.current[productId]
 
-        console.log(`🔀 [PROCESSING] Product ${productId} using source: "${source}"`)
-
         if (source === 'availability') {
           const firstBatch = data.batches?.[0]
           const reserved = typeof data.reserved_quantity === 'number' ? data.reserved_quantity : 0
@@ -372,15 +349,6 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
           const availableQuantity = typeof data.unreserved_quantity === 'number'
             ? data.unreserved_quantity
             : robustNumber(data.unreserved_quantity)
-          
-          console.log('✅ [API RESPONSE] Got accurate unreserved_quantity from availability API', {
-            productId,
-            unreserved_quantity: data.unreserved_quantity,
-            total_available: data.total_available,
-            reserved_quantity: data.reserved_quantity,
-            availableQuantity,
-            note: 'This accounts for sold items!'
-          })
           
           const unitCost = typeof firstBatch?.unit_cost === 'number'
             ? firstBatch.unit_cost
@@ -405,9 +373,6 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
             expiry_date: firstBatch?.expiry_date ?? null,
           }
         } else {
-          console.log(`⚠️ [FALLBACK PATH] Product ${productId} using fallback source: "${source}"`)
-          console.log(`⚠️ This may NOT account for sold items! data.available_quantity =`, data.available_quantity)
-          
           stockMap[productId] = {
             id: data.id,
             product: productId,
@@ -424,7 +389,6 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
       })
 
       if (Object.keys(stockMap).length > 0) {
-        console.log('[fetchStockLevels] SUCCESS - Updating stockData with:', stockMap)
         setStockData((prev) => {
           const next = {
             ...prev,
@@ -433,11 +397,8 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
           stockDataRef.current = next
           return next
         })
-      } else {
-        console.warn('[fetchStockLevels] WARNING - No stock data fetched! StockMap is empty')
       }
     } catch (err) {
-      console.error('Failed to fetch stock levels:', err)
     }
   }, [storefrontId, multiStorefront])
 
@@ -489,7 +450,6 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
         await fetchStockLevels(matches.map((product) => product.id))
       }
     } catch (err) {
-      console.error('[ProductSearch] Search error:', err)
       setError('Failed to search products. Please try again.')
     } finally {
       setLoading(false)
@@ -553,7 +513,6 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
 
       setBarcodeInput('')
     } catch (err) {
-      console.error('Barcode scan error:', err)
       setError('Failed to scan barcode')
     } finally {
       setLoading(false)
@@ -573,14 +532,6 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
       let preferredStorefrontId: UUID | undefined
       if (multiStorefront && storefrontId) {
         preferredStorefrontId = storefrontId
-        const product = catalog.find((item) => item.id === productId)
-        if (product) {
-          console.log(`🏪 Creating cart for current storefront`, {
-            productId,
-            productName: product.name,
-            storefrontId: preferredStorefrontId
-          })
-        }
       }
 
       const ensuredSaleId = await ensureSaleSession(preferredStorefrontId)
@@ -643,6 +594,12 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
       setAddingItemId(productId)
       setError(null)
 
+      // TypeScript guard: activeSaleId is guaranteed to be defined here
+      if (!activeSaleId) {
+        setError('No active sale')
+        return
+      }
+
       const unitPrice = saleType === 'WHOLESALE' ? stock.wholesale_price : stock.retail_price
 
       await dispatch(
@@ -690,13 +647,6 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
       const available = Number.isFinite(stock.available_quantity) ? Math.max(0, Math.floor(stock.available_quantity)) : 0
       const total = Number.isFinite(stock.quantity) ? Math.max(0, Math.floor(stock.quantity)) : 0
       
-      console.log('[Stock Status] Using fetched stock data', {
-        productName: product.name,
-        available,
-        total,
-        stock
-      })
-      
       const color = available === 0 ? 'danger' : available <= 5 ? 'warning' : 'success'
       
       return {
@@ -715,16 +665,6 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
       const currentLocationStock = product.locations.find(loc => loc.storefront_id === storefrontId)
       const storefrontAvailable = currentLocationStock?.available_quantity ?? 0
       const totalAvailable = product.available_quantity ?? 0
-      
-      // Debug logging
-      console.log('[Stock Status] Using catalog locations (no fetched data)', {
-        productName: product.name,
-        storefrontId,
-        currentLocationStock,
-        storefrontAvailable,
-        totalAvailable,
-        allLocations: product.locations
-      })
       
       const available = Number.isFinite(storefrontAvailable) ? Math.max(0, Math.floor(storefrontAvailable)) : 0
       const total = Number.isFinite(totalAvailable) ? Math.max(0, Math.floor(totalAvailable)) : 0
@@ -746,11 +686,6 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
     // Final fallback: use product.available_quantity from catalog
     const available = Number.isFinite(product.available_quantity) ? Math.max(0, Math.floor(product.available_quantity)) : 0
     const color = available === 0 ? 'danger' : available <= 5 ? 'warning' : 'success'
-
-    console.log('[Stock Status] Using product catalog fallback', {
-      productName: product.name,
-      available
-    })
 
     return {
       color,
@@ -851,19 +786,6 @@ export function ProductSearchPanel({ storefrontId, saleId, saleType, disabled, e
                 const stockStatus = getStockStatus(product)
                 const price = getPrice(product)
                 const isAdding = addingItemId === product.id
-
-                // Debug: log computed price sources so we can diagnose why price may show as 0
-                const currentStock = stockData[product.id]
-                console.log('[PRICE DEBUG]', {
-                  productId: product.id,
-                  name: product.name,
-                  saleType,
-                  catalogRetail: product.retail_price,
-                  catalogWholesale: product.wholesale_price,
-                  stockRetail: currentStock?.retail_price,
-                  stockWholesale: currentStock?.wholesale_price,
-                  computedPrice: price,
-                })
 
                 return (
                   <div

@@ -45,7 +45,6 @@ export const ProductSearchAutocomplete: React.FC<ProductSearchAutocompleteProps>
         setShowDropdown(true);
       }
     } catch (error) {
-      console.error('Product search error:', error);
       setResults([]);
     } finally {
       setLoading(false);

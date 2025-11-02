@@ -107,7 +107,6 @@ const StockRequestDetailModal = ({
               const data = await fetchStorefrontAvailability(request.storefront, item.product)
               return [item.product, data] as const
             } catch (error) {
-              console.error(`Failed to fetch availability for product ${item.product}:`, error)
               return null
             }
           })
@@ -120,7 +119,6 @@ const StockRequestDetailModal = ({
           setAvailabilityData(availabilityMap)
         }
       } catch (error) {
-        console.error('Error fetching availability data:', error)
       } finally {
         if (!isCancelled) {
           setLoadingAvailability(false)

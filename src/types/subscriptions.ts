@@ -34,11 +34,97 @@ export type AlertType =
   | 'SUBSCRIPTION_SUSPENDED'
   | 'SUBSCRIPTION_ACTIVATED'
 
+export type TaxAppliesTo = 'SUBTOTAL' | 'CUMULATIVE'
+
+export type ServiceChargeType = 'PERCENTAGE' | 'FIXED'
+
 // Business info included in subscription responses
 export interface BusinessInfo {
   id: UUID
   name: string
   description?: string
+}
+
+// ============================================
+// TAX CONFIGURATION
+// ============================================
+
+export interface TaxConfiguration {
+  id: UUID
+  name: string
+  code: string
+  description: string
+  rate: string
+  country: string
+  applies_to_subscriptions: boolean
+  is_mandatory: boolean
+  calculation_order: number
+  applies_to: TaxAppliesTo
+  is_active: boolean
+  effective_from: string
+  effective_until: string | null
+  is_effective_now: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateTaxConfigPayload {
+  name: string
+  code: string
+  description?: string
+  rate: string
+  country: string
+  applies_to_subscriptions?: boolean
+  is_mandatory?: boolean
+  calculation_order?: number
+  applies_to?: TaxAppliesTo
+  is_active?: boolean
+  effective_from: string
+  effective_until?: string | null
+}
+
+export type UpdateTaxConfigPayload = Partial<CreateTaxConfigPayload>
+
+// ============================================
+// PRICING CALCULATION
+// ============================================
+
+export interface TaxBreakdownItem {
+  code: string
+  name: string
+  rate: number
+  amount: string
+}
+
+export interface ServiceChargeItem {
+  code: string
+  name: string
+  type: ServiceChargeType
+  rate?: number
+  amount: string
+}
+
+export interface PricingBreakdown {
+  storefronts: number
+  currency: string
+  base_price: string
+  taxes: TaxBreakdownItem[]
+  total_tax: string
+  service_charges: ServiceChargeItem[]
+  total_service_charges: string
+  total_amount: string
+  breakdown: {
+    tier_id: UUID
+    tier_description: string
+    base_storefronts: number
+    additional_storefronts: number
+    price_per_additional: string
+  }
+}
+
+export interface PricingCalculationParams {
+  storefronts: number
+  gateway?: PaymentGateway
 }
 
 export interface Plan {
@@ -334,12 +420,12 @@ IMPORTANT NOTES FOR FRONTEND DEVELOPERS:
    
    ❌ WRONG:
    const { data: subscription } = await api.get('/subscriptions/api/subscriptions/me/')
-   console.log(subscription.plan.name)  // Error: subscription is array!
+   // subscription is array!
    
    ✅ CORRECT:
    const { data: subscriptions } = await api.get('/subscriptions/api/subscriptions/me/')
    if (subscriptions.length > 0) {
-     console.log(subscriptions[0].plan.name)  // Works!
+     // Use subscriptions[0]
    }
 
 2. Creating subscription requires business_id (REQUIRED):
@@ -381,10 +467,10 @@ IMPORTANT NOTES FOR FRONTEND DEVELOPERS:
 
 7. Plan object is embedded in subscription (not just UUID):
    ✅ CORRECT:
-   console.log(subscription.plan.name)  // Works!
-   console.log(subscription.plan.price)  // Works!
+   // subscription.plan.name works
+   // subscription.plan.price works
    
    ❌ WRONG:
-   console.log(subscription.plan_details.name)  // plan_details doesn't exist!
+   // plan_details doesn't exist!
 */
 

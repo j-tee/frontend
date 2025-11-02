@@ -60,7 +60,6 @@ const ExportHistoryPage = () => {
     try {
       await dispatch(downloadExport({ id: exportId, filename })).unwrap()
     } catch (err) {
-      console.error('Failed to download export:', err)
       alert('Failed to download file. Please try again.')
     }
   }

@@ -238,12 +238,6 @@ const ManageStocksPage = () => {
   const user = useAppSelector((state) => state.auth.user)
   
   const userRole = employment?.role || user?.final_userRole || user?.role
-  
-  // Debug: Log the user role being passed to modal (can be removed after testing)
-  console.log('ManageStocksPage - employment.role:', employment?.role)
-  console.log('ManageStocksPage - user.final_userRole:', user?.final_userRole)
-  console.log('ManageStocksPage - user.role:', user?.role)
-  console.log('ManageStocksPage - final userRole:', userRole)
 
   // Local state
   const [activeTab, setActiveTab] = useState('stock-products')
@@ -488,8 +482,8 @@ const ManageStocksPage = () => {
         if (!ignore && response.results) {
           setStorefronts(response.results)
         }
-      } catch (error) {
-        console.error('Failed to load storefronts:', error)
+      } catch {
+        // Silently ignore storefront loading errors
       }
     }
 
@@ -512,7 +506,6 @@ const ManageStocksPage = () => {
     if (activeTab === 'stock-adjustments') {
       const params = buildAdjustmentParams()
       void dispatch(loadStockAdjustments(params))
-      console.log('📊 Loading stock adjustments with filters:', params)
     }
   }, [activeTab, dispatch, buildAdjustmentParams])
   
@@ -918,9 +911,8 @@ const ManageStocksPage = () => {
       setShowEditFulfilledModal(false)
       setEditingRequest(null)
       dispatch(clearTransferRequestMutation('update'))
-    } catch (error) {
+    } catch {
       // Error handling is managed by the modal through Redux state
-      console.error('Failed to update fulfilled request:', error)
     }
   }
 
@@ -934,7 +926,6 @@ const ManageStocksPage = () => {
     // Reset to page 1 and reload adjustments list
     dispatch(setAdjustmentsPage(1))
     void dispatch(loadStockAdjustments(buildAdjustmentParams(1)))
-    console.log('✅ Created adjustment, reloading list from page 1')
   }
 
   const handleViewAdjustment = (adjustment: StockAdjustment) => {
@@ -948,7 +939,6 @@ const ManageStocksPage = () => {
     void dispatch(loadStockAdjustments(buildAdjustmentParams()))
     setShowAdjustmentDetailModal(false)
     setSelectedAdjustment(null)
-    console.log('✅ Approved adjustment, reloading list')
   }
 
   const handleRejectAdjustment = async (id: string) => {
@@ -957,7 +947,6 @@ const ManageStocksPage = () => {
     void dispatch(loadStockAdjustments(buildAdjustmentParams()))
     setShowAdjustmentDetailModal(false)
     setSelectedAdjustment(null)
-    console.log('❌ Rejected adjustment, reloading list')
   }
 
   const handleEditAdjustment = (adjustment: StockAdjustment) => {
@@ -972,7 +961,6 @@ const ManageStocksPage = () => {
     void dispatch(loadStockAdjustments(buildAdjustmentParams()))
     setShowEditAdjustmentModal(false)
     setEditingAdjustment(null)
-    console.log('✏️ Edited adjustment, reloading list')
   }
 
   const handleDeleteAdjustment = (adjustment: StockAdjustment) => {
@@ -990,9 +978,7 @@ const ManageStocksPage = () => {
       setShowDeleteConfirmation(false)
       setAdjustmentToDelete(null)
       setShowAdjustmentDetailModal(false)
-      console.log('🗑️ Deleted adjustment, reloading list')
-    } catch (error) {
-      console.error('Failed to delete adjustment:', error)
+    } catch {
       // Keep the confirmation modal open to show error
     }
   }
@@ -1038,26 +1024,13 @@ const ManageStocksPage = () => {
   
   const handleCompleteWarehouseTransfer = async (id: string, notes?: string) => {
     try {
-      console.log('=== Attempting to complete transfer ===')
-      console.log('Transfer ID:', id)
-      console.log('Notes:', notes)
-      console.log('Payload:', notes ? { notes } : undefined)
-      
-      const result = await dispatch(completeWarehouseTransferThunk({ transferId: id, payload: notes ? { notes } : undefined })).unwrap()
-      
-      console.log('=== Complete transfer SUCCESS ===')
-      console.log('Result:', result)
+      await dispatch(completeWarehouseTransferThunk({ transferId: id, payload: notes ? { notes } : undefined })).unwrap()
       
       // Reload transfers list
       void dispatch(loadWarehouseTransfers())
       setShowWarehouseTransferDetailModal(false)
       dispatch(clearWarehouseTransferMutation('complete'))
-    } catch (error) {
-      console.error('=== Failed to complete warehouse transfer ===')
-      console.error('Error object:', error)
-      console.error('Error type:', typeof error)
-      console.error('Error keys:', Object.keys(error as object))
-      console.error('Error JSON:', JSON.stringify(error, null, 2))
+    } catch {
       // Keep modal open to show error
     }
   }
@@ -1069,8 +1042,7 @@ const ManageStocksPage = () => {
       void dispatch(loadWarehouseTransfers())
       setShowWarehouseTransferDetailModal(false)
       dispatch(clearWarehouseTransferMutation('cancel'))
-    } catch (error) {
-      console.error('Failed to cancel warehouse transfer:', error)
+    } catch {
       // Keep modal open to show error
     }
   }
@@ -1082,8 +1054,7 @@ const ManageStocksPage = () => {
       void dispatch(loadWarehouseTransfers())
       setShowWarehouseTransferDetailModal(false)
       dispatch(clearWarehouseTransferMutation('delete'))
-    } catch (error) {
-      console.error('Failed to delete warehouse transfer:', error)
+    } catch {
       // Keep modal open to show error
     }
   }

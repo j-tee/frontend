@@ -12,7 +12,12 @@ import type {
   InitializePaymentRequest,
   VerifyPaymentRequest,
   PaymentInitiationResponse,
-  PaymentVerificationResponse
+  PaymentVerificationResponse,
+  TaxConfiguration,
+  CreateTaxConfigPayload,
+  UpdateTaxConfigPayload,
+  PricingBreakdown,
+  PricingCalculationParams
 } from '../types/subscriptions'
 
 // ========== Plans ==========
@@ -223,6 +228,100 @@ export const fetchRevenueByPlan = async () => {
 export const fetchExpiringSoon = async () => {
   const { data } = await httpClient.get<PaginatedResponse<Subscription>>(
     '/subscriptions/api/stats/expiring_soon/'
+  )
+  return data
+}
+
+// ========== Tax Configuration ==========
+
+/**
+ * Fetch all tax configurations with optional filtering
+ * @param params - Optional filters: is_active, country
+ */
+export const fetchTaxConfigurations = async (params?: {
+  is_active?: boolean
+  country?: string
+}) => {
+  const { data } = await httpClient.get<TaxConfiguration[]>(
+    '/subscriptions/api/tax-config/',
+    params ? { params } : undefined
+  )
+  return data
+}
+
+/**
+ * Fetch a single tax configuration by ID
+ * @param taxId - UUID of the tax configuration
+ */
+export const fetchTaxConfiguration = async (taxId: string) => {
+  const { data } = await httpClient.get<TaxConfiguration>(
+    `/subscriptions/api/tax-config/${taxId}/`
+  )
+  return data
+}
+
+/**
+ * Fetch only currently active/effective tax configurations
+ * Considers effective_from and effective_until dates
+ */
+export const fetchActiveTaxConfigurations = async () => {
+  const { data } = await httpClient.get<TaxConfiguration[]>(
+    '/subscriptions/api/tax-config/active/'
+  )
+  return data
+}
+
+/**
+ * Create a new tax configuration (Platform Admin only)
+ * @param payload - Tax configuration data
+ */
+export const createTaxConfiguration = async (payload: CreateTaxConfigPayload) => {
+  const { data } = await httpClient.post<TaxConfiguration>(
+    '/subscriptions/api/tax-config/',
+    payload
+  )
+  return data
+}
+
+/**
+ * Update an existing tax configuration (Platform Admin only)
+ * @param taxId - UUID of the tax configuration
+ * @param payload - Partial tax configuration data to update
+ */
+export const updateTaxConfiguration = async (
+  taxId: string,
+  payload: UpdateTaxConfigPayload
+) => {
+  const { data } = await httpClient.patch<TaxConfiguration>(
+    `/subscriptions/api/tax-config/${taxId}/`,
+    payload
+  )
+  return data
+}
+
+/**
+ * Delete a tax configuration (Platform Admin only)
+ * @param taxId - UUID of the tax configuration
+ */
+export const deleteTaxConfiguration = async (taxId: string) => {
+  await httpClient.delete(`/subscriptions/api/tax-config/${taxId}/`)
+}
+
+// ========== Pricing Calculation ==========
+
+/**
+ * Calculate complete pricing breakdown including taxes and service charges
+ * NEVER implement tax calculation on frontend - always use this endpoint
+ * @param params - storefronts (required), gateway (optional)
+ */
+export const calculatePricing = async (params: PricingCalculationParams) => {
+  const queryParams = new URLSearchParams({
+    storefronts: params.storefronts.toString(),
+    ...(params.gateway && { gateway: params.gateway })
+  })
+  
+  const { data } = await httpClient.get<PricingBreakdown>(
+    `/subscriptions/api/pricing/calculate/?${queryParams}`
   )
   return data
 }

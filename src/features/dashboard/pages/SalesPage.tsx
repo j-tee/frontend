@@ -98,11 +98,6 @@ export default function SalesPage() {
   const prevCartCustomerRef = useRef<string | null>(null)
   const hasUserSelectedCustomer = useRef<boolean>(false)
 
-  // Debug: Log sale type changes
-  useEffect(() => {
-    console.log('📊 Sale type changed to:', saleType)
-  }, [saleType])
-
   const normalizeStats = useCallback((stats: Partial<typeof DEFAULT_TODAY_STATS> | null | undefined) => {
     const safe = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : 0)
     return {
@@ -121,8 +116,8 @@ export default function SalesPage() {
       if (typeof window !== 'undefined') {
         try {
           window.localStorage.setItem(`pos_today_stats_${cacheKey}`, JSON.stringify(normalized))
-        } catch (storageError) {
-          console.warn('Unable to persist today stats cache', storageError)
+        } catch {
+          // Silently ignore localStorage errors
         }
       }
       return normalized
@@ -147,8 +142,7 @@ export default function SalesPage() {
         const normalized = normalizeStats(parsed)
         statsCacheRef.current[cacheKey] = normalized
         return normalized
-      } catch (err) {
-        console.warn('Failed to read cached today stats', err)
+      } catch {
         return null
       }
     },
@@ -328,8 +322,7 @@ export default function SalesPage() {
         }
         return storeStats(cacheKey, nextStats)
       })
-    } catch (err) {
-      console.error("Failed to load today's stats", err)
+    } catch {
       setStatsError("Couldn't refresh today's stats. Showing last known values.")
     } finally {
       setStatsLoading(false)
@@ -358,8 +351,8 @@ export default function SalesPage() {
       if (cart.status === 'DRAFT') {
         await dispatch(abandonSale({ saleId: cart.id })).unwrap()
       }
-    } catch (err) {
-      console.error('Failed to abandon previous draft sale', err)
+    } catch {
+      // Ignore abandonment errors
     } finally {
       dispatch(clearCart())
       currentCartRef.current = null
@@ -387,14 +380,6 @@ export default function SalesPage() {
     // Use preferred storefront if provided (multi-storefront mode), otherwise use current location
     const targetStorefront = preferredStorefrontId || currentLocation?.id
     
-    console.log('🔍 startFreshSaleSession called:', {
-      preferredStorefrontId,
-      currentLocationId: currentLocation?.id,
-      currentLocationName: storefronts.find(s => s.id === currentLocation?.id)?.name,
-      targetStorefront,
-      targetStorefrontName: storefronts.find(s => s.id === targetStorefront)?.name
-    })
-    
     if (!targetStorefront) {
       setCustomerError('Please select a storefront before starting a sale.')
       return null
@@ -416,16 +401,6 @@ export default function SalesPage() {
     }
 
     try {
-      console.log('🛒 Creating sale with storefront:', {
-        targetStorefront,
-        targetStorefrontName: storefronts.find(s => s.id === targetStorefront)?.name,
-        preferredStorefrontId,
-        currentLocationId: currentLocation?.id,
-        currentLocationName: storefronts.find(s => s.id === currentLocation?.id)?.name,
-        saleType,
-        customerId
-      })
-      
       const sale = await dispatch(
         createSale({
           storefront: targetStorefront,
@@ -447,12 +422,11 @@ export default function SalesPage() {
 
       setCustomerError(null)
       return sale
-    } catch (err) {
-      console.error('Failed to start a new sale session', err)
+    } catch {
       setCustomerError('Unable to start a new sale. Please try again.')
       return null
     }
-  }, [currentLocation, dispatch, getWalkInCustomer, saleType, selectedCustomer, storefronts])
+  }, [currentLocation, dispatch, getWalkInCustomer, saleType, selectedCustomer])
 
   const prepareFreshSale = useCallback(async (options?: { startNewDraft?: boolean; clearCustomer?: boolean }) => {
     if (initializingSaleRef.current) {
@@ -469,13 +443,10 @@ export default function SalesPage() {
     // Only reset customer selection if explicitly requested (e.g., after completing a sale)
     // Default is to preserve user's customer selection
     if (options?.clearCustomer === true) {
-      console.log('🔄 Clearing customer selection (fresh sale after completion)')
       setSelectedCustomer(null)
       setCheckoutCustomerId(null)
       hasUserSelectedCustomer.current = false
       prevCartCustomerRef.current = null
-    } else {
-      console.log('🔄 Preserving customer selection (initializing sale session)')
     }
 
     try {
@@ -547,7 +518,6 @@ export default function SalesPage() {
 
     // Don't run if business isn't loaded yet
     if (!currentBusiness?.id) {
-      console.log('⏳ Waiting for business context to load...')
       return
     }
 
@@ -571,7 +541,6 @@ export default function SalesPage() {
         )
         
         if (walkInOption) {
-          console.log('✅ Found walk-in customer:', walkInOption)
           setSelectedCustomer((prev) => {
             if (prev) return prev // Don't override user selection
             return walkInOption.id
@@ -580,12 +549,8 @@ export default function SalesPage() {
             if (prev) return prev
             return walkInOption.id
           })
-        } else {
-          // This should never happen since backend creates walk-in customer when business is created
-          console.warn('⚠️ Walk-in customer not found in customer list. Backend should have created it.')
         }
-      } catch (err) {
-        console.error('Failed to load customers', err)
+      } catch {
         if (isMounted) {
           setCustomerError('Unable to load customers. You can still create a new one.')
         }
@@ -605,27 +570,11 @@ export default function SalesPage() {
 
   // Sync selected customer TO cart when cart is created (user selected customer before adding products)
   useEffect(() => {
-    console.log('🟢 useEffect (user→cart sync) triggered:', {
-      hasCart: !!currentCart?.id,
-      cartId: currentCart?.id,
-      cartCustomer: currentCart?.customer,
-      selectedCustomer,
-      willSync: currentCart?.id && selectedCustomer && currentCart.customer !== selectedCustomer
-    })
-    
     if (currentCart?.id && selectedCustomer && currentCart.customer !== selectedCustomer) {
-      console.log('🟢 Syncing user-selected customer to backend cart:', {
-        cartId: currentCart.id,
-        cartCustomer: currentCart.customer,
-        cartCustomerName: currentCart.customer_name,
-        selectedCustomer,
-      })
-      
       // Update backend with the customer user selected before cart existed
       void (async () => {
         try {
           const updatedSale = await updateSaleCustomer(currentCart.id, selectedCustomer)
-          console.log('✅ Cart customer synced to backend:', updatedSale.customer_name)
           
           dispatch(
             setCurrentCartCustomer({
@@ -633,8 +582,7 @@ export default function SalesPage() {
               customerName: updatedSale.customer_name,
             })
           )
-        } catch (err) {
-          console.error('❌ Failed to sync customer to new cart:', err)
+        } catch {
           setCustomerError('Failed to assign customer to sale. Please reselect from dropdown.')
         }
       })()
@@ -648,15 +596,6 @@ export default function SalesPage() {
     const cartCustomer = currentCart?.customer || null
     const cartCustomerName = currentCart?.customer_name || null
     
-    console.log('🟣 useEffect (cart→dropdown sync) triggered:', {
-      currentCartCustomer: cartCustomer,
-      currentCartCustomerName: cartCustomerName,
-      prevCartCustomer: prevCartCustomerRef.current,
-      selectedCustomer,
-      hasUserSelected: hasUserSelectedCustomer.current,
-      willSync: cartCustomer && cartCustomer !== prevCartCustomerRef.current && !hasUserSelectedCustomer.current
-    })
-    
     // Only sync from cart to dropdown if:
     // 1. Cart customer actually CHANGED from backend (not just re-render)
     // 2. User hasn't manually selected a different customer
@@ -666,11 +605,8 @@ export default function SalesPage() {
       
       // ONLY update dropdown if user hasn't made their own selection
       if (!hasUserSelectedCustomer.current) {
-        console.log('🟣 Syncing cart customer to dropdown (no user selection):', cartCustomer)
         setSelectedCustomer(cartCustomer)
         setCheckoutCustomerId(cartCustomer)
-      } else {
-        console.log('🟣 Skipping dropdown sync - user has made selection:', selectedCustomer)
       }
     }
   }, [currentCart?.customer, currentCart?.customer_name, selectedCustomer, upsertCustomerOption])
@@ -716,51 +652,26 @@ export default function SalesPage() {
       // Reset user selection flag when clearing cart
       hasUserSelectedCustomer.current = false
       prevCartCustomerRef.current = null
-    } catch (err) {
-      console.error('Failed to abandon sale before clearing cart', err)
+    } catch {
+      // Ignore abandonment errors
     }
   }, [currentCartRef, dispatch])
 
   const handleCustomerChange = async (customerId: UUID | null) => {
-    console.log('🔵 handleCustomerChange called:', {
-      customerId,
-      currentCartExists: !!currentCart,
-      currentCartId: currentCart?.id,
-      currentCartCustomer: currentCart?.customer,
-      currentCartCustomerName: currentCart?.customer_name,
-    })
-    
     // Mark that user has manually selected a customer
     hasUserSelectedCustomer.current = true
     
-    console.log('🔵 Setting selectedCustomer to:', customerId, 'hasUserSelectedCustomer:', hasUserSelectedCustomer.current)
     setSelectedCustomer(customerId)
     setCheckoutCustomerId(customerId)
-    console.log('🔵 After setSelectedCustomer, hasUserSelectedCustomer:', hasUserSelectedCustomer.current)
     
     if (customerId) {
       const option = customerOptions.find((customer) => customer.id === customerId)
       const customerName = option?.name ?? null
       
-      console.log('🔵 Customer option found:', { customerName, option })
-      
       // Backend endpoint implemented (e60b313) - customer updates now persist to database
       if (currentCart?.id) {
         try {
-          console.log('🔄 Calling updateSaleCustomer API...', {
-            saleId: currentCart.id,
-            customerId,
-            endpoint: `/sales/api/sales/${currentCart.id}/update_customer/`
-          })
-          
           const updatedSale = await updateSaleCustomer(currentCart.id, customerId)
-          
-          console.log('✅ Backend response received:', {
-            customer: updatedSale.customer,
-            customer_name: updatedSale.customer_name,
-            status: updatedSale.status,
-            fullResponse: updatedSale
-          })
           
           // Update Redux store with backend response to ensure consistency
           dispatch(
@@ -770,16 +681,8 @@ export default function SalesPage() {
             })
           )
           
-          console.log('✅ Redux updated with backend data')
           setCustomerError(null)
-        } catch (err) {
-          console.error('❌ Failed to update customer on backend:', err)
-          console.error('❌ Error details:', {
-            error: err,
-            message: err instanceof Error ? err.message : 'Unknown error',
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            response: (err as any)?.response?.data
-          })
+        } catch {
           setCustomerError('Failed to update customer. Please try again.')
           // Revert selection on error
           setSelectedCustomer(currentCart.customer)
@@ -787,7 +690,6 @@ export default function SalesPage() {
         }
       } else {
         // No cart yet, just update local state
-        console.log('⚠️ No cart exists, updating local state only')
         dispatch(
           setCurrentCartCustomer({
             customerId,
@@ -797,7 +699,6 @@ export default function SalesPage() {
         setCustomerError(null)
       }
     } else {
-      console.log('🔵 Clearing customer selection')
       dispatch(setCurrentCartCustomer({ customerId: null, customerName: null }))
     }
   }
@@ -813,9 +714,7 @@ export default function SalesPage() {
     // Backend endpoint implemented (e60b313) - newly created customers now persist to sale
     if (currentCart?.id) {
       try {
-        console.log('🔄 Updating newly created customer on backend sale:', currentCart.id, '→', customer.id)
         const updatedSale = await updateSaleCustomer(currentCart.id, customer.id)
-        console.log('✅ Customer updated on backend:', updatedSale.customer_name)
         
         // Update Redux store with backend response to ensure consistency
         dispatch(
@@ -825,8 +724,7 @@ export default function SalesPage() {
           })
         )
         setCustomerError(null)
-      } catch (err) {
-        console.error('❌ Failed to update customer on backend:', err)
+      } catch {
         setCustomerError('Customer created but failed to assign to sale. Please select from dropdown.')
         // Revert selection on error
         setSelectedCustomer(currentCart.customer)
@@ -985,12 +883,6 @@ export default function SalesPage() {
                         variant={saleType === 'WHOLESALE' ? 'warning' : 'outline-secondary'}
                         size="sm"
                         onClick={() => {
-                          console.log('🔄 Sale type toggle clicked:', {
-                            current: saleType,
-                            willChangeTo: saleType === 'RETAIL' ? 'WHOLESALE' : 'RETAIL',
-                            hasCart: !!currentCart,
-                            cartId: currentCart?.id
-                          })
                           setSaleType(saleType === 'RETAIL' ? 'WHOLESALE' : 'RETAIL')
                         }}
                         disabled={!!currentCart}

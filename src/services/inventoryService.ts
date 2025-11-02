@@ -123,25 +123,11 @@ export const completeWarehouseTransfer = async (
   id: UUID,
   payload?: WarehouseTransferCompletePayload
 ): Promise<WarehouseTransfer> => {
-  console.log('=== completeWarehouseTransfer SERVICE ===')
-  console.log('Transfer ID:', id)
-  console.log('Payload:', payload)
-  console.log('URL:', `/inventory/api/warehouse-transfers/${id}/complete/`)
-  console.log('Body:', payload || {})
-  
-  try {
-    const { data } = await httpClient.post<WarehouseTransfer>(
-      `/inventory/api/warehouse-transfers/${id}/complete/`,
-      payload || {}
-    )
-    console.log('=== completeWarehouseTransfer SUCCESS ===')
-    console.log('Response data:', data)
-    return data
-  } catch (error) {
-    console.error('=== completeWarehouseTransfer ERROR ===')
-    console.error('Error:', error)
-    throw error
-  }
+  const { data } = await httpClient.post<WarehouseTransfer>(
+    `/inventory/api/warehouse-transfers/${id}/complete/`,
+    payload || {}
+  )
+  return data
 }
 
 export const cancelWarehouseTransfer = async (
@@ -222,16 +208,10 @@ export const fetchWarehouses = async (params?: FetchWarehousesParams) => {
 }
 
 export const createWarehouse = async (payload: WarehousePayload) => {
-  if (import.meta.env.DEV) {
-    console.debug('[inventory] creating warehouse', payload)
-  }
   const { data } = await httpClient.post<Warehouse>(
     '/inventory/api/warehouses/',
     payload,
   )
-  if (import.meta.env.DEV) {
-    console.debug('[inventory] warehouse created', data)
-  }
   return data
 }
 
@@ -276,16 +256,10 @@ export const fetchStorefront = async (storefrontId: string) => {
 }
 
 export const createStorefront = async (payload: StorefrontPayload) => {
-  if (import.meta.env.DEV) {
-    console.debug('[inventory] creating storefront', payload)
-  }
   const { data } = await httpClient.post<Storefront>(
     '/inventory/api/storefronts/',
     payload,
   )
-  if (import.meta.env.DEV) {
-    console.debug('[inventory] storefront created', data)
-  }
   return data
 }
 

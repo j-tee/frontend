@@ -68,8 +68,21 @@ export const setupHttpInterceptors = (store: Store<RootState>) => {
       }
 
       if (status === 403) {
-        const data = (error.response.data ?? {}) as { detail?: string }
-        store.dispatch(showSubscriptionGate(data.detail ?? null))
+        const data = (error.response.data ?? {}) as { detail?: string; code?: string }
+        
+        // Only show subscription gate for subscription-specific errors
+        const isSubscriptionError = 
+          data.code === 'subscription_required' ||
+          data.code === 'subscription_expired' ||
+          data.code === 'subscription_inactive' ||
+          (data.detail && (
+            data.detail.toLowerCase().includes('subscription') ||
+            data.detail.toLowerCase().includes('plan required')
+          ))
+        
+        if (isSubscriptionError) {
+          store.dispatch(showSubscriptionGate(data.detail ?? null))
+        }
       }
 
       return Promise.reject(error)

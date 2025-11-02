@@ -57,7 +57,6 @@ const ExportSchedulesPage = () => {
     try {
       await dispatch(deleteSchedule(scheduleId)).unwrap()
     } catch (err) {
-      console.error('Failed to delete schedule:', err)
     } finally {
       setActionLoading(null)
     }
@@ -72,7 +71,6 @@ const ExportSchedulesPage = () => {
         await dispatch(activateSchedule(schedule.id)).unwrap()
       }
     } catch (err) {
-      console.error('Failed to toggle schedule:', err)
     } finally {
       setActionLoading(null)
     }
@@ -88,7 +86,6 @@ const ExportSchedulesPage = () => {
       await dispatch(triggerSchedule(scheduleId)).unwrap()
       alert('Export triggered successfully! Check Export History for results.')
     } catch (err) {
-      console.error('Failed to trigger export:', err)
       alert('Failed to trigger export. Please try again.')
     } finally {
       setActionLoading(null)

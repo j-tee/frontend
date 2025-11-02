@@ -41,7 +41,6 @@ export const ProductMovementSummaryModal: React.FC<ProductMovementSummaryModalPr
         setError('Failed to load product summary');
       }
     } catch (err) {
-      console.error('Error fetching product summary:', err);
       setError('Failed to load product summary. Make sure the backend endpoint is available.');
     } finally {
       setLoading(false);

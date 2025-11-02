@@ -362,8 +362,8 @@ const StockIntakeModal = ({
       })
       setBatchSuccessMessage('Stock record created. Add line items below to complete the intake.')
       setIsUsingExistingBatch(false)
-    } catch (error) {
-      console.error('Failed to create stock batch', error)
+    } catch {
+      // Error is handled by parent component
     }
   }
 
@@ -377,10 +377,7 @@ const StockIntakeModal = ({
     const warehouseId = createdBatch.warehouse_id ?? batchForm.warehouse
 
     if (!warehouseId) {
-      console.error('Missing warehouse on stock batch, cannot create stock product', {
-        createdBatch,
-        fallbackWarehouse: batchForm.warehouse,
-      })
+      // Cannot create stock product without warehouse
       return
     }
 
@@ -406,8 +403,8 @@ const StockIntakeModal = ({
       setLineItemForm(initialLineItemForm)
       setItemSuccessMessage('Stock item added successfully.')
       onComplete?.(createdBatch.id)
-    } catch (error) {
-      console.error('Failed to create stock item', error)
+    } catch {
+      // Error is handled by parent component
     }
   }
 

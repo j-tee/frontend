@@ -52,7 +52,6 @@ export default function UserRoleAssignment() {
       setUserRoles(userRolesData)
       setAvailableRoles(rolesData)
     } catch (err) {
-      console.error('Failed to load user roles:', err)
       setMessage({
         type: 'error',
         text: 'Failed to load user roles'

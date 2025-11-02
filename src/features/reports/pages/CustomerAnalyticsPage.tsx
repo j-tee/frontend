@@ -45,7 +45,6 @@ const CustomerAnalyticsPage: React.FC = () => {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load customer analytics report');
-      console.error('Error fetching customer analytics:', err);
     } finally {
       setLoading(false);
     }
@@ -64,7 +63,6 @@ const CustomerAnalyticsPage: React.FC = () => {
         segment: selectedSegment === 'all' ? undefined : selectedSegment,
       });
     } catch (err) {
-      console.error('Export failed:', err);
       alert('Failed to export report. Please try again.');
     }
   };

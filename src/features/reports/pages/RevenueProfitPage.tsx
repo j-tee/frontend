@@ -44,7 +44,6 @@ const RevenueProfitPage: React.FC = () => {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load revenue & profit report');
-      console.error('Error fetching revenue & profit:', err);
     } finally {
       setLoading(false);
     }
@@ -63,7 +62,6 @@ const RevenueProfitPage: React.FC = () => {
         grouping: grouping,
       });
     } catch (err) {
-      console.error('Export failed:', err);
       alert('Failed to export report. Please try again.');
     }
   };

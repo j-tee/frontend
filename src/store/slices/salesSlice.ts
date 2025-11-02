@@ -163,24 +163,10 @@ export const addItemToCart = createAsyncThunk<
             }
           | undefined
 
-        console.error('[sales/addItem] API rejected add-to-cart request', {
-          saleId,
-          product: rest.product,
-          quantity: rest.quantity,
-          stockProduct,
-          status: error.response?.status,
-          statusText: error.response?.statusText,
-          code: responseData?.code,
-          error: responseData?.error,
-          developer_message: responseData?.developer_message,
-          details: responseData?.details,
-        })
-
+        // Error occurred - extract user-friendly message if available
         if (responseData?.developer_message) {
-          console.info('[sales/addItem] Developer message:', responseData.developer_message)
+          // Developer message available for debugging if needed
         }
-      } else {
-        console.error('[sales/addItem] Unexpected error while adding product to cart', error)
       }
 
       return rejectWithValue({ userMessage: friendlyMessage })
@@ -281,20 +267,10 @@ export const abandonSale = createAsyncThunk<
             }
           | undefined
 
-        console.error('[sales/abandon] Failed to abandon sale', {
-          saleId,
-          status: error.response?.status,
-          statusText: error.response?.statusText,
-          code: responseData?.code,
-          error: responseData?.error,
-          developer_message: responseData?.developer_message,
-        })
-
+        // Error occurred - extract user-friendly message if available
         if (responseData?.developer_message) {
-          console.info('[sales/abandon] Developer message:', responseData.developer_message)
+          // Developer message available for debugging if needed
         }
-      } else {
-        console.error('[sales/abandon] Unexpected error while abandoning sale', error)
       }
 
       return rejectWithValue(friendlyMessage)

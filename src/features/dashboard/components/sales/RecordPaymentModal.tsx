@@ -69,7 +69,6 @@ export function RecordPaymentModal({ show, sale, onHide, onPaymentRecorded }: Re
 
       await onPaymentRecorded()
     } catch (e) {
-      console.error('Failed to record payment', e)
       setError('Unable to record payment. Please try again.')
     } finally {
       setSubmitting(false)
