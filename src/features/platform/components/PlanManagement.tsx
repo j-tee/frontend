@@ -22,11 +22,13 @@ import {
 import type { Plan } from '../../../types/subscriptions'
 import type { CreatePlanPayload, BillingCycle } from '../../../types/platform'
 import { useAppSelector } from '../../../hooks'
+import { useCurrency } from '../../../hooks/useCurrency'
 import { selectCurrentUser } from '../../../store/slices/authSlice'
 import { canManagePlans } from '../../../utils/platformPermissions'
 
 export default function PlanManagement() {
   const user = useAppSelector(selectCurrentUser)
+  const { formatCurrency } = useCurrency()
   const [plans, setPlans] = useState<Plan[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -241,7 +243,7 @@ export default function PlanManagement() {
                         <small className="text-muted">{plan.description}</small>
                       </td>
                       <td>
-                        <strong>{plan.currency} {plan.price}</strong>
+                        <strong>{formatCurrency(parseFloat(plan.price))}</strong>
                       </td>
                       <td>{plan.billing_cycle}</td>
                       <td>

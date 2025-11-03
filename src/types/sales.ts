@@ -138,6 +138,7 @@ export interface Sale {
   receipt_number: string
   storefront: UUID
   storefront_name: string
+  business_name?: string // Business name from backend
   customer: UUID | null
   customer_name: string | null
   user: UUID

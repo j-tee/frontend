@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Modal, Button, Alert, Spinner, Badge } from 'react-bootstrap'
 import { useCurrency } from '../../../../hooks'
+import { useAppSelector } from '../../../../hooks'
+import { selectCurrentBusiness } from '../../../../store/slices/authSlice'
 import { getSale } from '../../../../services/salesService'
 import type { UUID } from '../../../../types/common'
 import type { Sale } from '../../../../types/sales'
@@ -16,6 +18,7 @@ export function ReceiptModal({ show, saleId, onHide }: ReceiptModalProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { formatCurrency } = useCurrency()
+  const business = useAppSelector(selectCurrentBusiness)
 
   const loadSaleDetails = useCallback(async () => {
     if (!saleId) return
@@ -133,7 +136,7 @@ export function ReceiptModal({ show, saleId, onHide }: ReceiptModalProps) {
           <div id="receipt-print-content">
             {/* Business Header */}
             <div className="text-center mb-3 border-bottom pb-3">
-              <h4 className="mb-1">DIALOGUES SYSTEMS</h4>
+              <h4 className="mb-1">{sale.business_name || business?.name || 'Business Name'}</h4>
               <div className="text-muted">{sale.storefront_name || 'Store'}</div>
               <div className="text-muted small mt-2">
                 Thank you for your business

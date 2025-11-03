@@ -775,6 +775,7 @@ export interface ARCustomer {
   '1_30_days': number;
   '31_60_days': number;
   '61_90_days': number;
+  over_90_days: number;
   last_payment_date: string | null;
   risk_level: 'low' | 'medium' | 'high';
   retail_balance: number;

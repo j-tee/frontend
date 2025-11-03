@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Search, X, Package } from 'lucide-react';
+import { Search, Package } from 'lucide-react';
 import { inventoryReportsService } from '../../../services/reportsService';
 import type { ProductSearchResult } from '../../../types/reports';
 

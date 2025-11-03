@@ -342,6 +342,9 @@ const App = () => {
               )}
             />
             <Route path="subscription" element={<SubscriptionPortal />} />
+            <Route path="subscription/payment/callback" element={<PaymentCallback />} />
+            <Route path="subscription/payment/success" element={<PaymentSuccess />} />
+            <Route path="subscription/payment/cancelled" element={<PaymentCancelled />} />
             {/* Account Settings Route */}
             <Route path="account" element={<AccountSettingsPage />} />
             {/* Platform Admin Route */}

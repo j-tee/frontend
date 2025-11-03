@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import Button from 'react-bootstrap/Button'
+import { useNavigate } from 'react-router-dom'
 import { useAppDispatch, useAppSelector } from '../../../hooks/index.js'
 import {
   loadActiveSubscription,
@@ -9,6 +10,7 @@ import {
 
 const BillingPage = () => {
   const dispatch = useAppDispatch()
+  const navigate = useNavigate()
   const subscription = useAppSelector(selectActiveSubscription)
   const { status } = useAppSelector(selectSubscriptionState)
 
@@ -27,7 +29,11 @@ const BillingPage = () => {
           Status: {status === 'loading' ? 'Checking…' : subscription?.status ?? 'Inactive'}
         </p>
         <p className="text-sm text-slate-700">Current plan: {typeof subscription?.plan === 'string' ? subscription.plan : subscription?.plan?.name ?? 'Select a plan'}</p>
-        <Button variant="primary" className="rounded-pill px-4">
+        <Button 
+          variant="primary" 
+          className="rounded-pill px-4"
+          onClick={() => navigate('/app/subscription')}
+        >
           View plans
         </Button>
       </div>

@@ -13,7 +13,7 @@ export default function PaymentCallback() {
     const verifyPaystackPayment = async () => {
       try {
         // Get payment reference from URL
-        const reference = searchParams.get('reference')
+        const reference = searchParams.get('reference') || searchParams.get('trxref')
         
         if (!reference) {
           setStatus('error')
@@ -100,7 +100,7 @@ export default function PaymentCallback() {
               Go to Dashboard
             </a>
             {' '}
-            <a href="/subscriptions" className="btn btn-outline-secondary">
+            <a href="/app/subscription" className="btn btn-outline-secondary">
               Manage Subscriptions
             </a>
           </p>
