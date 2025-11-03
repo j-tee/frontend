@@ -5,6 +5,7 @@ import { selectCurrentBusiness } from '../../../store/slices/authSlice'
 import httpClient from '../../../services/httpClient'
 import type { Plan, Subscription } from '../../../types/subscriptions'
 import { PricingBreakdown } from '../components/PricingBreakdown'
+import { createSubscription, initializePayment } from '../../../services/subscriptionService'
 
 export default function SubscriptionPortal() {
   const currentBusiness = useAppSelector(selectCurrentBusiness)
@@ -65,26 +66,46 @@ export default function SubscriptionPortal() {
     try {
       setProcessing(true)
       
-      // Initialize payment - will be implemented when backend endpoint is ready
-      // const frontendUrl = window.location.origin
-      // Payload for when subscription creation is available
-      // const payload = paymentGateway === 'PAYSTACK'
-      //   ? {
-      //       gateway: 'PAYSTACK',
-      //       callback_url: `${frontendUrl}/payment/callback`
-      //     }
-      //   : {
-      //       gateway: 'STRIPE',
-      //       success_url: `${frontendUrl}/payment/success`,
-      //       cancel_url: `${frontendUrl}/payment/cancelled`
-      //     }
+      // Step 1: Create the subscription
+      const newSubscription = await createSubscription({
+        plan_id: selectedPlan.id,
+        business_id: currentBusiness.id,
+        payment_method: paymentGateway === 'PAYSTACK' ? 'PAYSTACK' : 'STRIPE',
+        is_trial: false  // Explicitly set to false - this is a paid subscription
+      })
       
-      // For now, we'll need a subscription ID. Since we can't create one via API yet,
-      // we'll show instructions to contact support
-      alert('To subscribe to this plan, please contact support at alphalogiquetechnologies@gmail.com with your business details.')
+      // Step 2: Initialize payment
+      const frontendUrl = window.location.origin
+      const paymentPayload = paymentGateway === 'PAYSTACK'
+        ? {
+            gateway: 'PAYSTACK' as const,
+            callback_url: `${frontendUrl}/payment/callback`
+          }
+        : {
+            gateway: 'STRIPE' as const,
+            success_url: `${frontendUrl}/payment/success`,
+            cancel_url: `${frontendUrl}/payment/cancelled`
+          }
       
-    } catch {
-      alert('Failed to initialize payment. Please try again.')
+      const paymentResponse = await initializePayment(newSubscription.id, paymentPayload)
+      
+      // Step 3: Redirect to payment gateway
+      const paymentUrl = paymentResponse.authorization_url 
+        || paymentResponse.checkout_url 
+        || paymentResponse.data?.authorization_url 
+        || paymentResponse.data?.checkout_url
+      
+      if (paymentUrl) {
+        // Redirect user to payment gateway
+        window.location.href = paymentUrl
+      } else {
+        throw new Error('Payment URL not received from gateway')
+      }
+      
+    } catch (error) {
+      console.error('Subscription error:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to initialize payment'
+      alert(`Error: ${errorMessage}. Please try again or contact support.`)
     } finally {
       setProcessing(false)
       setShowPaymentModal(false)
@@ -269,8 +290,7 @@ export default function SubscriptionPortal() {
           </Form.Group>
 
           <Alert variant="info" className="mb-0">
-            <strong>Note:</strong> Backend API endpoint for creating subscriptions is being implemented. 
-            For now, please contact support to activate your subscription.
+            <strong>Note:</strong> You will be redirected to a secure payment page to complete your subscription.
           </Alert>
         </Modal.Body>
         <Modal.Footer>

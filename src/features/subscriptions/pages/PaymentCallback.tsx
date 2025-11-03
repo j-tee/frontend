@@ -6,99 +6,104 @@ import { verifyPayment } from '../../../services/subscriptionService'
 export default function PaymentCallback() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  
-  const [verifying, setVerifying] = useState(true)
-  const [success, setSuccess] = useState(false)
-  const [message, setMessage] = useState('Verifying payment...')
+  const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing')
+  const [message, setMessage] = useState('')
 
   useEffect(() => {
-    const handlePaymentVerification = async () => {
-      // Get reference from URL query params
-      const reference = searchParams.get('reference') || searchParams.get('trxref')
-      let subscriptionId = searchParams.get('subscription_id')
-      
-      if (!reference) {
-        setMessage('Invalid payment reference')
-        setVerifying(false)
-        setSuccess(false)
-        return
-      }
-
-      // If no subscription_id in URL, try to extract from reference
-      // Backend should include subscription_id in metadata that comes back
-      if (!subscriptionId) {
-        // Try to fetch from session storage (we'll store it before redirect)
-        subscriptionId = sessionStorage.getItem('pending_subscription_id')
-      }
-
-      if (!subscriptionId) {
-        setMessage('Missing subscription information. Please contact support.')
-        setVerifying(false)
-        setSuccess(false)
-        return
-      }
-
+    const verifyPaystackPayment = async () => {
       try {
-        console.log('Verifying payment:', { reference, subscriptionId })
+        // Get payment reference from URL
+        const reference = searchParams.get('reference') || searchParams.get('trxref')
         
+        if (!reference) {
+          setStatus('error')
+          setMessage('Payment reference not found in URL')
+          return
+        }
+
+        // Extract subscription ID from reference
+        // Reference format: SUB-{subscription_id}-{timestamp}
+        // UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (5 parts when split by -)
+        const refParts = reference.split('-')
+        if (refParts.length < 7 || refParts[0] !== 'SUB') {
+          setStatus('error')
+          setMessage('Invalid payment reference format')
+          return
+        }
+        
+        // Reconstruct full UUID from parts 1-5
+        // refParts: ['SUB', 'xxxxxxxx', 'xxxx', 'xxxx', 'xxxx', 'xxxxxxxxxxxx', 'timestamp']
+        const subscriptionId = `${refParts[1]}-${refParts[2]}-${refParts[3]}-${refParts[4]}-${refParts[5]}`
+        
+        // Verify payment with backend
         const result = await verifyPayment(subscriptionId, {
           gateway: 'PAYSTACK',
-          reference
+          reference: reference
         })
 
-        console.log('Payment verification result:', result)
-
         if (result.success) {
-          setSuccess(true)
+          setStatus('success')
           setMessage(result.message || 'Payment verified successfully!')
           
-          // Clear session storage
-          sessionStorage.removeItem('pending_subscription_id')
-          
-          // Redirect to subscription portal after 3 seconds
+          // Redirect to dashboard after 2 seconds
+          // User can see active subscription status and continue working
           setTimeout(() => {
-            navigate('/app/subscription')
-          }, 3000)
+            window.location.href = '/app'
+          }, 2000)
         } else {
-          setSuccess(false)
+          setStatus('error')
           setMessage(result.message || 'Payment verification failed')
         }
-      } catch (error: unknown) {
+        
+      } catch (error) {
         console.error('Payment verification error:', error)
-        const err = error as { response?: { data?: { error?: string; detail?: string } }; message?: string }
-        const errorMessage = err?.response?.data?.error || 
-                            err?.response?.data?.detail || 
-                            err?.message || 
-                            'Failed to verify payment'
-        setMessage(errorMessage)
-        setSuccess(false)
-      } finally {
-        setVerifying(false)
+        setStatus('error')
+        setMessage(error instanceof Error ? error.message : 'Failed to verify payment')
       }
     }
 
-    handlePaymentVerification()
+    verifyPaystackPayment()
   }, [searchParams, navigate])
 
   return (
     <Container fluid className="py-5 text-center">
-      {verifying ? (
+      {status === 'processing' && (
         <>
-          <Spinner animation="border" className="mb-3" />
-          <h4>Verifying Payment...</h4>
-          <p className="text-muted">Please wait while we confirm your payment with Paystack.</p>
+          <Spinner animation="border" role="status" className="mb-3">
+            <span className="visually-hidden">Loading...</span>
+          </Spinner>
+          <Alert variant="info">
+            <h4>Processing Payment...</h4>
+            <p>Please wait while we verify your payment with Paystack.</p>
+          </Alert>
         </>
-      ) : (
-        <Alert variant={success ? 'success' : 'danger'}>
-          <h4>{success ? '✓ Payment Successful!' : '✗ Payment Failed'}</h4>
+      )}
+
+      {status === 'success' && (
+        <Alert variant="success">
+          <h4>✅ Payment Successful!</h4>
           <p>{message}</p>
-          {success ? (
-            <p className="mb-0"><small>Redirecting to subscription portal...</small></p>
-          ) : (
-            <p className="mb-0">
-              <a href="/app/subscription">Return to subscription portal</a>
-            </p>
-          )}
+          <p className="mb-0">
+            <small className="text-muted">
+              Redirecting you to dashboard...
+            </small>
+          </p>
+        </Alert>
+      )}
+
+      {status === 'error' && (
+        <Alert variant="danger">
+          <h4>❌ Payment Verification Failed</h4>
+          <p>{message}</p>
+          <p className="mb-0">
+            <a href="/app" className="btn btn-primary">
+              Go to Dashboard
+            </a>
+            {' '}
+            <a href="/app/subscription" className="btn btn-outline-secondary">
+              Manage Subscriptions
+            </a>
+          </p>
         </Alert>
       )}
     </Container>
