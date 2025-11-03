@@ -36,13 +36,25 @@ export default function SubscriptionPortal() {
     try {
       setLoading(true)
       
-      // Load auto-calculated pricing (backend counts storefronts)
-      const pricingData = await fetchMyPricing()
-      setPricing(pricingData)
+      // Try to load auto-calculated pricing (new secure endpoint)
+      try {
+        const pricingData = await fetchMyPricing()
+        setPricing(pricingData)
+      } catch (pricingError) {
+        console.warn('My-pricing endpoint not available yet:', pricingError)
+        // Endpoint not implemented yet - this is expected during transition
+        setPricing(null)
+      }
       
-      // Check subscription status
-      const statusData = await checkSubscriptionStatus()
-      setSubscriptionStatus(statusData)
+      // Try to check subscription status (new endpoint)
+      try {
+        const statusData = await checkSubscriptionStatus()
+        setSubscriptionStatus(statusData)
+      } catch (statusError) {
+        console.warn('Status endpoint not available yet:', statusError)
+        // Endpoint not implemented yet - this is expected during transition
+        setSubscriptionStatus(null)
+      }
       
     } catch (error) {
       console.error('Failed to load subscription data:', error)
@@ -174,7 +186,7 @@ export default function SubscriptionPortal() {
         </Col>
       </Row>
 
-      {pricing && (
+      {pricing && pricing.breakdown && (
         <Row>
           <Col lg={8}>
             <Card>
@@ -310,8 +322,19 @@ export default function SubscriptionPortal() {
       )}
 
       {!pricing && (
-        <Alert variant="info">
-          <p className="mb-0">Unable to load pricing information. Please try refreshing the page.</p>
+        <Alert variant="warning">
+          <h5 className="mb-3">⚠️ Backend API Not Ready</h5>
+          <p className="mb-2">
+            The subscription pricing system is not yet fully configured. The following backend endpoints are missing:
+          </p>
+          <ul className="mb-3">
+            <li><code>GET /subscriptions/api/subscriptions/my-pricing/</code></li>
+            <li><code>GET /subscriptions/api/subscriptions/status/</code></li>
+          </ul>
+          <p className="mb-0">
+            <strong>For Backend Team:</strong> Please implement the endpoints documented in 
+            <code>docs/ADMIN-PRICING-TIER-MANAGEMENT.md</code>
+          </p>
         </Alert>
       )}
 
@@ -321,6 +344,15 @@ export default function SubscriptionPortal() {
           <Modal.Title>Complete Your Subscription</Modal.Title>
         </Modal.Header>
         <Modal.Body>
+          {!pricing && (
+            <Alert variant="warning">
+              <h6>Backend API Not Ready</h6>
+              <p className="mb-0">
+                The pricing calculation endpoint is not available. Please contact support or try again later.
+              </p>
+            </Alert>
+          )}
+          
           {pricing && (
             <>
               {/* Subscription Summary */}
@@ -329,7 +361,7 @@ export default function SubscriptionPortal() {
                 <div className="bg-light p-3 rounded">
                   <div className="d-flex justify-content-between mb-2">
                     <span><strong>Tier:</strong></span>
-                    <span>{pricing.breakdown.tier_name}</span>
+                    <span>{pricing.breakdown?.tier_name || 'N/A'}</span>
                   </div>
                   <div className="d-flex justify-content-between mb-2">
                     <span><strong>Storefronts:</strong></span>
@@ -377,7 +409,7 @@ export default function SubscriptionPortal() {
           <Button variant="secondary" onClick={() => setShowPaymentModal(false)} disabled={processing}>
             Cancel
           </Button>
-          <Button variant="primary" size="lg" onClick={handleSubscribe} disabled={processing}>
+          <Button variant="primary" size="lg" onClick={handleSubscribe} disabled={processing || !pricing}>
             {processing ? (
               <>
                 <Spinner animation="border" size="sm" className="me-2" />
