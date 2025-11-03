@@ -195,18 +195,24 @@ export interface MyPricingResponse {
   }
 }
 
+export interface SubscriptionStatusSummary {
+  id?: UUID
+  status?: SubscriptionStatus
+  plan_name?: string
+  current_period_start?: string
+  current_period_end?: string
+  currency?: string
+  amount?: string
+  days_until_expiry?: number
+}
+
 /**
  * Response from /subscriptions/api/subscriptions/status/
  * Check if user has an active subscription
  */
 export interface SubscriptionStatusResponse {
   has_subscription: boolean
-  subscription?: (Subscription & { plan_name?: string }) | {
-    id?: UUID
-    status?: SubscriptionStatus
-    plan_name?: string
-    current_period_end?: string
-  } | null
+  subscription?: (Subscription & { plan_name?: string }) | SubscriptionStatusSummary | null
 }
 
 export interface Plan {

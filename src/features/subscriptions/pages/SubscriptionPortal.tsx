@@ -170,6 +170,9 @@ export default function SubscriptionPortal() {
   const totalServiceCharges = pricing?.total_service_charges ?? '0.00'
   const billingCycleText = pricing ? getBillingCycleText(pricing.billing_cycle) : 'Monthly'
   const billingCycleLabel = `Billed ${billingCycleText.toLowerCase()}`
+  const subscriptionExpiry = subscription?.current_period_end
+    ? new Date(subscription.current_period_end).toLocaleDateString()
+    : null
 
   return (
     <Container fluid className="py-4">
@@ -190,7 +193,7 @@ export default function SubscriptionPortal() {
                   <h5>Current Subscription</h5>
                   <p>
                     <strong>Plan:</strong> {subscription.plan_name}<br/>
-                    <strong>Expires:</strong> {new Date(subscription.current_period_end).toLocaleDateString()}
+                    <strong>Expires:</strong> {subscriptionExpiry ?? 'Not available'}
                   </p>
                 </div>
               )}

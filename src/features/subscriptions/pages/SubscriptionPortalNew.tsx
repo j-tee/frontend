@@ -152,6 +152,19 @@ export default function SubscriptionPortalNew() {
     activeSubscription?.status === 'PAST_DUE' ? 'warning' :
     'secondary'
 
+  const subscriptionAmount =
+    activeSubscription?.currency && activeSubscription?.amount
+      ? `${activeSubscription.currency} ${activeSubscription.amount}`
+      : null
+
+  const subscriptionStartDate = activeSubscription?.current_period_start
+    ? new Date(activeSubscription.current_period_start).toLocaleDateString()
+    : null
+
+  const subscriptionEndDate = activeSubscription?.current_period_end
+    ? new Date(activeSubscription.current_period_end).toLocaleDateString()
+    : null
+
   return (
     <Container fluid className="py-4">
       {/* Error Display */}
@@ -179,9 +192,9 @@ export default function SubscriptionPortalNew() {
                 <div>
                   <h5>Current Subscription</h5>
                   <p>
-                    <strong>Amount:</strong> {activeSubscription.currency} {activeSubscription.amount} / month<br/>
-                    <strong>Start Date:</strong> {new Date(activeSubscription.current_period_start).toLocaleDateString()}<br/>
-                    <strong>End Date:</strong> {new Date(activeSubscription.current_period_end).toLocaleDateString()}
+                    <strong>Amount:</strong> {subscriptionAmount ?? 'Not available'}{subscriptionAmount ? ' / month' : ''}<br/>
+                    <strong>Start Date:</strong> {subscriptionStartDate ?? 'Not available'}<br/>
+                    <strong>End Date:</strong> {subscriptionEndDate ?? 'Not available'}
                     {activeSubscription.days_until_expiry !== undefined && (
                       <>
                         <br/>
