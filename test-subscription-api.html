@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Subscription API Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test-section {
+            border: 2px solid #ddd;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .warning { background-color: #fff3cd; border-color: #ffeaa7; }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .endpoint {
+            font-family: monospace;
+            background-color: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Subscription API Diagnostic Tool</h1>
+    <p>This tool tests the subscription endpoints to identify why the page is blank.</p>
+
+    <div class="test-section">
+        <h3>Authentication Token</h3>
+        <p>Enter your authentication token (from browser DevTools > Application > Local Storage):</p>
+        <input type="text" id="token" placeholder="Bearer eyJ0eXAiOiJKV1Q..." style="width: 100%; padding: 8px;">
+        <br><br>
+        <input type="text" id="apiBase" placeholder="API Base URL (e.g., http://localhost:8000)" style="width: 100%; padding: 8px;" value="http://localhost:8000">
+    </div>
+
+    <div class="test-section">
+        <h3>Test 1: My Pricing Endpoint</h3>
+        <p>Tests: <span class="endpoint">GET /subscriptions/api/subscriptions/my-pricing/</span></p>
+        <button onclick="testMyPricing()">Run Test</button>
+        <div id="test1-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test 2: Subscription Status Endpoint</h3>
+        <p>Tests: <span class="endpoint">GET /subscriptions/api/subscriptions/status/</span></p>
+        <button onclick="testStatus()">Run Test</button>
+        <div id="test2-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test 3: Pricing Tiers (Admin)</h3>
+        <p>Tests: <span class="endpoint">GET /subscriptions/api/pricing-tiers/</span></p>
+        <button onclick="testPricingTiers()">Run Test</button>
+        <div id="test3-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Run All Tests</h3>
+        <button onclick="runAllTests()">🚀 Run All Tests</button>
+    </div>
+
+    <script>
+        function getToken() {
+            const token = document.getElementById('token').value.trim();
+            if (!token) {
+                alert('Please enter your authentication token');
+                return null;
+            }
+            return token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+        }
+
+        function getApiBase() {
+            return document.getElementById('apiBase').value.trim() || 'http://localhost:8000';
+        }
+
+        async function makeRequest(url, resultDiv) {
+            const token = getToken();
+            if (!token) return;
+
+            const apiBase = getApiBase();
+            const fullUrl = `${apiBase}${url}`;
+
+            resultDiv.innerHTML = '<p>⏳ Testing...</p>';
+
+            try {
+                const response = await fetch(fullUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': token,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const statusCode = response.status;
+                let responseData;
+                
+                try {
+                    responseData = await response.json();
+                } catch (e) {
+                    responseData = await response.text();
+                }
+
+                if (statusCode === 200) {
+                    resultDiv.innerHTML = `
+                        <div style="color: green; font-weight: bold;">✅ SUCCESS (${statusCode})</div>
+                        <h4>Response Data:</h4>
+                        <pre>${JSON.stringify(responseData, null, 2)}</pre>
+                    `;
+                } else if (statusCode === 404) {
+                    resultDiv.innerHTML = `
+                        <div style="color: orange; font-weight: bold;">⚠️ ENDPOINT NOT FOUND (404)</div>
+                        <p>This endpoint has not been implemented by the backend yet.</p>
+                        <p><strong>Action Required:</strong> Backend team needs to implement this endpoint.</p>
+                        <p>See: <code>BACKEND-IMPLEMENTATION-CHECKLIST.md</code></p>
+                    `;
+                } else if (statusCode === 401) {
+                    resultDiv.innerHTML = `
+                        <div style="color: red; font-weight: bold;">❌ UNAUTHORIZED (401)</div>
+                        <p>Your authentication token is invalid or expired.</p>
+                        <p><strong>Action:</strong> Please refresh the page and get a new token.</p>
+                        <pre>${JSON.stringify(responseData, null, 2)}</pre>
+                    `;
+                } else if (statusCode === 500) {
+                    resultDiv.innerHTML = `
+                        <div style="color: red; font-weight: bold;">❌ SERVER ERROR (500)</div>
+                        <p>The backend encountered an error processing this request.</p>
+                        <p><strong>Action:</strong> Check Django server logs for details.</p>
+                        <pre>${JSON.stringify(responseData, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div style="color: red; font-weight: bold;">❌ ERROR (${statusCode})</div>
+                        <pre>${JSON.stringify(responseData, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div style="color: red; font-weight: bold;">❌ NETWORK ERROR</div>
+                    <p>Could not connect to the server. Is the backend running?</p>
+                    <p><strong>Error:</strong> ${error.message}</p>
+                    <p><strong>URL:</strong> ${fullUrl}</p>
+                `;
+            }
+        }
+
+        function testMyPricing() {
+            const resultDiv = document.getElementById('test1-result');
+            makeRequest('/subscriptions/api/subscriptions/my-pricing/', resultDiv);
+        }
+
+        function testStatus() {
+            const resultDiv = document.getElementById('test2-result');
+            makeRequest('/subscriptions/api/subscriptions/status/', resultDiv);
+        }
+
+        function testPricingTiers() {
+            const resultDiv = document.getElementById('test3-result');
+            makeRequest('/subscriptions/api/pricing-tiers/', resultDiv);
+        }
+
+        async function runAllTests() {
+            await testMyPricing();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await testStatus();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await testPricingTiers();
+        }
+
+        // Auto-fill token from localStorage if available
+        window.addEventListener('DOMContentLoaded', () => {
+            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+            if (token) {
+                document.getElementById('token').value = token;
+            }
+        });
+    </script>
+</body>
+</html>

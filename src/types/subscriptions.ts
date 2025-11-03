@@ -170,21 +170,28 @@ export interface PricingCalculationParams {
  * Backend auto-calculates pricing based on user's actual storefront count
  */
 export interface MyPricingResponse {
-  storefronts: number           // Actual count from backend
+  business_name: string
+  business_id: UUID
+  storefront_count: number
   currency: string
   base_price: string
   taxes: TaxBreakdownItem[]
   total_tax: string
-  service_charges: ServiceChargeItem[]
-  total_service_charges: string
   total_amount: string
-  breakdown: {
-    tier_id: UUID
-    tier_name: string
-    tier_description: string
-    base_storefronts: number
-    additional_storefronts: number
-    price_per_additional: string
+  billing_cycle: BillingCycle | string
+  tier_description: string
+  service_charges?: ServiceChargeItem[]
+  total_service_charges?: string
+
+  // Legacy fields (kept optional for backward compatibility with older specs)
+  storefronts?: number
+  breakdown?: {
+    tier_id?: UUID
+    tier_name?: string
+    tier_description?: string
+    base_storefronts?: number
+    additional_storefronts?: number
+    price_per_additional?: string
   }
 }
 

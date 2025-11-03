@@ -28,6 +28,21 @@ export default function SubscriptionPortal() {
   const [paymentGateway, setPaymentGateway] = useState<'PAYSTACK' | 'STRIPE'>('PAYSTACK')
   const [processing, setProcessing] = useState(false)
 
+  const getBillingCycleText = (cycle?: string) => {
+    if (!cycle) return 'Monthly'
+    const normalized = cycle.toUpperCase()
+    switch (normalized) {
+      case 'MONTHLY':
+        return 'Monthly'
+      case 'QUARTERLY':
+        return 'Quarterly'
+      case 'YEARLY':
+        return 'Yearly'
+      default:
+        return normalized.charAt(0) + normalized.slice(1).toLowerCase()
+    }
+  }
+
   useEffect(() => {
     loadData()
   }, [])
@@ -39,7 +54,12 @@ export default function SubscriptionPortal() {
       // Try to load auto-calculated pricing (new secure endpoint)
       try {
         const pricingData = await fetchMyPricing()
-        setPricing(pricingData)
+        setPricing({
+          ...pricingData,
+          taxes: pricingData.taxes ?? [],
+          service_charges: pricingData.service_charges ?? [],
+          total_service_charges: pricingData.total_service_charges ?? '0.00'
+        })
       } catch (pricingError) {
         console.warn('My-pricing endpoint not available yet:', pricingError)
         // Endpoint not implemented yet - this is expected during transition
@@ -144,6 +164,13 @@ export default function SubscriptionPortal() {
     status === 'PAST_DUE' ? 'warning' :
     'secondary'
 
+  const storefrontCount = pricing?.storefront_count ?? pricing?.storefronts ?? 0
+  const taxes = pricing?.taxes ?? []
+  const serviceCharges = pricing?.service_charges ?? []
+  const totalServiceCharges = pricing?.total_service_charges ?? '0.00'
+  const billingCycleText = pricing ? getBillingCycleText(pricing.billing_cycle) : 'Monthly'
+  const billingCycleLabel = `Billed ${billingCycleText.toLowerCase()}`
+
   return (
     <Container fluid className="py-4">
       {/* Current Subscription Status */}
@@ -198,22 +225,24 @@ export default function SubscriptionPortal() {
                 <strong>For Backend Team:</strong> Please implement the endpoints documented in:
               </p>
               <ul className="mb-0">
-                <li><code>docs/BACKEND-PRICING-ENDPOINTS-SPEC.md</code> (detailed spec)</li>
-                <li><code>docs/ADMIN-PRICING-TIER-MANAGEMENT.md</code> (overview)</li>
+                <li><code>FRONTEND_BACKEND_SUBSCRIPTION_API_CONTRACT.md</code> (current contract)</li>
+                <li><code>docs/BACKEND-PRICING-ENDPOINTS-SPEC.md</code> (legacy reference)</li>
               </ul>
             </Alert>
           )}
         </Col>
       </Row>
 
-      {pricing && pricing.breakdown && (
+      {pricing && (
         <Row>
           <Col lg={8}>
             <Card>
               <Card.Body>
                 <div className="mb-4">
-                  <h5 className="text-primary">{pricing.breakdown.tier_name}</h5>
-                  <p className="text-muted mb-0">{pricing.breakdown.tier_description}</p>
+                  <h5 className="text-primary">{pricing.tier_description || 'Subscription Pricing'}</h5>
+                  <p className="text-muted mb-0">
+                    {billingCycleText} plan • {storefrontCount} {storefrontCount === 1 ? 'Storefront' : 'Storefronts'}
+                  </p>
                 </div>
 
                 {/* Storefront Count (Read-only - from backend) */}
@@ -221,10 +250,10 @@ export default function SubscriptionPortal() {
                   <div className="d-flex align-items-center">
                     <i className="bi bi-shop me-2" style={{ fontSize: '1.5rem' }}></i>
                     <div>
-                      <strong>Your Storefronts:</strong> {pricing.storefronts}
+                      <strong>Your Storefronts:</strong> {storefrontCount}
                       <br/>
                       <small className="text-muted">
-                        Based on your registered {pricing.storefronts === 1 ? 'location' : 'locations'}
+                        Based on your registered {storefrontCount === 1 ? 'location' : 'locations'}
                       </small>
                     </div>
                   </div>
@@ -236,24 +265,11 @@ export default function SubscriptionPortal() {
                   
                   {/* Base Price */}
                   <div className="d-flex justify-content-between mb-2">
-                    <span>Base Price ({pricing.breakdown.base_storefronts} {pricing.breakdown.base_storefronts === 1 ? 'storefront' : 'storefronts'})</span>
+                    <span>
+                      Base Price ({storefrontCount} {storefrontCount === 1 ? 'storefront' : 'storefronts'})
+                    </span>
                     <span className="fw-bold">{formatCurrency(pricing.base_price, getCurrencyFromCode(pricing.currency))}</span>
                   </div>
-
-                  {/* Additional Storefronts */}
-                  {pricing.breakdown.additional_storefronts > 0 && (
-                    <div className="d-flex justify-content-between mb-2">
-                      <span>
-                        Additional Storefronts ({pricing.breakdown.additional_storefronts} × {formatCurrency(pricing.breakdown.price_per_additional, getCurrencyFromCode(pricing.currency))})
-                      </span>
-                      <span className="fw-bold">
-                        {formatCurrency(
-                          (parseFloat(pricing.breakdown.price_per_additional) * pricing.breakdown.additional_storefronts).toFixed(2),
-                          getCurrencyFromCode(pricing.currency)
-                        )}
-                      </span>
-                    </div>
-                  )}
 
                   <hr />
 
@@ -264,20 +280,27 @@ export default function SubscriptionPortal() {
                   </div>
 
                   {/* Taxes */}
-                  {pricing.taxes.map((tax, idx) => (
+                  {taxes.map((tax, idx) => (
                     <div key={idx} className="d-flex justify-content-between mb-2 text-muted">
-                      <span>{tax.name} ({(tax.rate * 100).toFixed(2)}%)</span>
+                      <span>{tax.name} ({tax.rate <= 1 ? (tax.rate * 100).toFixed(2) : tax.rate.toFixed(2)}%)</span>
                       <span>{formatCurrency(tax.amount, getCurrencyFromCode(pricing.currency))}</span>
                     </div>
                   ))}
 
                   {/* Service Charges */}
-                  {pricing.service_charges.map((charge, idx) => (
+                  {serviceCharges.map((charge, idx) => (
                     <div key={idx} className="d-flex justify-content-between mb-2 text-muted">
                       <span>{charge.name}</span>
                       <span>{formatCurrency(charge.amount, getCurrencyFromCode(pricing.currency))}</span>
                     </div>
                   ))}
+
+                  {serviceCharges.length > 0 && (
+                    <div className="d-flex justify-content-between mb-2 text-muted">
+                      <span>Total Service Charges</span>
+                      <span>{formatCurrency(totalServiceCharges, getCurrencyFromCode(pricing.currency))}</span>
+                    </div>
+                  )}
 
                   <hr />
 
@@ -286,7 +309,7 @@ export default function SubscriptionPortal() {
                     <h5 className="mb-0">Total Amount</h5>
                     <h5 className="mb-0 text-primary">{formatCurrency(pricing.total_amount, getCurrencyFromCode(pricing.currency))}</h5>
                   </div>
-                  <small className="text-muted d-block text-end">Billed monthly</small>
+                  <small className="text-muted d-block text-end">{billingCycleLabel}</small>
                 </div>
 
                 {/* Subscribe Button */}
@@ -316,7 +339,7 @@ export default function SubscriptionPortal() {
               <Card.Body>
                 <h6 className="mb-3">What's Included</h6>
                 <ul className="list-unstyled mb-0">
-                  <li className="mb-2">✓ {pricing.storefronts} Active {pricing.storefronts === 1 ? 'Storefront' : 'Storefronts'}</li>
+                  <li className="mb-2">✓ {storefrontCount} Active {storefrontCount === 1 ? 'Storefront' : 'Storefronts'}</li>
                   <li className="mb-2">✓ Unlimited Products</li>
                   <li className="mb-2">✓ Unlimited Users</li>
                   <li className="mb-2">✓ Advanced Reports</li>
@@ -364,17 +387,17 @@ export default function SubscriptionPortal() {
                 <div className="bg-light p-3 rounded">
                   <div className="d-flex justify-content-between mb-2">
                     <span><strong>Tier:</strong></span>
-                    <span>{pricing.breakdown?.tier_name || 'N/A'}</span>
+                    <span>{pricing.tier_description || 'N/A'}</span>
                   </div>
                   <div className="d-flex justify-content-between mb-2">
                     <span><strong>Storefronts:</strong></span>
-                    <span>{pricing.storefronts}</span>
+                    <span>{storefrontCount}</span>
                   </div>
                   <div className="d-flex justify-content-between mb-0">
                     <span><strong>Total Amount:</strong></span>
                     <span className="text-primary fw-bold">{formatCurrency(pricing.total_amount, getCurrencyFromCode(pricing.currency))}</span>
                   </div>
-                  <small className="text-muted">Billed monthly</small>
+                  <small className="text-muted">{billingCycleLabel}</small>
                 </div>
               </div>
 
