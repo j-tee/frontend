@@ -183,6 +183,26 @@ export default function SubscriptionPortal() {
       <Row className="mb-4">
         <Col>
           <h4 className="mb-3">Your Pricing</h4>
+          
+          {!pricing && (
+            <Alert variant="warning">
+              <h5 className="mb-3">⚠️ Backend API Not Ready</h5>
+              <p className="mb-2">
+                The subscription pricing system is not yet fully configured. The following backend endpoints are missing:
+              </p>
+              <ul className="mb-3">
+                <li><code>GET /subscriptions/api/subscriptions/my-pricing/</code></li>
+                <li><code>GET /subscriptions/api/subscriptions/status/</code></li>
+              </ul>
+              <p className="mb-2">
+                <strong>For Backend Team:</strong> Please implement the endpoints documented in:
+              </p>
+              <ul className="mb-0">
+                <li><code>docs/BACKEND-PRICING-ENDPOINTS-SPEC.md</code> (detailed spec)</li>
+                <li><code>docs/ADMIN-PRICING-TIER-MANAGEMENT.md</code> (overview)</li>
+              </ul>
+            </Alert>
+          )}
         </Col>
       </Row>
 
@@ -319,23 +339,6 @@ export default function SubscriptionPortal() {
             </Card>
           </Col>
         </Row>
-      )}
-
-      {!pricing && (
-        <Alert variant="warning">
-          <h5 className="mb-3">⚠️ Backend API Not Ready</h5>
-          <p className="mb-2">
-            The subscription pricing system is not yet fully configured. The following backend endpoints are missing:
-          </p>
-          <ul className="mb-3">
-            <li><code>GET /subscriptions/api/subscriptions/my-pricing/</code></li>
-            <li><code>GET /subscriptions/api/subscriptions/status/</code></li>
-          </ul>
-          <p className="mb-0">
-            <strong>For Backend Team:</strong> Please implement the endpoints documented in 
-            <code>docs/ADMIN-PRICING-TIER-MANAGEMENT.md</code>
-          </p>
-        </Alert>
       )}
 
       {/* Payment Modal */}
