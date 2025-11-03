@@ -127,6 +127,32 @@ export interface PricingCalculationParams {
   gateway?: PaymentGateway
 }
 
+// ============================================
+// MY PRICING ENDPOINT RESPONSE (New)
+// ============================================
+
+export interface MyPricingResponse {
+  business_name: string
+  business_id: UUID
+  storefront_count: number
+  currency: string
+  base_price: string
+  taxes: TaxBreakdownItem[]
+  total_tax: string
+  total_amount: string
+  billing_cycle: 'MONTHLY' | 'QUARTERLY' | 'YEARLY'
+  tier_description: string
+}
+
+// ============================================
+// SUBSCRIPTION STATUS CHECK RESPONSE (New)
+// ============================================
+
+export interface SubscriptionStatusResponse {
+  has_subscription: boolean
+  subscription: Subscription | null
+}
+
 export interface Plan {
   id: UUID
   name: string
@@ -358,11 +384,18 @@ export interface SubscriptionStats {
 }
 
 export interface CreateSubscriptionRequest {
-  plan_id: UUID
-  business_id: UUID  // REQUIRED - subscription belongs to business, not user
+  plan_id?: UUID  // DEPRECATED - backend auto-calculates from storefront count
+  business_id?: UUID  // Optional - backend can infer from authenticated user
   payment_method?: PaymentMethodType
   is_trial?: boolean
   trial_end_date?: string
+}
+
+// New simplified subscription creation (no plan selection)
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface CreateSubscriptionRequestV2 {
+  // Empty body - backend calculates everything automatically
+  // based on user's business storefront count
 }
 
 export interface CancelSubscriptionRequest {

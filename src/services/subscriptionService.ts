@@ -17,7 +17,9 @@ import type {
   CreateTaxConfigPayload,
   UpdateTaxConfigPayload,
   PricingBreakdown,
-  PricingCalculationParams
+  PricingCalculationParams,
+  MyPricingResponse,
+  SubscriptionStatusResponse
 } from '../types/subscriptions'
 
 // ========== Plans ==========
@@ -100,6 +102,29 @@ export const renewSubscription = async (
 export const fetchSubscriptionUsage = async (subscriptionId: string) => {
   const { data } = await httpClient.get<Subscription>(
     `/subscriptions/api/subscriptions/${subscriptionId}/usage/`
+  )
+  return data
+}
+
+/**
+ * Fetch subscription pricing for current user's business
+ * Backend automatically detects storefront count and calculates price
+ * NO plan selection required - price is based on actual storefronts
+ */
+export const fetchMyPricing = async () => {
+  const { data } = await httpClient.get<MyPricingResponse>(
+    '/subscriptions/api/subscriptions/my-pricing/'
+  )
+  return data
+}
+
+/**
+ * Check if user has an active subscription
+ * Returns subscription status and details
+ */
+export const checkSubscriptionStatus = async () => {
+  const { data } = await httpClient.get<SubscriptionStatusResponse>(
+    '/subscriptions/api/subscriptions/status/'
   )
   return data
 }
