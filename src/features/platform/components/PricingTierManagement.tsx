@@ -223,8 +223,12 @@ export default function PricingTierManagement() {
               </p>
             </div>
             {canManage && (
-              <Button variant="primary" onClick={() => handleOpenModal()}>
-                <i className="bi bi-plus-circle me-2"></i>
+              <Button
+                variant="primary"
+                className="pricing-tier-cta"
+                onClick={() => handleOpenModal()}
+              >
+                <i className="bi bi-plus-circle"></i>
                 Create Pricing Tier
               </Button>
             )}
@@ -311,33 +315,40 @@ export default function PricingTierManagement() {
                         </Badge>
                       </td>
                       <td>
-                        <div className="btn-group btn-group-sm">
-                          {canManage && (
-                            <>
-                              <Button
-                                variant="outline-primary"
-                                onClick={() => handleOpenModal(tier)}
-                                title="Edit pricing tier"
-                              >
-                                <i className="bi bi-pencil"></i>
-                              </Button>
-                              <Button
-                                variant={tier.is_active ? 'outline-warning' : 'outline-success'}
-                                onClick={() => handleToggleActive(tier)}
-                                title={tier.is_active ? 'Deactivate' : 'Activate'}
-                              >
-                                <i className={tier.is_active ? 'bi bi-pause' : 'bi bi-play'}></i>
-                              </Button>
-                              <Button
-                                variant="outline-danger"
-                                onClick={() => handleDelete(tier)}
-                                title="Delete pricing tier"
-                              >
-                                <i className="bi bi-trash"></i>
-                              </Button>
-                            </>
-                          )}
-                        </div>
+                        {canManage && (
+                          <div className="d-flex flex-wrap gap-2 justify-content-end">
+                            <Button
+                              variant="light"
+                              size="sm"
+                              className="tier-action-btn tier-action-edit"
+                              onClick={() => handleOpenModal(tier)}
+                              title="Edit pricing tier"
+                            >
+                              <i className="bi bi-pencil"></i>
+                              Edit
+                            </Button>
+                            <Button
+                              variant="light"
+                              size="sm"
+                              className={`tier-action-btn ${tier.is_active ? 'tier-action-pause' : 'tier-action-activate'}`}
+                              onClick={() => handleToggleActive(tier)}
+                              title={tier.is_active ? 'Deactivate tier' : 'Activate tier'}
+                            >
+                              <i className={tier.is_active ? 'bi bi-pause-circle' : 'bi bi-play-circle'}></i>
+                              {tier.is_active ? 'Pause' : 'Activate'}
+                            </Button>
+                            <Button
+                              variant="light"
+                              size="sm"
+                              className="tier-action-btn tier-action-delete"
+                              onClick={() => handleDelete(tier)}
+                              title="Delete pricing tier"
+                            >
+                              <i className="bi bi-trash"></i>
+                              Delete
+                            </Button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}
