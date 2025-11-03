@@ -4,7 +4,7 @@ import { useAppSelector } from '../../../hooks'
 import { selectCurrentUser } from '../../../store/slices/authSlice'
 import { isPlatformAdmin, isSuperAdmin } from '../../../utils/platformPermissions'
 import PlatformStats from '../components/PlatformStats'
-import PlanManagement from '../components/PlanManagement'
+import PricingTierManagement from '../components/PricingTierManagement'
 import SubscriptionManagement from '../components/SubscriptionManagement'
 import RoleManagement from '../components/RoleManagement'
 import UserRoleAssignment from '../components/UserRoleAssignment'
@@ -50,7 +50,7 @@ export default function PlatformDashboard() {
                     <Nav.Link eventKey="overview">Overview & Stats</Nav.Link>
                   </Nav.Item>
                   <Nav.Item>
-                    <Nav.Link eventKey="plans">Plan Management</Nav.Link>
+                    <Nav.Link eventKey="pricing">Pricing Tier Management</Nav.Link>
                   </Nav.Item>
                   <Nav.Item>
                     <Nav.Link eventKey="subscriptions">Subscriptions</Nav.Link>
@@ -79,8 +79,8 @@ export default function PlatformDashboard() {
             <PlatformStats />
           </Tab.Pane>
 
-          <Tab.Pane eventKey="plans">
-            <PlanManagement />
+          <Tab.Pane eventKey="pricing">
+            <PricingTierManagement />
           </Tab.Pane>
 
           <Tab.Pane eventKey="subscriptions">

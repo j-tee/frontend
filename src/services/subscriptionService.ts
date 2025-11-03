@@ -17,7 +17,9 @@ import type {
   CreateTaxConfigPayload,
   UpdateTaxConfigPayload,
   PricingBreakdown,
-  PricingCalculationParams
+  PricingCalculationParams,
+  MyPricingResponse,
+  SubscriptionStatusResponse
 } from '../types/subscriptions'
 
 // ========== Plans ==========
@@ -322,6 +324,31 @@ export const calculatePricing = async (params: PricingCalculationParams) => {
   
   const { data } = await httpClient.get<PricingBreakdown>(
     `/subscriptions/api/pricing/calculate/?${queryParams}`
+  )
+  return data
+}
+
+// ========== Secure Pricing (Auto-calculated) ==========
+
+/**
+ * Get auto-calculated pricing for the current user's business
+ * Backend counts actual storefronts and calculates pricing
+ * NO user input - prevents pricing manipulation
+ */
+export const fetchMyPricing = async () => {
+  const { data } = await httpClient.get<MyPricingResponse>(
+    '/subscriptions/api/subscriptions/my-pricing/'
+  )
+  return data
+}
+
+/**
+ * Check if current business has an active subscription
+ * Used to show appropriate UI (subscribe vs manage)
+ */
+export const checkSubscriptionStatus = async () => {
+  const { data } = await httpClient.get<SubscriptionStatusResponse>(
+    '/subscriptions/api/subscriptions/status/'
   )
   return data
 }
