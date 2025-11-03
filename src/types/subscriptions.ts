@@ -86,6 +86,40 @@ export interface CreateTaxConfigPayload {
 export type UpdateTaxConfigPayload = Partial<CreateTaxConfigPayload>
 
 // ============================================
+// PRICING TIERS (STOREFRONT-BASED PRICING)
+// ============================================
+
+export interface PricingTier {
+  id: UUID
+  name: string
+  min_storefronts: number
+  max_storefronts: number | null
+  base_price: string
+  base_storefronts: number
+  price_per_additional_storefront: string
+  currency: string
+  is_active: boolean
+  description: string
+  created_at: string
+  updated_at: string
+  created_by?: UUID
+}
+
+export interface CreatePricingTierPayload {
+  name: string
+  min_storefronts: number
+  max_storefronts: number | null
+  base_price: string
+  base_storefronts: number
+  price_per_additional_storefront: string
+  currency: string
+  description?: string
+  is_active?: boolean
+}
+
+export type UpdatePricingTierPayload = Partial<CreatePricingTierPayload> & { id: UUID }
+
+// ============================================
 // PRICING CALCULATION
 // ============================================
 
@@ -128,9 +162,13 @@ export interface PricingCalculationParams {
 }
 
 // ============================================
-// MY PRICING ENDPOINT RESPONSE (New)
+// SECURE PRICING (Auto-calculated by backend)
 // ============================================
 
+/**
+ * Response from /subscriptions/api/subscriptions/my-pricing/
+ * Backend auto-calculates pricing based on user's actual storefront count
+ */
 export interface MyPricingResponse {
   business_name: string
   business_id: UUID
@@ -140,17 +178,35 @@ export interface MyPricingResponse {
   taxes: TaxBreakdownItem[]
   total_tax: string
   total_amount: string
-  billing_cycle: 'MONTHLY' | 'QUARTERLY' | 'YEARLY'
+  billing_cycle: BillingCycle | string
   tier_description: string
+  service_charges?: ServiceChargeItem[]
+  total_service_charges?: string
+
+  // Legacy fields (kept optional for backward compatibility with older specs)
+  storefronts?: number
+  breakdown?: {
+    tier_id?: UUID
+    tier_name?: string
+    tier_description?: string
+    base_storefronts?: number
+    additional_storefronts?: number
+    price_per_additional?: string
+  }
 }
 
-// ============================================
-// SUBSCRIPTION STATUS CHECK RESPONSE (New)
-// ============================================
-
+/**
+ * Response from /subscriptions/api/subscriptions/status/
+ * Check if user has an active subscription
+ */
 export interface SubscriptionStatusResponse {
   has_subscription: boolean
-  subscription: Subscription | null
+  subscription?: (Subscription & { plan_name?: string }) | {
+    id?: UUID
+    status?: SubscriptionStatus
+    plan_name?: string
+    current_period_end?: string
+  } | null
 }
 
 export interface Plan {
@@ -384,7 +440,7 @@ export interface SubscriptionStats {
 }
 
 export interface CreateSubscriptionRequest {
-  plan_id?: UUID  // DEPRECATED - backend auto-calculates from storefront count
+  plan_id?: UUID  // Optional - backend auto-calculates tier from storefront count
   business_id?: UUID  // Optional - backend can infer from authenticated user
   payment_method?: PaymentMethodType
   is_trial?: boolean
