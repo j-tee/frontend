@@ -587,9 +587,26 @@ export const fetchStorefrontAvailability = async (storefrontId: string, productI
   return data
 }
 
-export const fetchProductStockReconciliation = async (productId: string) => {
+export const fetchProductStockReconciliation = async (
+  productId: string,
+  filters?: {
+    batchId?: string | null
+    warehouseId?: string | null
+  },
+) => {
+  const params: Record<string, string> = {}
+
+  if (filters?.batchId) {
+    params.batch_id = filters.batchId
+  }
+
+  if (filters?.warehouseId) {
+    params.warehouse_id = filters.warehouseId
+  }
+
   const { data } = await httpClient.get<StockReconciliationResponse>(
     `/inventory/api/products/${productId}/stock-reconciliation/`,
+    Object.keys(params).length > 0 ? { params } : undefined,
   )
   return data
 }

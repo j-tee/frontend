@@ -12,6 +12,7 @@ import StockIntakeModal from '../components/StockIntakeModal'
 import { TransferModal } from '../components/TransferModal'
 import TransferDetailModal from '../components/TransferDetailModal'
 import StockProductDetailModal from '../components/StockProductDetailModal'
+import StockProductOverviewPanel from '../components/StockProductOverviewPanel'
 import StockRequestForm from '../components/stock-requests/StockRequestForm'
 import StockRequestList from '../components/stock-requests/StockRequestList'
 import StockRequestDetailModal from '../components/stock-requests/StockRequestDetailModal'
@@ -249,6 +250,7 @@ const ManageStocksPage = () => {
   const [showIntakeModal, setShowIntakeModal] = useState(false)
   const [showStockProductModal, setShowStockProductModal] = useState(false)
   const [selectedStockProduct, setSelectedStockProduct] = useState<StockProduct | null>(null)
+  const [overviewStockProduct, setOverviewStockProduct] = useState<StockProduct | null>(null)
   const [productLookup, setProductLookup] = useState<Product[]>([])
   const [isLoadingProductLookup, setIsLoadingProductLookup] = useState(false)
   const [productLookupError, setProductLookupError] = useState<string | null>(null)
@@ -259,6 +261,26 @@ const ManageStocksPage = () => {
   const [transferError, setTransferError] = useState<string | null>(null)
   const [isSubmittingTransfer, setIsSubmittingTransfer] = useState(false)
   const [transferSuccess, setTransferSuccess] = useState<{ reference_number: string } | null>(null)
+
+  useEffect(() => {
+    if (stockProducts.length === 0) {
+      if (overviewStockProduct) {
+        setOverviewStockProduct(null)
+      }
+      return
+    }
+    if (!overviewStockProduct && stockProducts.length > 0) {
+      setOverviewStockProduct(stockProducts[0])
+      return
+    }
+    if (!overviewStockProduct) {
+      return
+    }
+    const updated = stockProducts.find((item) => item.id === overviewStockProduct.id)
+    if (updated && updated !== overviewStockProduct) {
+      setOverviewStockProduct(updated)
+    }
+  }, [overviewStockProduct, stockProducts])
   // Handler for submitting transfer
   const handleSubmitTransfer = async ({ sourceWarehouse, destinationWarehouse, products, reason }: { sourceWarehouse: string; destinationWarehouse: string; products: Array<{ product: string; quantity: number }>; reason?: string }) => {
     setIsSubmittingTransfer(true)
@@ -646,6 +668,7 @@ const ManageStocksPage = () => {
 
   const handleOpenStockProductModal = (stockProduct: StockProduct) => {
     setSelectedStockProduct(stockProduct)
+    setOverviewStockProduct(stockProduct)
     setShowStockProductModal(true)
     dispatch(resetEditStockProductState())
     dispatch(resetDeleteStockProductState())
@@ -689,6 +712,19 @@ const ManageStocksPage = () => {
   const handleResetBatchState = () => {
     dispatch(resetCreateStockBatchState())
   }
+
+  const handleSelectOverviewStockProduct = useCallback((stockProductId: string | null) => {
+    if (!stockProductId) {
+      setOverviewStockProduct(null)
+      return
+    }
+    const nextProduct = stockProducts.find((item) => item.id === stockProductId)
+    if (nextProduct) {
+      setOverviewStockProduct(nextProduct)
+    } else if (!overviewStockProduct || overviewStockProduct.id !== stockProductId) {
+      setOverviewStockProduct(null)
+    }
+  }, [overviewStockProduct, stockProducts])
 
   const handleResetStockProductState = () => {
     dispatch(resetCreateStockProductState())
@@ -1081,6 +1117,11 @@ const ManageStocksPage = () => {
       {/* Tab Navigation */}
       <Nav variant="tabs" className="mb-4">
         <Nav.Item>
+          <Nav.Link active={activeTab === 'overview'} onClick={() => setActiveTab('overview')}>
+            Overview
+          </Nav.Link>
+        </Nav.Item>
+        <Nav.Item>
           <Nav.Link active={activeTab === 'stock-products'} onClick={() => setActiveTab('stock-products')}>
             Stock products
           </Nav.Link>
@@ -1101,6 +1142,40 @@ const ManageStocksPage = () => {
           </Nav.Link>
         </Nav.Item>
       </Nav>
+
+      {/* Overview Tab */}
+      <div className="space-y-6" style={{ display: activeTab === 'overview' ? 'block' : 'none' }}>
+        <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h3 className="text-xl font-semibold text-slate-900">Stock overview</h3>
+              <p className="text-slate-600">Aggregate reconciliation metrics without leaving the Manage stocks workspace.</p>
+            </div>
+          </div>
+        </section>
+
+        {stockProductsStatus === 'loading' && stockProducts.length === 0 ? (
+          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="text-center py-6">
+              <Spinner animation="border" variant="primary" />
+              <p className="mt-2 text-slate-600">Loading stock products…</p>
+            </div>
+          </section>
+        ) : null}
+
+        <StockProductOverviewPanel
+          stockProduct={overviewStockProduct}
+          stockProducts={stockProducts}
+          stockBatches={stockBatches}
+          warehouses={warehouses}
+          onSelectStockProduct={handleSelectOverviewStockProduct}
+          isStockProductsLoading={stockProductsStatus === 'loading'}
+        />
+
+        {stockProductsStatus === 'failed' && stockProductsError ? (
+          <Alert variant="danger">{stockProductsError}</Alert>
+        ) : null}
+      </div>
 
       {/* Stock Products Tab */}
       <div className="space-y-6" style={{ display: activeTab === 'stock-products' ? 'block' : 'none' }}>
@@ -2065,7 +2140,6 @@ const ManageStocksPage = () => {
         stockProduct={selectedStockProduct}
         suppliers={suppliers}
         stockBatches={stockBatches}
-        stockProducts={stockProducts}
         warehouses={warehouses}
         isUpdating={isUpdatingStockProduct}
         updateError={editStockProductError}

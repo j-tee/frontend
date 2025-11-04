@@ -312,11 +312,21 @@ export interface StockReconciliationStorefrontEntry {
   storefront_name?: string | null
   location?: string | null
   on_hand?: number | string | null
+  sellable?: number | string | null
   linked_reservations?: number | string | null
   orphaned_reservations?: number | string | null
   transferred_quantity?: number | string | null
   sold_quantity?: number | string | null
   last_transfer_date?: string | null
+}
+
+export interface StockReconciliationWarehouseBatch {
+  stock_product_id?: UUID | null
+  warehouse_id?: UUID | null
+  warehouse_name?: string | null
+  quantity?: number | string | null
+  arrival_date?: string | null
+  batch_identifier?: string | null
 }
 
 export interface StockReconciliationReservationDetail {
@@ -343,24 +353,38 @@ export interface StockReconciliationFormula {
   recorded_batch_quantity?: number | string | null
   baseline_vs_recorded_delta?: number | string | null
   net_adjustment_units?: number | string | null
+  formula_explanation?: string | null
 }
 
 export interface StockReconciliationResponse {
-  product?: UUID | null
+  product?: UUID | {
+    id?: UUID | null
+    name?: string | null
+    sku?: string | null
+  } | null
   generated_at?: string | null
+  filters?: {
+    batch_id?: UUID | string | null
+    warehouse_id?: UUID | string | null
+    batch_name?: string | null
+    warehouse_name?: string | null
+  }
   warehouse?: {
     recorded_quantity?: number | string | null
     inventory_on_hand?: number | string | null
     inventory_breakdown?: StockReconciliationWarehouseEntry[]
+    batches?: StockReconciliationWarehouseBatch[]
   }
   storefront?: {
     total_on_hand?: number | string | null
     sellable_now?: number | string | null
     entries?: StockReconciliationStorefrontEntry[]
+    breakdown?: StockReconciliationStorefrontEntry[]
   }
   sales?: {
     completed_units?: number | string | null
     completed_value?: number | string | null
+    completed_sale_ids?: UUID[] | null
   }
   adjustments?: {
     shrinkage_units?: number | string | null
@@ -369,6 +393,8 @@ export interface StockReconciliationResponse {
   reservations?: {
     linked_units?: number | string | null
     orphaned_units?: number | string | null
+    linked_count?: number | string | null
+    orphaned_count?: number | string | null
     details?: StockReconciliationReservationDetail[]
   }
   formula?: StockReconciliationFormula
