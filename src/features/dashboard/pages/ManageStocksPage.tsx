@@ -241,7 +241,7 @@ const ManageStocksPage = () => {
   const userRole = employment?.role || user?.final_userRole || user?.role
 
   // Local state
-  const [activeTab, setActiveTab] = useState('stock-products')
+  const [activeTab, setActiveTab] = useState('overview')
   const [searchTerm, setSearchTerm] = useState(stockProductsFilters.search)
   const [selectedBatch, setSelectedBatch] = useState<string | null>(stockProductsFilters.stock)
   const [selectedSupplier, setSelectedSupplier] = useState<string | null>(stockProductsFilters.supplier)
