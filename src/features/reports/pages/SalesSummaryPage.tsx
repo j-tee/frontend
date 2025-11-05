@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { ReportContainer } from '../components/ReportContainer';
 import { SummaryCard } from '../components/SummaryCard';
 import { DateRangeFilter } from '../components/DateRangeFilter';
@@ -6,15 +6,20 @@ import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates
 import { salesReportsService } from '../../../services/reportsService';
 import type { SalesSummaryResponse } from '../../../types/reports';
 import { useCurrency } from '../../../hooks/useCurrency';
+import { useAppSelector } from '../../../hooks';
+import { selectStorefrontsLoading, selectUserStorefronts } from '../../../store/slices/authSlice';
 
 const SalesSummaryPage: React.FC = () => {
   const { formatCurrency } = useCurrency();
+  const storefronts = useAppSelector(selectUserStorefronts);
+  const storefrontsLoading = useAppSelector(selectStorefrontsLoading);
   
   // State
   const [data, setData] = useState<SalesSummaryResponse['data'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [storefrontId, setStorefrontId] = useState('');
 
   // Filters - default to last 30 days
   const [startDate, setStartDate] = useState(() => {
@@ -27,7 +32,7 @@ const SalesSummaryPage: React.FC = () => {
   });
 
   // Fetch data
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -36,6 +41,7 @@ const SalesSummaryPage: React.FC = () => {
         end_date: endDate,
         period_type: 'daily',
         compare_previous: true,
+        ...(storefrontId ? { storefront_id: storefrontId } : {}),
       });
       if (result.success && result.data) {
         setData(result.data);
@@ -51,7 +57,7 @@ const SalesSummaryPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [startDate, endDate, storefrontId]);
 
   // Export to CSV
   const handleExportCSV = async () => {
@@ -61,8 +67,9 @@ const SalesSummaryPage: React.FC = () => {
         start_date: startDate,
         end_date: endDate,
         period_type: 'daily',
+        ...(storefrontId ? { storefront_id: storefrontId } : {}),
       });
-    } catch (err) {
+    } catch {
       alert('Failed to export CSV. Please try again.');
     } finally {
       setExporting(false);
@@ -77,8 +84,9 @@ const SalesSummaryPage: React.FC = () => {
         start_date: startDate,
         end_date: endDate,
         period_type: 'daily',
+        ...(storefrontId ? { storefront_id: storefrontId } : {}),
       });
-    } catch (err) {
+    } catch {
       alert('Failed to export PDF. Please try again.');
     } finally {
       setExporting(false);
@@ -87,9 +95,16 @@ const SalesSummaryPage: React.FC = () => {
 
   // Load on mount and when filters change
   useEffect(() => {
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate]);
+    void fetchData();
+  }, [fetchData]);
+
+  const storefrontOptions = useMemo(() => {
+    const items = storefronts ?? [];
+    return items.map((storefront) => ({
+      id: storefront.id,
+      name: storefront.name,
+    }));
+  }, [storefronts]);
 
   // Format number with null safety
   const formatNumber = (value: number | null | undefined): string => {
@@ -160,13 +175,42 @@ const SalesSummaryPage: React.FC = () => {
     >
       {/* Filters */}
       <div className="rounded-3xl border border-slate-300 bg-white p-6 shadow-sm">
-        <h3 className="mb-4 text-xl font-bold text-slate-900">Date Range</h3>
-        <DateRangeFilter
-          startDate={startDate}
-          endDate={endDate}
-          onStartDateChange={setStartDate}
-          onEndDateChange={setEndDate}
-        />
+        <h3 className="mb-4 text-xl font-bold text-slate-900">Filters</h3>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <DateRangeFilter
+              startDate={startDate}
+              endDate={endDate}
+              onStartDateChange={setStartDate}
+              onEndDateChange={setEndDate}
+            />
+          </div>
+          <div className="flex flex-col">
+            <label htmlFor="storefront-filter" className="mb-2 text-sm font-semibold text-slate-700">
+              Storefront
+            </label>
+            <select
+              id="storefront-filter"
+              value={storefrontId}
+              onChange={(event) => setStorefrontId(event.target.value)}
+              className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-60"
+              disabled={storefrontsLoading}
+            >
+              <option value="">All storefronts</option>
+              {storefrontOptions.map((storefront) => (
+                <option key={storefront.id} value={storefront.id}>
+                  {storefront.name}
+                </option>
+              ))}
+            </select>
+            {storefrontsLoading && (
+              <span className="mt-2 text-xs font-medium text-slate-500">Loading storefronts…</span>
+            )}
+            {!storefrontsLoading && storefrontOptions.length === 0 && (
+              <span className="mt-2 text-xs font-medium text-slate-500">No storefronts available</span>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Summary Cards */}

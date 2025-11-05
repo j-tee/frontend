@@ -1,14 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { salesReportsService } from '../../../services/reportsService';
-import type { RevenueTrendsResponse } from '../../../types/reports';
+import type { RevenueTrendsResponse, ReportFilters } from '../../../types/reports';
 import { useCurrency } from '../../../hooks/useCurrency';
 import { ReportContainer } from '../components/ReportContainer';
 import { SummaryCard } from '../components/SummaryCard';
 import { DateRangeFilter } from '../components/DateRangeFilter';
 import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates';
+import { useAppSelector } from '../../../hooks';
+import { selectStorefrontsLoading, selectUserStorefronts } from '../../../store/slices/authSlice';
 
 const RevenueTrendsPage: React.FC = () => {
   const { formatCurrency } = useCurrency();
+  const storefronts = useAppSelector(selectUserStorefronts);
+  const storefrontsLoading = useAppSelector(selectStorefrontsLoading);
   const [data, setData] = useState<RevenueTrendsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,17 +29,33 @@ const RevenueTrendsPage: React.FC = () => {
   });
 
   const [interval, setInterval] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  const [storefrontId, setStorefrontId] = useState<string>('');
 
-  const fetchData = async () => {
+  const storefrontOptions = useMemo(() => {
+    const items = storefronts ?? [];
+    return items.map((storefront) => ({ id: storefront.id, name: storefront.name }));
+  }, [storefronts]);
+
+  const buildFilters = useCallback((): ReportFilters => {
+    const filters: ReportFilters = {
+      start_date: startDate,
+      end_date: endDate,
+      interval,
+    };
+
+    if (storefrontId) {
+      filters.storefront_id = storefrontId;
+    }
+
+    return filters;
+  }, [endDate, interval, startDate, storefrontId]);
+
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     
     try {
-      const result = await salesReportsService.getRevenueTrends({
-        start_date: startDate,
-        end_date: endDate,
-        interval: interval,
-      });
+      const result = await salesReportsService.getRevenueTrends(buildFilters());
       
       setData(result);
     } catch (err) {
@@ -43,21 +63,16 @@ const RevenueTrendsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [buildFilters]);
 
   useEffect(() => {
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, interval]);
+    void fetchData();
+  }, [fetchData]);
 
   const handleExport = async () => {
     try {
-      await salesReportsService.exportRevenueTrendsCSV({
-        start_date: startDate,
-        end_date: endDate,
-        interval: interval,
-      });
-    } catch (err) {
+      await salesReportsService.exportRevenueTrendsCSV(buildFilters());
+    } catch {
       alert('Failed to export report. Please try again.');
     }
   };
@@ -94,7 +109,9 @@ const RevenueTrendsPage: React.FC = () => {
       actions={
         <>
           <button
-            onClick={fetchData}
+            onClick={() => {
+              void fetchData();
+            }}
             disabled={loading}
             className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-50"
           >
@@ -110,15 +127,71 @@ const RevenueTrendsPage: React.FC = () => {
         </>
       }
     >
-      {/* Date Filter */}
-      <div className="mb-4">
-        <DateRangeFilter
-          startDate={startDate}
-          endDate={endDate}
-          onStartDateChange={setStartDate}
-          onEndDateChange={setEndDate}
-          showPresets={true}
-        />
+      {/* Filters */}
+      <div className="card mb-4">
+        <div className="card-body">
+          <div className="row g-3 align-items-end">
+            <div className="col-md-5">
+              <DateRangeFilter
+                startDate={startDate}
+                endDate={endDate}
+                onStartDateChange={setStartDate}
+                onEndDateChange={setEndDate}
+                showPresets={true}
+              />
+            </div>
+            <div className="col-md-3">
+              <label className="form-label fw-bold" htmlFor="storefront-filter">
+                Storefront
+              </label>
+              <select
+                id="storefront-filter"
+                className="form-select"
+                value={storefrontId}
+                onChange={(event) => setStorefrontId(event.target.value)}
+                disabled={storefrontsLoading}
+              >
+                <option value="">All Storefronts</option>
+                {storefrontOptions.map((storefront) => (
+                  <option key={storefront.id} value={storefront.id}>
+                    {storefront.name}
+                  </option>
+                ))}
+              </select>
+              {storefrontsLoading && <div className="form-text">Loading storefronts…</div>}
+              {!storefrontsLoading && storefrontOptions.length === 0 && (
+                <div className="form-text">No storefronts available</div>
+              )}
+            </div>
+            <div className="col-md-2">
+              <label className="form-label fw-bold" htmlFor="interval-filter">
+                Interval
+              </label>
+              <select
+                id="interval-filter"
+                className="form-select"
+                value={interval}
+                onChange={(event) => setInterval(event.target.value as 'daily' | 'weekly' | 'monthly')}
+              >
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </div>
+            <div className="col-md-2 col-lg-1">
+              <button
+                className="btn btn-outline-secondary w-100"
+                onClick={() => {
+                  setStorefrontId('');
+                  setInterval('daily');
+                }}
+              >
+                <i className="bi bi-x-circle me-2"></i>
+                Clear
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Summary Cards */}

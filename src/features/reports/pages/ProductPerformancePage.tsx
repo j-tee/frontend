@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { salesReportsService } from '../../../services/reportsService';
 import type { ProductPerformanceResponse, ReportFilters } from '../../../types/reports';
 import { ReportContainer } from '../components/ReportContainer';
@@ -6,9 +6,13 @@ import { SummaryCard } from '../components/SummaryCard';
 import { DateRangeFilter } from '../components/DateRangeFilter';
 import { ReportStates } from '../components/ReportStates';
 import { useCurrency } from '../../../hooks/useCurrency';
+import { useAppSelector } from '../../../hooks';
+import { selectStorefrontsLoading, selectUserStorefronts } from '../../../store/slices/authSlice';
 
 const ProductPerformancePage: React.FC = () => {
   const { formatCurrency } = useCurrency();
+  const storefronts = useAppSelector(selectUserStorefronts);
+  const storefrontsLoading = useAppSelector(selectStorefrontsLoading);
   
   const [data, setData] = useState<ProductPerformanceResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -26,62 +30,56 @@ const ProductPerformancePage: React.FC = () => {
 
   const [category, setCategory] = useState<string>('');
   const [saleType, setSaleType] = useState<string>('');
+  const [storefrontId, setStorefrontId] = useState<string>('');
 
-  const fetchData = async () => {
+  const storefrontOptions = useMemo(() => {
+    const items = storefronts ?? [];
+    return items.map((storefront) => ({ id: storefront.id, name: storefront.name }));
+  }, [storefronts]);
+
+  const buildFilters = useCallback((): ReportFilters => {
+    const filters: ReportFilters = {
+      start_date: startDate,
+      end_date: endDate,
+    };
+
+    if (category) filters.category_id = category;
+    if (saleType) filters.customer_type = saleType as 'retail' | 'wholesale';
+    if (storefrontId) filters.storefront_id = storefrontId;
+
+    return filters;
+  }, [category, endDate, saleType, startDate, storefrontId]);
+
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     
     try {
-      const filters: ReportFilters = {
-        start_date: startDate,
-        end_date: endDate,
-      };
-      
-      if (category) filters.category_id = category;
-      if (saleType) filters.customer_type = saleType as 'retail' | 'wholesale';
-      
-      const result = await salesReportsService.getProductPerformance(filters);
+      const result = await salesReportsService.getProductPerformance(buildFilters());
       setData(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load product performance report');
     } finally {
       setLoading(false);
     }
-  };
+  }, [buildFilters]);
 
   useEffect(() => {
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, category, saleType]);
+    void fetchData();
+  }, [fetchData]);
 
   const handleExportCSV = async () => {
     try {
-      const filters: ReportFilters = {
-        start_date: startDate,
-        end_date: endDate,
-      };
-      
-      if (category) filters.category_id = category;
-      if (saleType) filters.customer_type = saleType as 'retail' | 'wholesale';
-      
-      await salesReportsService.exportProductPerformanceCSV(filters);
-    } catch (err) {
+      await salesReportsService.exportProductPerformanceCSV(buildFilters());
+    } catch {
       alert('Failed to export CSV. Please try again.');
     }
   };
 
   const handleExportPDF = async () => {
     try {
-      const filters: ReportFilters = {
-        start_date: startDate,
-        end_date: endDate,
-      };
-      
-      if (category) filters.category_id = category;
-      if (saleType) filters.customer_type = saleType as 'retail' | 'wholesale';
-      
-      await salesReportsService.exportProductPerformancePDF(filters);
-    } catch (err) {
+      await salesReportsService.exportProductPerformancePDF(buildFilters());
+    } catch {
       alert('Failed to export PDF. Please try again.');
     }
   };
@@ -105,7 +103,9 @@ const ProductPerformancePage: React.FC = () => {
       actions={
         <>
           <button
-            onClick={fetchData}
+            onClick={() => {
+              void fetchData();
+            }}
             disabled={loading}
             className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-50"
           >
@@ -128,14 +128,86 @@ const ProductPerformancePage: React.FC = () => {
         </>
       }
     >
-      <div className="mb-4">
-        <DateRangeFilter
-          startDate={startDate}
-          endDate={endDate}
-          onStartDateChange={setStartDate}
-          onEndDateChange={setEndDate}
-          showPresets={true}
-        />
+      <div className="card mb-4">
+        <div className="card-body">
+          <div className="mb-4">
+            <DateRangeFilter
+              startDate={startDate}
+              endDate={endDate}
+              onStartDateChange={setStartDate}
+              onEndDateChange={setEndDate}
+              showPresets={true}
+            />
+          </div>
+          <div className="row g-3 align-items-end">
+            <div className="col-md-4 col-lg-3">
+              <label className="form-label fw-bold" htmlFor="storefront-filter">
+                Storefront
+              </label>
+              <select
+                id="storefront-filter"
+                className="form-select"
+                value={storefrontId}
+                onChange={(event) => setStorefrontId(event.target.value)}
+                disabled={storefrontsLoading}
+              >
+                <option value="">All Storefronts</option>
+                {storefrontOptions.map((storefront) => (
+                  <option key={storefront.id} value={storefront.id}>
+                    {storefront.name}
+                  </option>
+                ))}
+              </select>
+              {storefrontsLoading && (
+                <div className="form-text">Loading storefronts…</div>
+              )}
+              {!storefrontsLoading && storefrontOptions.length === 0 && (
+                <div className="form-text">No storefronts available</div>
+              )}
+            </div>
+            <div className="col-md-4 col-lg-3">
+              <label className="form-label fw-bold" htmlFor="category-filter">
+                Category Filter
+              </label>
+              <input
+                id="category-filter"
+                type="text"
+                className="form-control"
+                placeholder="Enter category name..."
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              />
+            </div>
+            <div className="col-md-4 col-lg-3">
+              <label className="form-label fw-bold" htmlFor="sale-type-filter">
+                Sale Type
+              </label>
+              <select
+                id="sale-type-filter"
+                className="form-select"
+                value={saleType}
+                onChange={(e) => setSaleType(e.target.value)}
+              >
+                <option value="">All Types</option>
+                <option value="retail">Retail Only</option>
+                <option value="wholesale">Wholesale Only</option>
+              </select>
+            </div>
+            <div className="col-md-4 col-lg-3">
+              <button
+                className="btn btn-outline-secondary w-100"
+                onClick={() => {
+                  setCategory('');
+                  setSaleType('');
+                  setStorefrontId('');
+                }}
+              >
+                <i className="bi bi-x-circle me-2"></i>
+                Clear Filters
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="row g-3 mb-4">
