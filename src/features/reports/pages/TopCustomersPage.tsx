@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Download, RefreshCw, Award } from 'lucide-react';
 import { ReportContainer } from '../components/ReportContainer';
@@ -7,7 +7,17 @@ import { DateRangeFilter } from '../components/DateRangeFilter';
 import { ReportStates } from '../components/ReportStates';
 import { customerReportsService } from '../../../services/reportsService';
 import { useCurrency } from '../../../hooks/useCurrency';
-import type { TopCustomersResponse, TopCustomer } from '../../../types/reports';
+import { useAppSelector } from '../../../hooks';
+import { selectStorefrontsLoading, selectUserStorefronts } from '../../../store/slices/authSlice';
+import type { ReportFilters, TopCustomersResponse, TopCustomer } from '../../../types/reports';
+
+const getDefaultStartDate = (): string => {
+  const date = new Date();
+  date.setDate(date.getDate() - 30);
+  return date.toISOString().split('T')[0];
+};
+
+const getToday = (): string => new Date().toISOString().split('T')[0];
 
 const TopCustomersPage: React.FC = () => {
   const navigate = useNavigate();
@@ -15,27 +25,41 @@ const TopCustomersPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const { formatCurrency } = useCurrency();
+  const storefronts = useAppSelector(selectUserStorefronts);
+  const storefrontsLoading = useAppSelector(selectStorefrontsLoading);
 
   // Filters
-  const [startDate] = useState(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
-  const [endDate] = useState(new Date().toISOString().split('T')[0]);
-  const [sortBy] = useState<'' | 'revenue' | 'frequency' | 'avg_order_value'>('revenue');
-  const [limit] = useState(50);
+  const [startDate, setStartDate] = useState<string>(getDefaultStartDate);
+  const [endDate, setEndDate] = useState<string>(getToday);
+  const [sortBy, setSortBy] = useState<'revenue' | 'frequency' | 'avg_order_value'>('revenue');
+  const [limit, setLimit] = useState<number>(50);
+  const [storefrontId, setStorefrontId] = useState<string>('');
 
-  useEffect(() => {
-    loadData();
-  }, [startDate, endDate, sortBy, limit]);
+  const storefrontOptions = useMemo(() => {
+    const items = storefronts ?? [];
+    return items.map((storefront) => ({ id: storefront.id, name: storefront.name }));
+  }, [storefronts]);
 
-  const loadData = async () => {
+  const buildFilters = useCallback((): ReportFilters => {
+    const filters: ReportFilters = {
+      start_date: startDate,
+      end_date: endDate,
+      sort_by: sortBy,
+      limit,
+    };
+
+    if (storefrontId) {
+      filters.storefront_id = storefrontId;
+    }
+
+    return filters;
+  }, [endDate, limit, sortBy, startDate, storefrontId]);
+
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
-      const result = await customerReportsService.getTopCustomers({
-        start_date: startDate,
-        end_date: endDate,
-        sort_by: sortBy || 'revenue',
-        limit
-      });
+      const result = await customerReportsService.getTopCustomers(buildFilters());
       
       // Handle nested API response structure
       if (result.success && result.data) {
@@ -48,19 +72,26 @@ const TopCustomersPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [buildFilters]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
   const handleExport = async () => {
     try {
-      await customerReportsService.exportTopCustomersCSV({
-        start_date: startDate,
-        end_date: endDate,
-        sort_by: sortBy || 'revenue',
-        limit
-      });
+      await customerReportsService.exportTopCustomersCSV(buildFilters());
     } catch (err) {
       alert('Export failed: ' + (err as Error).message);
     }
+  };
+
+  const handleClearFilters = () => {
+    setStartDate(getDefaultStartDate());
+    setEndDate(getToday());
+    setSortBy('revenue');
+    setLimit(50);
+    setStorefrontId('');
   };
 
   const getLoyaltyTierColor = (tier: string): string => {
@@ -83,7 +114,7 @@ const TopCustomersPage: React.FC = () => {
   };
 
   if (loading) return <ReportStates.Loading />;
-  if (error) return <ReportStates.Error error={error} onRetry={loadData} />;
+  if (error) return <ReportStates.Error error={error} onRetry={() => { void loadData(); }} />;
   if (!data) return <ReportStates.Empty message="No customer data available" />;
 
   return (
@@ -101,7 +132,9 @@ const TopCustomersPage: React.FC = () => {
             <span>Back</span>
           </button>
           <button
-            onClick={loadData}
+            onClick={() => {
+              void loadData();
+            }}
             className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
           >
             <RefreshCw className="w-4 h-4" />
@@ -117,14 +150,76 @@ const TopCustomersPage: React.FC = () => {
         </>
       }
     >
-      {/* Date Range Filter */}
-      <div className="mb-6">
-        <DateRangeFilter
-          startDate={startDate}
-          endDate={endDate}
-          onStartDateChange={() => {}}
-          onEndDateChange={() => {}}
-        />
+      {/* Filters */}
+      <div className="mb-6 bg-white border border-gray-200 rounded-lg p-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="md:col-span-2">
+            <DateRangeFilter
+              startDate={startDate}
+              endDate={endDate}
+              onStartDateChange={setStartDate}
+              onEndDateChange={setEndDate}
+              showPresets={true}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="top-customers-storefront">
+              Storefront
+            </label>
+            <select
+              id="top-customers-storefront"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={storefrontId}
+              onChange={(event) => setStorefrontId(event.target.value)}
+              disabled={storefrontsLoading}
+            >
+              <option value="">All Storefronts</option>
+              {storefrontOptions.map((storefront) => (
+                <option key={storefront.id} value={storefront.id}>
+                  {storefront.name}
+                </option>
+              ))}
+            </select>
+            {storefrontsLoading && <p className="mt-1 text-xs text-gray-500">Loading storefronts…</p>}
+            {!storefrontsLoading && storefrontOptions.length === 0 && (
+              <p className="mt-1 text-xs text-gray-500">No storefronts available</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="top-customers-sort">
+              Sort By
+            </label>
+            <select
+              id="top-customers-sort"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={sortBy}
+              onChange={(event) => setSortBy(event.target.value as 'revenue' | 'frequency' | 'avg_order_value')}
+            >
+              <option value="revenue">Revenue</option>
+              <option value="frequency">Purchase Frequency</option>
+              <option value="avg_order_value">Average Order Value</option>
+            </select>
+            <label className="block text-sm font-medium text-gray-700 mb-1 mt-3" htmlFor="top-customers-limit">
+              Result Limit
+            </label>
+            <select
+              id="top-customers-limit"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={limit}
+              onChange={(event) => setLimit(Number(event.target.value))}
+            >
+              <option value={25}>Top 25</option>
+              <option value={50}>Top 50</option>
+              <option value={100}>Top 100</option>
+            </select>
+            <button
+              className="w-full mt-3 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              onClick={handleClearFilters}
+            >
+              Clear Filters
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Summary Cards */}

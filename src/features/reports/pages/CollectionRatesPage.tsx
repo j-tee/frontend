@@ -1,41 +1,59 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { financialReportsService } from '../../../services/reportsService';
-import type { CollectionRatesResponse } from '../../../types/reports';
+import type { CollectionRatesResponse, ReportFilters } from '../../../types/reports';
 import { useCurrency } from '../../../hooks/useCurrency';
 import { ReportContainer } from '../components/ReportContainer';
 import { SummaryCard } from '../components/SummaryCard';
 import { DateRangeFilter } from '../components/DateRangeFilter';
 import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates';
 
+const getDefaultStartDate = (): string => {
+  const date = new Date();
+  date.setDate(date.getDate() - 90);
+  return date.toISOString().split('T')[0];
+};
+
+const getToday = (): string => new Date().toISOString().split('T')[0];
+import { useAppSelector } from '../../../hooks';
+import { selectStorefrontsLoading, selectUserStorefronts } from '../../../store/slices/authSlice';
+
 const CollectionRatesPage: React.FC = () => {
   const { formatCurrency } = useCurrency();
+  const storefronts = useAppSelector(selectUserStorefronts);
+  const storefrontsLoading = useAppSelector(selectStorefrontsLoading);
   const [data, setData] = useState<CollectionRatesResponse['data'] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  // Default to last 90 days
-  const [startDate, setStartDate] = useState(() => {
-    const date = new Date();
-    date.setDate(date.getDate() - 90);
-    return date.toISOString().split('T')[0];
-  });
-  
-  const [endDate, setEndDate] = useState(() => {
-    return new Date().toISOString().split('T')[0];
-  });
-
+  const [startDate, setStartDate] = useState<string>(getDefaultStartDate);
+  const [endDate, setEndDate] = useState<string>(getToday);
   const [grouping, setGrouping] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
+  const [storefrontId, setStorefrontId] = useState<string>('');
 
-  const fetchData = async () => {
+  const storefrontOptions = useMemo(() => {
+    const items = storefronts ?? [];
+    return items.map((storefront) => ({ id: storefront.id, name: storefront.name }));
+  }, [storefronts]);
+
+  const buildFilters = useCallback((): ReportFilters => {
+    const filters: ReportFilters = {
+      start_date: startDate,
+      end_date: endDate,
+      grouping,
+    };
+
+    if (storefrontId) {
+      filters.storefront_id = storefrontId;
+    }
+
+    return filters;
+  }, [endDate, grouping, startDate, storefrontId]);
+
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     
     try {
-      const result = await financialReportsService.getCollectionRates({
-        start_date: startDate,
-        end_date: endDate,
-        grouping: grouping,
-      });
+      const result = await financialReportsService.getCollectionRates(buildFilters());
       
       if (result.success && result.data) {
         setData(result.data);
@@ -47,23 +65,25 @@ const CollectionRatesPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [buildFilters]);
 
   useEffect(() => {
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, grouping]);
+    void fetchData();
+  }, [fetchData]);
 
   const handleExport = async () => {
     try {
-      await financialReportsService.exportCollectionRatesCSV({
-        start_date: startDate,
-        end_date: endDate,
-        grouping: grouping,
-      });
-    } catch (err) {
+      await financialReportsService.exportCollectionRatesCSV(buildFilters());
+    } catch {
       alert('Failed to export report. Please try again.');
     }
+  };
+
+  const handleClearFilters = () => {
+    setStartDate(getDefaultStartDate());
+    setEndDate(getToday());
+    setGrouping('monthly');
+    setStorefrontId('');
   };
 
   const formatPercent = (value: number | null | undefined): string => {
@@ -77,7 +97,7 @@ const CollectionRatesPage: React.FC = () => {
   };
 
   if (loading && !data) return <LoadingState message="Loading collection rates data..." />;
-  if (error) return <ErrorState error={error} onRetry={fetchData} />;
+  if (error) return <ErrorState error={error} onRetry={() => { void fetchData(); }} />;
   if (!data || !data.summary || !data.results) return <EmptyState message="No collection rates data available" />;
 
   const { summary, results } = data;
@@ -90,7 +110,9 @@ const CollectionRatesPage: React.FC = () => {
       actions={
         <>
           <button
-            onClick={fetchData}
+            onClick={() => {
+              void fetchData();
+            }}
             disabled={loading}
             className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-50"
           >
@@ -106,28 +128,64 @@ const CollectionRatesPage: React.FC = () => {
         </>
       }
     >
-      {/* Date Filter & Grouping */}
-      <div className="row mb-4">
-        <div className="col-md-8">
-          <DateRangeFilter
-            startDate={startDate}
-            endDate={endDate}
-            onStartDateChange={setStartDate}
-            onEndDateChange={setEndDate}
-            showPresets={true}
-          />
-        </div>
-        <div className="col-md-4">
-          <label className="form-label">Group By</label>
-          <select 
-            className="form-select"
-            value={grouping}
-            onChange={(e) => setGrouping(e.target.value as 'daily' | 'weekly' | 'monthly')}
-          >
-            <option value="daily">Daily</option>
-            <option value="weekly">Weekly</option>
-            <option value="monthly">Monthly</option>
-          </select>
+      {/* Filters */}
+      <div className="card mb-4">
+        <div className="card-body">
+          <div className="row g-3 align-items-end">
+            <div className="col-md-5">
+              <DateRangeFilter
+                startDate={startDate}
+                endDate={endDate}
+                onStartDateChange={setStartDate}
+                onEndDateChange={setEndDate}
+                showPresets={true}
+              />
+            </div>
+            <div className="col-md-3">
+              <label className="form-label fw-bold" htmlFor="collection-storefront-filter">
+                Storefront
+              </label>
+              <select
+                id="collection-storefront-filter"
+                className="form-select"
+                value={storefrontId}
+                onChange={(event) => setStorefrontId(event.target.value)}
+                disabled={storefrontsLoading}
+              >
+                <option value="">All Storefronts</option>
+                {storefrontOptions.map((storefront) => (
+                  <option key={storefront.id} value={storefront.id}>
+                    {storefront.name}
+                  </option>
+                ))}
+              </select>
+              {storefrontsLoading && <div className="form-text">Loading storefronts…</div>}
+              {!storefrontsLoading && storefrontOptions.length === 0 && (
+                <div className="form-text">No storefronts available</div>
+              )}
+            </div>
+            <div className="col-md-3">
+              <label className="form-label fw-bold" htmlFor="collection-grouping-filter">
+                Group By
+              </label>
+              <select
+                id="collection-grouping-filter"
+                className="form-select"
+                value={grouping}
+                onChange={(event) => setGrouping(event.target.value as 'daily' | 'weekly' | 'monthly')}
+              >
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </div>
+            <div className="col-md-1">
+              <button className="btn btn-outline-secondary w-100" onClick={handleClearFilters}>
+                <i className="bi bi-x-circle me-2"></i>
+                Clear
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 

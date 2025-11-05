@@ -1,13 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { financialReportsService } from '../../../services/reportsService';
-import type { ARAgingResponse } from '../../../types/reports';
+import type { ARAgingResponse, ReportFilters } from '../../../types/reports';
 import { useCurrency } from '../../../hooks/useCurrency';
 import { ReportContainer } from '../components/ReportContainer';
 import { SummaryCard } from '../components/SummaryCard';
 import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates';
+import { useAppSelector } from '../../../hooks';
+import { selectStorefrontsLoading, selectUserStorefronts } from '../../../store/slices/authSlice';
 
 const ARAgingPage: React.FC = () => {
   const { formatCurrency } = useCurrency();
+  const storefronts = useAppSelector(selectUserStorefronts);
+  const storefrontsLoading = useAppSelector(selectStorefrontsLoading);
   const [data, setData] = useState<ARAgingResponse['data'] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -15,15 +19,31 @@ const ARAgingPage: React.FC = () => {
   const [asOfDate, setAsOfDate] = useState(() => {
     return new Date().toISOString().split('T')[0];
   });
+  const [storefrontId, setStorefrontId] = useState<string>('');
 
-  const fetchData = async () => {
+  const storefrontOptions = useMemo(() => {
+    const items = storefronts ?? [];
+    return items.map((storefront) => ({ id: storefront.id, name: storefront.name }));
+  }, [storefronts]);
+
+  const buildFilters = useCallback((): ReportFilters => {
+    const filters: ReportFilters = {
+      as_of_date: asOfDate,
+    };
+
+    if (storefrontId) {
+      filters.storefront_id = storefrontId;
+    }
+
+    return filters;
+  }, [asOfDate, storefrontId]);
+
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     
     try {
-      const result = await financialReportsService.getARAging({
-        as_of_date: asOfDate,
-      });
+      const result = await financialReportsService.getARAging(buildFilters());
       
       if (result.success && result.data) {
         setData(result.data);
@@ -35,21 +55,23 @@ const ARAgingPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [buildFilters]);
 
   useEffect(() => {
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [asOfDate]);
+    void fetchData();
+  }, [fetchData]);
 
   const handleExport = async () => {
     try {
-      await financialReportsService.exportARAgingCSV({
-        as_of_date: asOfDate,
-      });
-    } catch (err) {
+      await financialReportsService.exportARAgingCSV(buildFilters());
+    } catch {
       alert('Failed to export report. Please try again.');
     }
+  };
+
+  const handleClearFilters = () => {
+    setStorefrontId('');
+    setAsOfDate(new Date().toISOString().split('T')[0]);
   };
 
   const formatPercent = (value: number | null | undefined): string => {
@@ -67,7 +89,7 @@ const ARAgingPage: React.FC = () => {
   };
 
   if (loading && !data) return <LoadingState message="Loading AR aging data..." />;
-  if (error) return <ErrorState error={error} onRetry={fetchData} />;
+  if (error) return <ErrorState error={error} onRetry={() => { void fetchData(); }} />;
   if (!data || !data.summary || !data.results) return <EmptyState message="No AR aging data available" />;
 
   const { summary, results } = data;
@@ -80,7 +102,9 @@ const ARAgingPage: React.FC = () => {
       actions={
         <>
           <button
-            onClick={fetchData}
+            onClick={() => {
+              void fetchData();
+            }}
             disabled={loading}
             className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-50"
           >
@@ -96,17 +120,53 @@ const ARAgingPage: React.FC = () => {
         </>
       }
     >
-      {/* Date Filter */}
-      <div className="row mb-4">
-        <div className="col-md-4">
-          <label className="form-label">As of Date</label>
-          <input
-            type="date"
-            className="form-control"
-            value={asOfDate}
-            onChange={(e) => setAsOfDate(e.target.value)}
-            max={new Date().toISOString().split('T')[0]}
-          />
+      {/* Filters */}
+      <div className="card mb-4">
+        <div className="card-body">
+          <div className="row g-3 align-items-end">
+            <div className="col-md-4">
+              <label className="form-label fw-bold" htmlFor="ar-aging-date">
+                As of Date
+              </label>
+              <input
+                type="date"
+                id="ar-aging-date"
+                className="form-control"
+                value={asOfDate}
+                onChange={(event) => setAsOfDate(event.target.value)}
+                max={new Date().toISOString().split('T')[0]}
+              />
+            </div>
+            <div className="col-md-4">
+              <label className="form-label fw-bold" htmlFor="ar-aging-storefront">
+                Storefront
+              </label>
+              <select
+                id="ar-aging-storefront"
+                className="form-select"
+                value={storefrontId}
+                onChange={(event) => setStorefrontId(event.target.value)}
+                disabled={storefrontsLoading}
+              >
+                <option value="">All Storefronts</option>
+                {storefrontOptions.map((storefront) => (
+                  <option key={storefront.id} value={storefront.id}>
+                    {storefront.name}
+                  </option>
+                ))}
+              </select>
+              {storefrontsLoading && <div className="form-text">Loading storefronts…</div>}
+              {!storefrontsLoading && storefrontOptions.length === 0 && (
+                <div className="form-text">No storefronts available</div>
+              )}
+            </div>
+            <div className="col-md-2">
+              <button className="btn btn-outline-secondary w-100" onClick={handleClearFilters}>
+                <i className="bi bi-x-circle me-2"></i>
+                Clear
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 

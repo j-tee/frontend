@@ -1,14 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { salesReportsService } from '../../../services/reportsService';
-import type { CustomerAnalyticsResponse } from '../../../types/reports';
+import type { CustomerAnalyticsResponse, ReportFilters } from '../../../types/reports';
 import { useCurrency } from '../../../hooks/useCurrency';
 import { ReportContainer } from '../components/ReportContainer';
 import { SummaryCard } from '../components/SummaryCard';
 import { DateRangeFilter } from '../components/DateRangeFilter';
 import { ReportStates } from '../components/ReportStates';
+import { useAppSelector } from '../../../hooks';
+import { selectStorefrontsLoading, selectUserStorefronts } from '../../../store/slices/authSlice';
 
 const CustomerAnalyticsPage: React.FC = () => {
   const { formatCurrency } = useCurrency();
+  const storefronts = useAppSelector(selectUserStorefronts);
+  const storefrontsLoading = useAppSelector(selectStorefrontsLoading);
   const [data, setData] = useState<CustomerAnalyticsResponse['data'] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,17 +29,36 @@ const CustomerAnalyticsPage: React.FC = () => {
   });
 
   const [selectedSegment, setSelectedSegment] = useState<'all' | 'new' | 'returning' | 'vip' | 'at-risk'>('all');
+  const [storefrontId, setStorefrontId] = useState<string>('');
 
-  const fetchData = async () => {
+  const storefrontOptions = useMemo(() => {
+    const items = storefronts ?? [];
+    return items.map((storefront) => ({ id: storefront.id, name: storefront.name }));
+  }, [storefronts]);
+
+  const buildFilters = useCallback((): ReportFilters => {
+    const filters: ReportFilters = {
+      start_date: startDate,
+      end_date: endDate,
+    };
+
+    if (selectedSegment !== 'all') {
+      filters.segment = selectedSegment;
+    }
+
+    if (storefrontId) {
+      filters.storefront_id = storefrontId;
+    }
+
+    return filters;
+  }, [endDate, selectedSegment, startDate, storefrontId]);
+
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     
     try {
-      const result = await salesReportsService.getCustomerAnalytics({
-        start_date: startDate,
-        end_date: endDate,
-        segment: selectedSegment === 'all' ? undefined : selectedSegment,
-      });
+      const result = await salesReportsService.getCustomerAnalytics(buildFilters());
       
       // Handle nested API response structure
       if (result.success && result.data) {
@@ -48,21 +71,16 @@ const CustomerAnalyticsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [buildFilters]);
 
   useEffect(() => {
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, selectedSegment]);
+    void fetchData();
+  }, [fetchData]);
 
   const handleExport = async () => {
     try {
-      await salesReportsService.exportCustomerAnalyticsCSV({
-        start_date: startDate,
-        end_date: endDate,
-        segment: selectedSegment === 'all' ? undefined : selectedSegment,
-      });
-    } catch (err) {
+      await salesReportsService.exportCustomerAnalyticsCSV(buildFilters());
+    } catch {
       alert('Failed to export report. Please try again.');
     }
   };
@@ -92,7 +110,9 @@ const CustomerAnalyticsPage: React.FC = () => {
       actions={
         <>
           <button
-            onClick={fetchData}
+            onClick={() => {
+              void fetchData();
+            }}
             disabled={loading}
             className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-50"
           >
@@ -108,15 +128,56 @@ const CustomerAnalyticsPage: React.FC = () => {
         </>
       }
     >
-      {/* Date Filter */}
-      <div className="mb-4">
-        <DateRangeFilter
-          startDate={startDate}
-          endDate={endDate}
-          onStartDateChange={setStartDate}
-          onEndDateChange={setEndDate}
-          showPresets={true}
-        />
+      {/* Filters */}
+      <div className="card mb-4">
+        <div className="card-body">
+          <div className="row g-3 align-items-end">
+            <div className="col-md-5">
+              <DateRangeFilter
+                startDate={startDate}
+                endDate={endDate}
+                onStartDateChange={setStartDate}
+                onEndDateChange={setEndDate}
+                showPresets={true}
+              />
+            </div>
+            <div className="col-md-4 col-lg-3">
+              <label className="form-label fw-bold" htmlFor="storefront-filter">
+                Storefront
+              </label>
+              <select
+                id="storefront-filter"
+                className="form-select"
+                value={storefrontId}
+                onChange={(event) => setStorefrontId(event.target.value)}
+                disabled={storefrontsLoading}
+              >
+                <option value="">All Storefronts</option>
+                {storefrontOptions.map((storefront) => (
+                  <option key={storefront.id} value={storefront.id}>
+                    {storefront.name}
+                  </option>
+                ))}
+              </select>
+              {storefrontsLoading && <div className="form-text">Loading storefronts…</div>}
+              {!storefrontsLoading && storefrontOptions.length === 0 && (
+                <div className="form-text">No storefronts available</div>
+              )}
+            </div>
+            <div className="col-md-3 col-lg-2">
+              <button
+                className="btn btn-outline-secondary w-100"
+                onClick={() => {
+                  setStorefrontId('');
+                  setSelectedSegment('all');
+                }}
+              >
+                <i className="bi bi-x-circle me-2"></i>
+                Clear Filters
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Summary Cards */}
