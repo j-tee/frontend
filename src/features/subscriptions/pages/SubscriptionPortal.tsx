@@ -154,15 +154,17 @@ export default function SubscriptionPortal() {
     )
   }
 
-  const hasSubscription = subscriptionStatus?.has_subscription || false
-  const subscription = subscriptionStatus?.subscription
-  
-  const status = subscription?.status || 'INACTIVE'
-  const badgeVariant = 
-    status === 'ACTIVE' ? 'success' :
-    status === 'TRIAL' ? 'info' :
-    status === 'PAST_DUE' ? 'warning' :
+  const subscription = subscriptionStatus?.subscription ?? null
+  const normalizedStatus = (subscription?.status ?? 'INACTIVE').toUpperCase()
+  const badgeVariant =
+    normalizedStatus === 'ACTIVE' ? 'success' :
+    normalizedStatus === 'TRIAL' ? 'info' :
+    normalizedStatus === 'PAST_DUE' ? 'warning' :
     'secondary'
+  const statusLabel = normalizedStatus.replace(/_/g, ' ')
+  const hasSubscription =
+    subscriptionStatus?.has_subscription ??
+    (subscription !== null && ['ACTIVE', 'TRIAL', 'PAST_DUE'].includes(normalizedStatus))
 
   const storefrontCount = pricing?.storefront_count ?? pricing?.storefronts ?? 0
   const taxes = pricing?.taxes ?? []
@@ -184,8 +186,12 @@ export default function SubscriptionPortal() {
               <h4>Subscription Management</h4>
               <div className="mb-3">
                 <strong>Business:</strong> {currentBusiness.name}<br/>
-                <strong>Status:</strong>{' '}
-                <Badge bg={badgeVariant}>{status}</Badge>
+                <div className="d-flex align-items-center gap-2">
+                  <strong>Status:</strong>
+                  <Badge bg={badgeVariant} className="px-3 text-uppercase">
+                    {statusLabel}
+                  </Badge>
+                </div>
               </div>
               
               {hasSubscription && subscription && (

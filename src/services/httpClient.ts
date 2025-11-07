@@ -43,6 +43,8 @@ export const setupHttpInterceptors = (store: Store<RootState>) => {
 
     const state = store.getState()
     const token = state.auth.token
+    console.log('HTTP Interceptor - Token from state:', token ? `${token.substring(0, 20)}...` : 'NO TOKEN')
+    console.log('HTTP Interceptor - Request URL:', config.url)
     if (token) {
       if (isAxiosHeaders) {
         headers.set('Authorization', `Token ${token}`)
@@ -50,6 +52,9 @@ export const setupHttpInterceptors = (store: Store<RootState>) => {
         config.headers = config.headers ?? {}
         ;(config.headers as Record<string, unknown>)['Authorization'] = `Token ${token}`
       }
+      console.log('HTTP Interceptor - Authorization header set')
+    } else {
+      console.warn('HTTP Interceptor - NO TOKEN AVAILABLE')
     }
     return config
   })
