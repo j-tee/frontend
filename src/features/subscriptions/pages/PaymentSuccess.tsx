@@ -2,15 +2,24 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Container, Alert, Spinner, Button } from 'react-bootstrap'
 import { verifyPayment } from '../../../services/subscriptionService'
+import useAppSelector from '../../../hooks/useAppSelector'
+import { selectAuthState } from '../../../store/slices/authSlice'
 
 export default function PaymentSuccess() {
   const [searchParams] = useSearchParams()
+  const { token } = useAppSelector(selectAuthState)
   const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing')
   const [message, setMessage] = useState('')
 
   useEffect(() => {
     const verifyStripePayment = async () => {
       try {
+        // Wait for token to be available
+        if (!token) {
+          console.log('Waiting for auth token...')
+          return
+        }
+
         // Get session_id from URL (Stripe callback)
         const sessionId = searchParams.get('session_id')
         
@@ -55,8 +64,11 @@ export default function PaymentSuccess() {
       }
     }
 
-    verifyStripePayment()
-  }, [searchParams])
+    // Only run when we have a token
+    if (token) {
+      verifyStripePayment()
+    }
+  }, [searchParams, token]) // token is in dependency array so effect re-runs when it changes
 
   return (
     <Container fluid className="py-5 text-center">

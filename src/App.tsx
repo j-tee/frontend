@@ -48,6 +48,7 @@ import SubscriptionPortal from './features/subscriptions/pages/SubscriptionPorta
 import PaymentCallback from './features/subscriptions/pages/PaymentCallback.tsx'
 import PaymentSuccess from './features/subscriptions/pages/PaymentSuccess.tsx'
 import PaymentCancelled from './features/subscriptions/pages/PaymentCancelled.tsx'
+import ManualVerifyPayment from './features/subscriptions/pages/ManualVerifyPayment.tsx'
 import PlatformDashboard from './features/platform/pages/PlatformDashboard.tsx'
 import AccountSettingsPage from './features/account/pages/AccountSettingsPage.tsx'
 import { AIFeaturesPage, PurchaseCreditsModal, AICheckoutModal } from './features/ai'
@@ -365,6 +366,7 @@ const App = () => {
       <Route path="/payment/callback" element={<PaymentCallback />} />
       <Route path="/payment/success" element={<PaymentSuccess />} />
       <Route path="/payment/cancelled" element={<PaymentCancelled />} />
+      <Route path="/payment/verify" element={<ManualVerifyPayment />} />
       <Route path="*" element={<LandingPage />} />
     </Routes>
       <PurchaseCreditsModal />

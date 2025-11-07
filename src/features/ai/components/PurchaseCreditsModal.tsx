@@ -38,10 +38,14 @@ export const PurchaseCreditsModal: React.FC = () => {
 
   const handlePurchase = async (packageType: CreditPackageType) => {
     try {
+      // Get frontend base URL for callback
+      const frontendUrl = window.location.origin
+      
       const response = await dispatch(
         purchaseCredits({
           package: packageType,
           payment_method: 'mobile_money',
+          callback_url: `${frontendUrl}/payment/callback`,
         }),
       ).unwrap()
 

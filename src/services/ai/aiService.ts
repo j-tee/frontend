@@ -19,6 +19,7 @@ import type {
   CollectionMessageResponse,
   CreditRiskAssessmentRequest,
   CreditRiskAssessmentResponse,
+  AICreditVerificationResponse,
 } from '../../types/ai'
 
 const AI_BASE_PATH = '/ai/api'
@@ -45,6 +46,21 @@ export const purchaseCredits = async (
     `${AI_BASE_PATH}/credits/purchase/`,
     data,
   )
+  return response.data
+}
+
+/**
+ * Verify AI credit payment with the given reference
+ */
+export const verifyCreditsPayment = async (
+  reference: string,
+): Promise<AICreditVerificationResponse> => {
+  console.log('verifyCreditsPayment called with reference:', reference)
+  const response = await httpClient.get<AICreditVerificationResponse>(
+    `${AI_BASE_PATH}/credits/verify/`,
+    { params: { reference, trxref: reference } },
+  )
+  console.log('verifyCreditsPayment response:', response.data)
   return response.data
 }
 

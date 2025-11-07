@@ -27,6 +27,7 @@ export interface CreditPurchaseRequest {
   package: CreditPackageType
   payment_method: PaymentMethod
   custom_amount?: number
+  callback_url?: string
 }
 
 export interface AICreditInvoiceLine {
@@ -73,6 +74,17 @@ export interface AICreditPurchaseSummary {
   unit_price?: number | string
   amount?: number | string
   credits_to_add?: number
+}
+
+export interface AICreditVerificationResponse {
+  success?: boolean
+  status?: 'success' | 'failed' | 'error'
+  message?: string
+  reference?: string
+  gateway?: string
+  credits_added?: number
+  new_balance?: number
+  balance?: number
 }
 
 export interface CreditPurchaseResponse {
