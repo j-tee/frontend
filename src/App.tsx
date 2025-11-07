@@ -50,6 +50,7 @@ import PaymentSuccess from './features/subscriptions/pages/PaymentSuccess.tsx'
 import PaymentCancelled from './features/subscriptions/pages/PaymentCancelled.tsx'
 import PlatformDashboard from './features/platform/pages/PlatformDashboard.tsx'
 import AccountSettingsPage from './features/account/pages/AccountSettingsPage.tsx'
+import { AIFeaturesPage, PurchaseCreditsModal, AICheckoutModal } from './features/ai'
 
 const App = () => {
   return (
@@ -326,6 +327,14 @@ const App = () => {
               )}
             />
             <Route
+              path="ai"
+              element={(
+                <RequirePermission capability={CAPABILITIES.REPORTS_VIEW}>
+                  <AIFeaturesPage />
+                </RequirePermission>
+              )}
+            />
+            <Route
               path="billing"
               element={(
                 <RequirePermission capability={CAPABILITIES.BILLING_MANAGE}>
@@ -358,6 +367,8 @@ const App = () => {
       <Route path="/payment/cancelled" element={<PaymentCancelled />} />
       <Route path="*" element={<LandingPage />} />
     </Routes>
+      <PurchaseCreditsModal />
+      <AICheckoutModal />
       <ToastContainer position="top-right" autoClose={4000} newestOnTop pauseOnHover closeOnClick theme="light" />
     </>
   )

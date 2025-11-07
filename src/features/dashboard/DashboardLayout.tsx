@@ -30,6 +30,8 @@ import {
 import type { StorefrontPayload, WarehousePayload } from '../../types/inventory.js'
 import { CAPABILITIES, normalizeMembershipRole, type Capability } from '../../utils/permissions.js'
 import { isPlatformAdmin } from '../../utils/platformPermissions.js'
+import { fetchCreditsBalance, selectAICredits, selectAICreditsLoading } from '../../store/slices/aiSlice.js'
+import { areAIFeaturesEnabled } from '../../services/ai/aiService.ts'
 
 type NavIconKey =
   | 'dashboard'
@@ -41,6 +43,7 @@ type NavIconKey =
   | 'bookkeeping'
   | 'billing'
   | 'settings'
+  | 'ai'
 
 interface SideNavLink {
   to: string
@@ -49,6 +52,7 @@ interface SideNavLink {
   end?: boolean
   requiredCapability?: Capability
   subLinks?: { to: string; label: string; requiredCapability?: Capability }[]
+  featureFlag?: 'ai'
 }
 
 interface SideNavSection {
@@ -131,6 +135,13 @@ const ICONS: Record<NavIconKey, ReactNode> = {
       />
     </svg>
   ),
+  ai: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <path d="M12 2 3 6.5v11L12 22l9-4.5v-11L12 2z" strokeLinejoin="round" />
+      <path d="M3 6.5 12 11l9-4.5" strokeLinejoin="round" />
+      <circle cx="12" cy="12.5" r="2.5" />
+    </svg>
+  ),
 }
 
 const SIDE_NAV_SECTIONS: SideNavSection[] = [
@@ -192,6 +203,13 @@ const SIDE_NAV_SECTIONS: SideNavSection[] = [
         ],
       },
       {
+        label: 'AI Features',
+        to: '/app/ai',
+        icon: 'ai',
+        requiredCapability: CAPABILITIES.REPORTS_VIEW,
+        featureFlag: 'ai',
+      },
+      {
         label: 'Bookkeeping',
         to: '/app/bookkeeping',
         icon: 'bookkeeping',
@@ -248,6 +266,59 @@ const DashboardLayout = () => {
   const canManageStaff = can(CAPABILITIES.EMPLOYEES_MANAGE)
   const canManageLocations = can(CAPABILITIES.LOCATIONS_MANAGE)
   const hasQuickActions = canManageSales || canManageInventory || canManageLocations || canManageStaff
+  const envAIFeaturesEnabled = useMemo(() => areAIFeaturesEnabled(), [])
+  const subscriptionUnlocksAI = useMemo(() => {
+    if (!activeSubscription || activeSubscription.status !== 'ACTIVE') {
+      return false
+    }
+    const { plan } = activeSubscription
+    if (!plan) {
+      return false
+    }
+
+    const includesAIString = (value: unknown): boolean => {
+      return typeof value === 'string' && value.toLowerCase().includes('ai')
+    }
+
+    if (Array.isArray(plan.features) && plan.features.some(includesAIString)) {
+      return true
+    }
+
+    if (
+      plan.features &&
+      typeof plan.features === 'object' &&
+      !Array.isArray(plan.features) &&
+      Object.entries(plan.features).some(([key, value]) => {
+        return Boolean(value) && key.toLowerCase().includes('ai')
+      })
+    ) {
+      return true
+    }
+
+    if (Array.isArray(plan.features_display) && plan.features_display.some(includesAIString)) {
+      return true
+    }
+
+    return includesAIString(plan.name)
+  }, [activeSubscription])
+  const aiFeaturesEnabled = envAIFeaturesEnabled || subscriptionUnlocksAI
+
+  const aiCredits = useAppSelector(selectAICredits)
+  const aiCreditsLoading = useAppSelector(selectAICreditsLoading)
+  const aiBalance = aiCredits ? Number(aiCredits.balance) || 0 : 0
+  const aiLowCredits = aiCredits ? aiBalance < 10 : false
+  const aiStatusLabel = aiCreditsLoading
+    ? 'Checking credits…'
+    : aiCredits
+      ? `${aiBalance.toFixed(1)} credits`
+      : 'Get AI credits'
+  const aiStatusHelper = aiCreditsLoading
+    ? 'Please wait'
+    : aiCredits
+      ? aiLowCredits
+        ? 'Top up soon'
+        : 'Ready to use'
+      : 'Start with 30 credits'
 
   useEffect(() => {
     if (!user) {
@@ -268,6 +339,12 @@ const DashboardLayout = () => {
       void dispatch(loadActiveSubscription())
     }
   }, [dispatch, user])
+
+  useEffect(() => {
+    if (aiFeaturesEnabled && user?.id) {
+      void dispatch(fetchCreditsBalance())
+    }
+  }, [aiFeaturesEnabled, dispatch, user?.id])
 
   useEffect(() => {
     if (locationStatus === 'idle' && user) {
@@ -498,7 +575,12 @@ const DashboardLayout = () => {
     const filteredSections = SIDE_NAV_SECTIONS
       .map((section) => ({
         ...section,
-        links: section.links.filter((link) => !link.requiredCapability || can(link.requiredCapability)),
+        links: section.links.filter((link) => {
+          if (link.featureFlag === 'ai' && !aiFeaturesEnabled) {
+            return false
+          }
+          return !link.requiredCapability || can(link.requiredCapability)
+        }),
       }))
       .filter((section) => section.links.length > 0)
 
@@ -617,6 +699,57 @@ const DashboardLayout = () => {
 
   const renderWorkspace = () => (
     <div className="flex flex-col gap-6">
+      {aiFeaturesEnabled ? (
+        <section className="space-y-4 rounded-3xl border border-indigo-200 bg-indigo-50/80 p-6 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-indigo-900">AI Assistant</h2>
+              <p className="mt-2 text-sm text-indigo-700">
+                {aiCreditsLoading
+                  ? 'Checking your available credits…'
+                  : aiCredits
+                    ? `You have ${aiBalance.toFixed(1)} credits ready to use.`
+                    : 'Buy your first credits to unlock AI insights.'}
+              </p>
+            </div>
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-2xl text-white">
+              🤖
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <span
+              className={`rounded-full border px-3 py-1 text-sm font-semibold ${
+                aiLowCredits
+                  ? 'border-amber-300 bg-amber-100 text-amber-700'
+                  : 'border-indigo-300 bg-white/70 text-indigo-800'
+              }`}
+            >
+              {aiCreditsLoading ? 'Loading credits…' : aiCredits ? `${aiBalance.toFixed(1)} credits available` : 'No credits yet'}
+            </span>
+            {!aiCreditsLoading ? (
+              <span className="text-xs text-indigo-700">{aiStatusHelper}</span>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="primary"
+              className="rounded-pill bg-gradient-to-r from-indigo-500 to-purple-600 px-4"
+              onClick={() => navigate('/app/ai')}
+            >
+              {aiCredits && !aiLowCredits ? 'Open AI workspace' : 'Top up & open AI workspace'}
+            </Button>
+            {aiLowCredits ? (
+              <Button
+                variant="outline-secondary"
+                className="rounded-pill px-4"
+                onClick={() => navigate('/app/ai')}
+              >
+                Buy credits now
+              </Button>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
       <section className="space-y-4 rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-lg font-semibold text-slate-900">Locations</h2>
@@ -838,6 +971,54 @@ const DashboardLayout = () => {
                 ) : null}
               </div>
             ) : null}
+            {aiFeaturesEnabled ? (
+              <>
+                <Button
+                  variant="outline-secondary"
+                  className={`hidden items-center gap-2 rounded-2xl border px-3 py-2 text-sm font-semibold md:flex ${
+                    aiLowCredits
+                      ? 'border-amber-300 bg-amber-50 text-amber-700'
+                      : 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                  }`}
+                  onClick={() => navigate('/app/ai')}
+                >
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-base text-white">
+                    🤖
+                  </span>
+                  <div className="text-left leading-tight">
+                    <span className="block text-xs font-medium text-slate-500">AI Assistant</span>
+                    <span className="block text-sm font-semibold">
+                      {aiCreditsLoading ? (
+                        <span className="flex items-center gap-1">
+                          <Spinner animation="border" size="sm" role="status" />
+                          Loading…
+                        </span>
+                      ) : (
+                        aiStatusLabel
+                      )}
+                    </span>
+                    {!aiCreditsLoading ? (
+                      <span className="block text-xs text-slate-500">{aiStatusHelper}</span>
+                    ) : null}
+                  </div>
+                </Button>
+                <Button
+                  variant="outline-secondary"
+                  className={`flex items-center gap-2 rounded-2xl border px-2 py-2 text-sm md:hidden ${
+                    aiLowCredits
+                      ? 'border-amber-300 bg-amber-50 text-amber-700'
+                      : 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                  }`}
+                  onClick={() => navigate('/app/ai')}
+                  aria-label="Open AI features"
+                >
+                  <span className="text-base">🤖</span>
+                  <span>
+                    {aiCreditsLoading ? 'AI…' : aiCredits ? aiBalance.toFixed(1) : 'Start'}
+                  </span>
+                </Button>
+              </>
+            ) : null}
             <Button
               variant="light"
               className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-slate-700 shadow-sm lg:hidden"
@@ -938,6 +1119,29 @@ const DashboardLayout = () => {
                 >
                   {subscriptionDisplayLabel}
                 </Badge>
+
+                {aiFeaturesEnabled ? (
+                  <Button
+                    variant="outline-secondary"
+                    className={`flex items-center gap-2 rounded-pill border px-3 py-2 text-sm ${
+                      aiLowCredits
+                        ? 'border-amber-300 bg-amber-50 text-amber-700'
+                        : 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                    }`}
+                    onClick={() => navigate('/app/ai')}
+                  >
+                    <span aria-hidden="true" className="text-base">🤖</span>
+                    <div className="flex flex-col leading-tight text-left">
+                      <span className="text-xs uppercase tracking-wide text-slate-500">AI Assistant</span>
+                      <span className="text-sm font-semibold">
+                        {aiCreditsLoading ? 'Checking credits…' : aiCredits ? `${aiBalance.toFixed(1)} credits` : 'Buy credits'}
+                      </span>
+                      {!aiCreditsLoading ? (
+                        <span className="text-xs text-slate-500">{aiStatusHelper}</span>
+                      ) : null}
+                    </div>
+                  </Button>
+                ) : null}
                 
                 {/* Platform Admin Access */}
                 {user && isPlatformAdmin(user) && (
