@@ -75,7 +75,7 @@ export const AICheckoutModal: React.FC = () => {
   }, [invoice])
 
   const baseAmount = toNumber(invoice?.base_amount ?? invoice?.subtotal ?? payment?.amount)
-  const totalTax = toNumber(invoice?.total_tax ?? invoice?.tax_total)
+  const totalTax = toNumber(invoice?.tax_total)
   const totalAmount = toNumber(invoice?.total_amount ?? invoice?.total ?? payment?.amount)
   const packageName = payment?.package ?? payment?.purchase?.package ?? 'AI Credits'
 
