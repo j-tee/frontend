@@ -562,6 +562,7 @@ export const selectAIUsageStats = (state: RootState) => state.ai.usageStats
 export const selectAITransactions = (state: RootState) => state.ai.transactions
 export const selectQueryResult = (state: RootState) => state.ai.queryResult
 export const selectQueryLoading = (state: RootState) => state.ai.queryLoading
+export const selectQueryError = (state: RootState) => state.ai.queryError
 export const selectPurchaseModal = (state: RootState) => state.ai.purchaseModal
 export const selectCheckoutModal = (state: RootState) => state.ai.checkoutModal
 export const selectCollectionMessage = (state: RootState) => state.ai.collectionMessage
