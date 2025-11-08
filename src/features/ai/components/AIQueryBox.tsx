@@ -11,6 +11,7 @@ import {
   clearQueryResult,
   selectQueryResult,
   selectQueryLoading,
+  selectQueryError,
   selectAICredits,
 } from '../../../store/slices/aiSlice'
 import './AIQueryBox.css'
@@ -31,6 +32,7 @@ export const AIQueryBox: React.FC<AIQueryBoxProps> = ({
   
   const result = useAppSelector(selectQueryResult)
   const loading = useAppSelector(selectQueryLoading)
+  const queryError = useAppSelector(selectQueryError)
   const credits = useAppSelector(selectAICredits)
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -129,7 +131,23 @@ export const AIQueryBox: React.FC<AIQueryBoxProps> = ({
         )}
       </form>
 
-      {result && (
+      {queryError ? (
+        <div className="query-result error-state">
+          <div className="answer-section">
+            <div className="answer-header">
+              <span className="icon" role="img" aria-hidden="true">
+                ⚠️
+              </span>
+              <h4>We couldn&apos;t complete that request</h4>
+            </div>
+            <div className="answer-content">
+              <p className="friendly-error">Our AI service had a hiccup. Please try again in a moment.</p>
+              <p className="error-details">{queryError}</p>
+            </div>
+          </div>
+        </div>
+      ) :
+      result ? (
         <div className="query-result">
           <div className="answer-section">
             <div className="answer-header">
@@ -182,7 +200,7 @@ export const AIQueryBox: React.FC<AIQueryBoxProps> = ({
             </small>
           </div>
         </div>
-      )}
+      ) : null}
 
       {loading && (
         <div className="loading-state">

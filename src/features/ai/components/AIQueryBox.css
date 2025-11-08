@@ -167,6 +167,32 @@
   margin-top: 20px;
 }
 
+.query-result.error-state {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.query-result.error-state .answer-header h4 {
+  color: #b91c1c;
+}
+
+.query-result.error-state .answer-content {
+  background: #fff5f5;
+  border-color: #fecaca;
+  color: #7f1d1d;
+}
+
+.friendly-error {
+  margin: 0 0 8px 0;
+  font-weight: 600;
+}
+
+.error-details {
+  margin: 0;
+  font-size: 14px;
+  color: #b91c1c;
+}
+
 .answer-section {
   margin-bottom: 20px;
 }
