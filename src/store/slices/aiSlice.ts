@@ -21,6 +21,10 @@ import type {
   CollectionMessageResponse,
   CreditRiskAssessmentRequest,
   CreditRiskAssessmentResponse,
+  ReportNarrativeRequest,
+  ReportNarrativeResponse,
+  InventoryForecastRequest,
+  InventoryForecastResponse,
   AIPurchaseModalState,
   AICheckoutModalState,
 } from '../../types/ai'
@@ -66,6 +70,16 @@ interface AIState {
   creditAssessmentLoading: boolean
   creditAssessmentError: string | null
 
+  // Report Narrative
+  reportNarrative: ReportNarrativeResponse | null
+  reportNarrativeLoading: boolean
+  reportNarrativeError: string | null
+
+  // Inventory Forecast
+  inventoryForecast: InventoryForecastResponse | null
+  inventoryForecastLoading: boolean
+  inventoryForecastError: string | null
+
   // Purchase Modal
   purchaseModal: AIPurchaseModalState
 
@@ -108,6 +122,14 @@ const initialState: AIState = {
   creditAssessment: null,
   creditAssessmentLoading: false,
   creditAssessmentError: null,
+
+  reportNarrative: null,
+  reportNarrativeLoading: false,
+  reportNarrativeError: null,
+
+  inventoryForecast: null,
+  inventoryForecastLoading: false,
+  inventoryForecastError: null,
 
   purchaseModal: {
     isOpen: false,
@@ -328,6 +350,70 @@ export const assessRisk = createAsyncThunk<
   }
 })
 
+/**
+ * Generate report narrative
+ */
+export const generateNarrative = createAsyncThunk<
+  ReportNarrativeResponse,
+  ReportNarrativeRequest,
+  { rejectValue: string }
+>('ai/generateNarrative', async (data, { rejectWithValue, dispatch }) => {
+  try {
+    const result = await aiService.generateReportNarrative(data)
+    dispatch(fetchCreditsBalance())
+    return result
+  } catch (error) {
+    if (isAxiosError(error)) {
+      if (error.response?.status === 402) {
+        const errorData = error.response.data as {
+          current_balance?: number
+          required_credits?: number
+        }
+        dispatch(
+          showPurchaseModal({
+            requiredCredits: errorData.required_credits,
+            currentBalance: errorData.current_balance,
+          }),
+        )
+      }
+      return rejectWithValue(toUserFacingError(error))
+    }
+    return rejectWithValue('Failed to generate narrative')
+  }
+})
+
+/**
+ * Generate inventory forecast
+ */
+export const generateForecast = createAsyncThunk<
+  InventoryForecastResponse,
+  InventoryForecastRequest,
+  { rejectValue: string }
+>('ai/generateForecast', async (data, { rejectWithValue, dispatch }) => {
+  try {
+    const result = await aiService.generateInventoryForecast(data)
+    dispatch(fetchCreditsBalance())
+    return result
+  } catch (error) {
+    if (isAxiosError(error)) {
+      if (error.response?.status === 402) {
+        const errorData = error.response.data as {
+          current_balance?: number
+          required_credits?: number
+        }
+        dispatch(
+          showPurchaseModal({
+            requiredCredits: errorData.required_credits,
+            currentBalance: errorData.current_balance,
+          }),
+        )
+      }
+      return rejectWithValue(toUserFacingError(error))
+    }
+    return rejectWithValue('Failed to generate forecast')
+  }
+})
+
 // ============================================
 // Slice
 // ============================================
@@ -384,6 +470,14 @@ const aiSlice = createSlice({
       state.creditAssessment = null
       state.creditAssessmentError = null
     },
+    clearReportNarrative: (state) => {
+      state.reportNarrative = null
+      state.reportNarrativeError = null
+    },
+    clearInventoryForecast: (state) => {
+      state.inventoryForecast = null
+      state.inventoryForecastError = null
+    },
 
     // Clear All Errors
     clearAllErrors: (state) => {
@@ -394,6 +488,8 @@ const aiSlice = createSlice({
       state.productDescriptionError = null
       state.collectionMessageError = null
       state.creditAssessmentError = null
+      state.reportNarrativeError = null
+      state.inventoryForecastError = null
       state.lastError = null
     },
   },
@@ -536,6 +632,38 @@ const aiSlice = createSlice({
         state.creditAssessmentError = action.payload ?? 'Failed to assess risk'
         state.lastError = action.payload ?? null
       })
+
+    // Generate Narrative
+    builder
+      .addCase(generateNarrative.pending, (state) => {
+        state.reportNarrativeLoading = true
+        state.reportNarrativeError = null
+      })
+      .addCase(generateNarrative.fulfilled, (state, action) => {
+        state.reportNarrativeLoading = false
+        state.reportNarrative = action.payload
+      })
+      .addCase(generateNarrative.rejected, (state, action) => {
+        state.reportNarrativeLoading = false
+        state.reportNarrativeError = action.payload ?? 'Failed to generate narrative'
+        state.lastError = action.payload ?? null
+      })
+
+    // Generate Forecast
+    builder
+      .addCase(generateForecast.pending, (state) => {
+        state.inventoryForecastLoading = true
+        state.inventoryForecastError = null
+      })
+      .addCase(generateForecast.fulfilled, (state, action) => {
+        state.inventoryForecastLoading = false
+        state.inventoryForecast = action.payload
+      })
+      .addCase(generateForecast.rejected, (state, action) => {
+        state.inventoryForecastLoading = false
+        state.inventoryForecastError = action.payload ?? 'Failed to generate forecast'
+        state.lastError = action.payload ?? null
+      })
   },
 })
 
@@ -552,6 +680,8 @@ export const {
   clearProductDescription,
   clearCollectionMessage,
   clearCreditAssessment,
+  clearReportNarrative,
+  clearInventoryForecast,
   clearAllErrors,
 } = aiSlice.actions
 
@@ -563,9 +693,14 @@ export const selectAITransactions = (state: RootState) => state.ai.transactions
 export const selectQueryResult = (state: RootState) => state.ai.queryResult
 export const selectQueryLoading = (state: RootState) => state.ai.queryLoading
 export const selectQueryError = (state: RootState) => state.ai.queryError
+export const selectProductDescription = (state: RootState) => state.ai.productDescription
+export const selectProductDescriptionLoading = (state: RootState) => state.ai.productDescriptionLoading
+export const selectProductDescriptionError = (state: RootState) => state.ai.productDescriptionError
 export const selectPurchaseModal = (state: RootState) => state.ai.purchaseModal
 export const selectCheckoutModal = (state: RootState) => state.ai.checkoutModal
 export const selectCollectionMessage = (state: RootState) => state.ai.collectionMessage
 export const selectCreditAssessment = (state: RootState) => state.ai.creditAssessment
+export const selectReportNarrative = (state: RootState) => state.ai.reportNarrative
+export const selectInventoryForecast = (state: RootState) => state.ai.inventoryForecast
 
 export default aiSlice.reducer

@@ -49,7 +49,7 @@ import PaymentCallback from './features/subscriptions/pages/PaymentCallback.tsx'
 import PaymentSuccess from './features/subscriptions/pages/PaymentSuccess.tsx'
 import PaymentCancelled from './features/subscriptions/pages/PaymentCancelled.tsx'
 import ManualVerifyPayment from './features/subscriptions/pages/ManualVerifyPayment.tsx'
-import PlatformDashboard from './features/platform/pages/PlatformDashboard.tsx'
+import PlatformOwnerDashboard from './features/platform/pages/PlatformOwnerDashboard.tsx'
 import AccountSettingsPage from './features/account/pages/AccountSettingsPage.tsx'
 import { AIFeaturesPage, PurchaseCreditsModal, AICheckoutModal } from './features/ai'
 
@@ -357,8 +357,8 @@ const App = () => {
             <Route path="subscription/payment/cancelled" element={<PaymentCancelled />} />
             {/* Account Settings Route */}
             <Route path="account" element={<AccountSettingsPage />} />
-            {/* Platform Admin Route */}
-            <Route path="platform" element={<PlatformDashboard />} />
+            {/* Platform Admin Route - Full dashboard with tabs */}
+            <Route path="platform" element={<PlatformOwnerDashboard />} />
           </Route>
         </Route>
       </Route>

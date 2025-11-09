@@ -8,6 +8,7 @@ import { DateRangeFilter } from '../components/DateRangeFilter';
 import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates';
 import { useAppSelector } from '../../../hooks';
 import { selectStorefrontsLoading, selectUserStorefronts } from '../../../store/slices/authSlice';
+import { ReportNarrativeWidget } from '../../ai/components/ReportNarrativeWidget';
 
 const RevenueProfitPage: React.FC = () => {
   const { formatCurrency } = useCurrency();
@@ -184,6 +185,20 @@ const RevenueProfitPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* AI Summary */}
+      {data && (
+        <ReportNarrativeWidget
+          reportType="revenue_profit"
+          reportData={{
+            summary: data.summary,
+            results: data.results,
+            date_range: { start_date: startDate, end_date: endDate },
+            grouping,
+          }}
+          reportTitle="Revenue & Profit"
+        />
+      )}
 
       {/* Summary Cards */}
       <div className="row g-3 mb-4">

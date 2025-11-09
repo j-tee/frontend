@@ -8,6 +8,7 @@ import { ReportStates } from '../components/ReportStates';
 import { useCurrency } from '../../../hooks/useCurrency';
 import { useAppSelector } from '../../../hooks';
 import { selectStorefrontsLoading, selectUserStorefronts } from '../../../store/slices/authSlice';
+import { AIQueryBox } from '../../ai';
 
 const ProductPerformancePage: React.FC = () => {
   const { formatCurrency } = useCurrency();
@@ -208,6 +209,14 @@ const ProductPerformancePage: React.FC = () => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* AI Query Box - Ask questions about product performance */}
+      <div className="mb-4">
+        <AIQueryBox 
+          storefrontId={storefrontId}
+          placeholder="Ask about product performance... (e.g., 'Which products had the highest revenue last month?' or 'Show me slow-moving inventory')"
+        />
       </div>
 
       <div className="row g-3 mb-4">

@@ -6,6 +6,7 @@ import { useCurrency } from '../../../hooks/useCurrency';
 import { ReportContainer } from '../components/ReportContainer';
 import { SummaryCard } from '../components/SummaryCard';
 import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates';
+import { ReportNarrativeWidget } from '../../ai/components/ReportNarrativeWidget';
 
 const StockLevelsPage: React.FC = () => {
   const { formatCurrency } = useCurrency();
@@ -361,6 +362,19 @@ const StockLevelsPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* AI Summary */}
+      {data && data.data && (
+        <ReportNarrativeWidget
+          reportType="stock_levels"
+          reportData={{
+            summary: data.data.summary,
+            items: data.data.items,
+            filters: { warehouse_id: warehouseId, category_id: categoryId, stock_status: stockStatus },
+          }}
+          reportTitle="Stock Levels"
+        />
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">

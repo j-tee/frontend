@@ -8,6 +8,7 @@ import type { SalesSummaryResponse } from '../../../types/reports';
 import { useCurrency } from '../../../hooks/useCurrency';
 import { useAppSelector } from '../../../hooks';
 import { selectStorefrontsLoading, selectUserStorefronts } from '../../../store/slices/authSlice';
+import { ReportNarrativeWidget } from '../../ai/components/ReportNarrativeWidget';
 
 const SalesSummaryPage: React.FC = () => {
   const { formatCurrency } = useCurrency();
@@ -212,6 +213,20 @@ const SalesSummaryPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* AI Summary */}
+      {data && (
+        <ReportNarrativeWidget
+          reportType="sales_summary"
+          reportData={{
+            summary: data.summary,
+            breakdown: data.breakdown,
+            comparison: data.comparison,
+            date_range: { start_date: startDate, end_date: endDate },
+          }}
+          reportTitle="Sales Summary"
+        />
+      )}
 
       {/* Summary Cards */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
