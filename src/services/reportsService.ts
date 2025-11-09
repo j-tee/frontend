@@ -108,10 +108,14 @@ export const salesReportsService = {
    * Get product performance report
    */
   getProductPerformance: async (filters: ReportFilters = {}): Promise<ProductPerformanceResponse> => {
-    const response = await reportsApi.get<ProductPerformanceResponse>(
+    const response = await reportsApi.get<{ data: ProductPerformanceResponse } | ProductPerformanceResponse>(
       `/reports/api/sales/products${buildQueryString(filters)}`
     );
-    return response.data;
+    if (typeof response.data === 'object' && response.data !== null && 'data' in response.data) {
+      const payload = (response.data as { data?: ProductPerformanceResponse }).data;
+      if (payload) return payload;
+    }
+    return response.data as ProductPerformanceResponse;
   },
 
   /**
