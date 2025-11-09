@@ -282,6 +282,78 @@ export interface CreditRiskAssessmentResponse {
 }
 
 // ============================================
+// Report Narrative Generator Types
+// ============================================
+
+export type ReportType = 
+  | 'sales_summary' 
+  | 'stock_levels' 
+  | 'revenue_profit' 
+  | 'ar_aging'
+  | 'inventory_movement'
+  | 'general'
+
+export type ReportData = Record<string, unknown>
+
+export interface ReportNarrativeRequest {
+  report_type: ReportType
+  report_data: ReportData
+}
+
+export interface ReportNarrativeResponse {
+  executive_summary: string
+  key_insights: string[]
+  trends: string[]
+  recommendations: string[]
+  alerts?: string[]
+  credits_used: number
+  new_balance: number
+}
+
+// ============================================
+// Inventory Forecasting Types
+// ============================================
+
+export interface InventoryForecastRequest {
+  warehouse_id?: string
+  category_id?: string
+  forecast_days?: number
+}
+
+export interface ProductForecast {
+  product_id: string
+  product_name: string
+  sku: string
+  current_stock: number
+  reorder_point: number
+  predicted_stockout_date: string | null
+  days_until_stockout: number | null
+  recommended_reorder_quantity: number
+  recommended_reorder_date: string | null
+  confidence_score: number
+  weekly_sales_velocity: number
+  trend: 'increasing' | 'stable' | 'decreasing'
+  seasonality_factor?: number
+  risk_level: 'critical' | 'high' | 'medium' | 'low'
+}
+
+export interface InventoryForecastResponse {
+  forecast_period_days: number
+  total_products_analyzed: number
+  products_at_risk: number
+  forecasts: ProductForecast[]
+  summary: {
+    critical_items: number
+    high_risk_items: number
+    medium_risk_items: number
+    low_risk_items: number
+    total_recommended_reorder_value: number
+  }
+  credits_used: number
+  new_balance: number
+}
+
+// ============================================
 // Feature Cost Reference
 // ============================================
 

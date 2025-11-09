@@ -4,9 +4,10 @@ import Badge from 'react-bootstrap/Badge'
 import Button from 'react-bootstrap/Button'
 import Dropdown from 'react-bootstrap/Dropdown'
 import Form from 'react-bootstrap/Form'
+import Nav from 'react-bootstrap/Nav'
 import Offcanvas from 'react-bootstrap/Offcanvas'
 import Spinner from 'react-bootstrap/Spinner'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import PageTransition from '../../components/PageTransition.tsx'
 import { useAppDispatch, useAppSelector, usePermissions } from '../../hooks/index.js'
 import { fetchCurrentUser, loadUserStorefronts, logout, selectAuthState } from '../../store/slices/authSlice.js'
@@ -29,7 +30,7 @@ import {
 } from '../../store/slices/locationSlice.js'
 import type { StorefrontPayload, WarehousePayload } from '../../types/inventory.js'
 import { CAPABILITIES, normalizeMembershipRole, type Capability } from '../../utils/permissions.js'
-import { isPlatformAdmin } from '../../utils/platformPermissions.js'
+import { isPlatformAdmin, isSuperAdmin } from '../../utils/platformPermissions.js'
 import { fetchCreditsBalance, selectAICredits, selectAICreditsLoading } from '../../store/slices/aiSlice.js'
 import { areAIFeaturesEnabled } from '../../services/ai/aiService.ts'
 
@@ -236,6 +237,32 @@ const SIDE_NAV_SECTIONS: SideNavSection[] = [
   },
 ]
 
+// Platform Owner Navigation - No business operations, only admin features
+const PLATFORM_OWNER_NAV_SECTIONS: SideNavSection[] = [
+  {
+    title: 'Platform Administration',
+    links: [
+      {
+        label: 'Platform Admin',
+        to: '/app/platform',
+        icon: 'settings',
+        end: false,
+      },
+    ],
+  },
+  {
+    title: 'Personal',
+    links: [
+      {
+        label: 'Account Settings',
+        to: '/app/account',
+        icon: 'settings',
+        end: false,
+      },
+    ],
+  },
+]
+
 const DashboardLayout = () => {
   const dispatch = useAppDispatch()
   const { user, business, employment } = useAppSelector(selectAuthState)
@@ -252,6 +279,7 @@ const DashboardLayout = () => {
   const [storefrontValidationError, setStorefrontValidationError] = useState<string | null>(null)
   const [warehouseValidationError, setWarehouseValidationError] = useState<string | null>(null)
   const navigate = useNavigate()
+  const location = useLocation()
   const storefronts = useAppSelector(selectStorefronts)
   const warehouses = useAppSelector(selectWarehouses)
   const locationStatus = useAppSelector(selectLocationStatus)
@@ -571,8 +599,22 @@ const DashboardLayout = () => {
       : 'Warehouse'
     : null
 
+  // Get active tab from URL query parameter
+  const getActiveTab = () => {
+    const params = new URLSearchParams(location.search)
+    return params.get('tab') || 'dashboard'
+  }
+  
+  const activeTab = getActiveTab()
+
   const renderNavigation = (onNavigate?: () => void) => {
-    const filteredSections = SIDE_NAV_SECTIONS
+    // Check if user is platform owner/admin
+    const isPlatformOwner = user && isPlatformAdmin(user)
+    
+    // Use different navigation for platform owners
+    const baseSections = isPlatformOwner ? PLATFORM_OWNER_NAV_SECTIONS : SIDE_NAV_SECTIONS
+    
+    const filteredSections = baseSections
       .map((section) => ({
         ...section,
         links: section.links.filter((link) => {
@@ -596,41 +638,44 @@ const DashboardLayout = () => {
 
     return (
       <div className="flex flex-col gap-8">
-        <div className="space-y-4 rounded-3xl border border-white/10 bg-white/5 p-4 text-slate-100">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">Active location</p>
-          {activeLocationSummary ? (
-            <div className="space-y-1">
-              <p className="text-base font-semibold text-white">{activeLocationSummary.name}</p>
-              <p className="text-xs text-slate-300">
-                {activeLocationTypeLabel}
-                {activeLocationSummary.location ? ` • ${activeLocationSummary.location}` : ''}
+        {/* Only show location switcher for business users, not platform owners */}
+        {!isPlatformOwner && (
+          <div className="space-y-4 rounded-3xl border border-white/10 bg-white/5 p-4 text-slate-100">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">Active location</p>
+            {activeLocationSummary ? (
+              <div className="space-y-1">
+                <p className="text-base font-semibold text-white">{activeLocationSummary.name}</p>
+                <p className="text-xs text-slate-300">
+                  {activeLocationTypeLabel}
+                  {activeLocationSummary.location ? ` • ${activeLocationSummary.location}` : ''}
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-300">
+                {hasLocations
+                  ? 'Select a location to focus your workspace.'
+                  : canManageLocations
+                    ? 'Create a storefront or warehouse to unlock your workspace.'
+                    : 'Ask your administrator to create a storefront or warehouse for you.'}
               </p>
+            )}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                variant="outline-light"
+                className="rounded-pill px-3 py-2 text-sm"
+                onClick={() => openLocationSwitcher(locationButtonMode)}
+              >
+                {locationButtonLabel}
+              </Button>
             </div>
-          ) : (
-            <p className="text-sm text-slate-300">
-              {hasLocations
-                ? 'Select a location to focus your workspace.'
-                : canManageLocations
-                  ? 'Create a storefront or warehouse to unlock your workspace.'
-                  : 'Ask your administrator to create a storefront or warehouse for you.'}
-            </p>
-          )}
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button
-              variant="outline-light"
-              className="rounded-pill px-3 py-2 text-sm"
-              onClick={() => openLocationSwitcher(locationButtonMode)}
-            >
-              {locationButtonLabel}
-            </Button>
+            {locationStatus === 'loading' ? (
+              <div className="mt-2 text-xs text-slate-300">Loading locations…</div>
+            ) : null}
+            {locationError ? (
+              <div className="mt-2 text-xs text-red-200">{locationError}</div>
+            ) : null}
           </div>
-          {locationStatus === 'loading' ? (
-            <div className="mt-2 text-xs text-slate-300">Loading locations…</div>
-          ) : null}
-          {locationError ? (
-            <div className="mt-2 text-xs text-red-200">{locationError}</div>
-          ) : null}
-        </div>
+        )}
         <div className="space-y-6">
           {filteredSections.map((section) => (
             <div key={section.title} className="space-y-3">
@@ -899,7 +944,8 @@ const DashboardLayout = () => {
       </a>
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
         <div className="flex w-full items-center gap-3 px-4 py-3 sm:px-6 lg:px-10 xl:px-12">
-          <div className="flex flex-1 items-center gap-3">
+          {/* Left section - Logo and mobile menu */}
+          <div className="flex items-center gap-3">
             <Button
               variant="outline-secondary"
               className="rounded-2xl border-slate-200 bg-white px-3 py-2 text-slate-700 shadow-sm lg:hidden"
@@ -911,22 +957,227 @@ const DashboardLayout = () => {
               </svg>
             </Button>
             <span className="text-lg font-semibold text-brand-secondary">POS Suite</span>
-            <div className="relative hidden flex-1 md:block">
-              <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-slate-400">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-                  <circle cx="11" cy="11" r="7" />
-                  <path d="m20 20-2-2" strokeLinecap="round" />
-                </svg>
-              </span>
-              <Form.Control
-                type="search"
-                placeholder="Search customers, products, or orders"
-                className="h-11 rounded-3xl border border-slate-200 bg-white pl-11 pr-4 text-sm shadow-none focus:border-brand-primary focus:ring-0"
-              />
-            </div>
           </div>
+            
+            {/* Platform Owner Navigation Tabs - Centered between logo and actions */}
+            {isPlatformAdmin(user) ? (
+              <div className="hidden flex-1 md:flex items-center justify-center">
+                {(() => {
+                  // Helper function to get tab style based on active state
+                  const getTabStyle = (tabName: string) => {
+                    const isActive = activeTab === tabName
+                    return {
+                      color: isActive ? '#ffffff' : '#64748b',
+                      backgroundColor: isActive ? '#6366f1' : 'transparent',
+                      transition: 'all 0.2s ease',
+                      fontWeight: isActive ? '600' : '500',
+                      boxShadow: isActive ? '0 1px 3px rgba(99, 102, 241, 0.3)' : 'none'
+                    }
+                  }
+                  
+                  return (
+                <Nav 
+                  variant="pills" 
+                  className="d-flex gap-1"
+                  style={{
+                    backgroundColor: '#f8fafc',
+                    borderRadius: '12px',
+                    padding: '4px'
+                  }}
+                >
+                  <Nav.Link 
+                    href="/app/platform?tab=dashboard"
+                    className="px-3 py-2 text-sm rounded-pill border-0"
+                    style={getTabStyle('dashboard')}
+                    onMouseEnter={(e) => {
+                      if (activeTab !== 'dashboard') {
+                        e.currentTarget.style.backgroundColor = '#e2e8f0'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (activeTab !== 'dashboard') {
+                        e.currentTarget.style.backgroundColor = 'transparent'
+                      }
+                    }}
+                  >
+                    <i className="bi bi-speedometer2 me-1"></i>
+                    Dashboard
+                  </Nav.Link>
+                  <Nav.Link 
+                    href="/app/platform?tab=financial"
+                    className="px-3 py-2 text-sm rounded-pill border-0"
+                    style={getTabStyle('financial')}
+                    onMouseEnter={(e) => {
+                      if (activeTab !== 'financial') {
+                        e.currentTarget.style.backgroundColor = '#e2e8f0'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (activeTab !== 'financial') {
+                        e.currentTarget.style.backgroundColor = 'transparent'
+                      }
+                    }}
+                  >
+                    <i className="bi bi-cash-stack me-1"></i>
+                    Financial
+                  </Nav.Link>
+                  <Nav.Link 
+                    href="/app/platform?tab=revenue"
+                    className="px-3 py-2 text-sm rounded-pill border-0"
+                    style={getTabStyle('revenue')}
+                    onMouseEnter={(e) => {
+                      if (activeTab !== 'revenue') {
+                        e.currentTarget.style.backgroundColor = '#e2e8f0'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (activeTab !== 'revenue') {
+                        e.currentTarget.style.backgroundColor = 'transparent'
+                      }
+                    }}
+                  >
+                    <i className="bi bi-graph-up-arrow me-1"></i>
+                    Revenue
+                  </Nav.Link>
+                  <Nav.Link 
+                    href="/app/platform?tab=subscriptions"
+                    className="px-3 py-2 text-sm rounded-pill border-0"
+                    style={getTabStyle('subscriptions')}
+                    onMouseEnter={(e) => {
+                      if (activeTab !== 'subscriptions') {
+                        e.currentTarget.style.backgroundColor = '#e2e8f0'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (activeTab !== 'subscriptions') {
+                        e.currentTarget.style.backgroundColor = 'transparent'
+                      }
+                    }}
+                  >
+                    <i className="bi bi-receipt me-1"></i>
+                    Subscriptions
+                  </Nav.Link>
+                  <Nav.Link 
+                    href="/app/platform?tab=pricing"
+                    className="px-3 py-2 text-sm rounded-pill border-0"
+                    style={getTabStyle('pricing')}
+                    onMouseEnter={(e) => {
+                      if (activeTab !== 'pricing') {
+                        e.currentTarget.style.backgroundColor = '#e2e8f0'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (activeTab !== 'pricing') {
+                        e.currentTarget.style.backgroundColor = 'transparent'
+                      }
+                    }}
+                  >
+                    <i className="bi bi-tags me-1"></i>
+                    Pricing
+                  </Nav.Link>
+                  <Nav.Link 
+                    href="/app/platform?tab=taxes"
+                    className="px-3 py-2 text-sm rounded-pill border-0"
+                    style={getTabStyle('taxes')}
+                    onMouseEnter={(e) => {
+                      if (activeTab !== 'taxes') {
+                        e.currentTarget.style.backgroundColor = '#e2e8f0'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (activeTab !== 'taxes') {
+                        e.currentTarget.style.backgroundColor = 'transparent'
+                      }
+                    }}
+                  >
+                    <i className="bi bi-calculator me-1"></i>
+                    Taxes
+                  </Nav.Link>
+                  <Nav.Link 
+                    href="/app/platform?tab=users"
+                    className="px-3 py-2 text-sm rounded-pill border-0"
+                    style={getTabStyle('users')}
+                    onMouseEnter={(e) => {
+                      if (activeTab !== 'users') {
+                        e.currentTarget.style.backgroundColor = '#e2e8f0'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (activeTab !== 'users') {
+                        e.currentTarget.style.backgroundColor = 'transparent'
+                      }
+                    }}
+                  >
+                    <i className="bi bi-people me-1"></i>
+                    Users
+                  </Nav.Link>
+                  {isSuperAdmin(user) && (
+                    <>
+                      <Nav.Link 
+                        href="/app/platform?tab=roles"
+                        className="px-3 py-2 text-sm rounded-pill border-0"
+                        style={getTabStyle('roles')}
+                        onMouseEnter={(e) => {
+                          if (activeTab !== 'roles') {
+                            e.currentTarget.style.backgroundColor = '#e2e8f0'
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (activeTab !== 'roles') {
+                            e.currentTarget.style.backgroundColor = 'transparent'
+                          }
+                        }}
+                      >
+                        <i className="bi bi-shield-lock me-1"></i>
+                        Roles
+                      </Nav.Link>
+                      <Nav.Link 
+                        href="/app/platform?tab=system"
+                        className="px-3 py-2 text-sm rounded-pill border-0"
+                        style={getTabStyle('system')}
+                        onMouseEnter={(e) => {
+                          if (activeTab !== 'system') {
+                            e.currentTarget.style.backgroundColor = '#e2e8f0'
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (activeTab !== 'system') {
+                            e.currentTarget.style.backgroundColor = 'transparent'
+                          }
+                        }}
+                      >
+                        <i className="bi bi-activity me-1"></i>
+                        System
+                      </Nav.Link>
+                    </>
+                  )}
+                </Nav>
+                  )
+                })()}
+              </div>
+            ) : (
+              // Regular search bar for business users - also flex-1 for consistent layout
+              <div className="flex flex-1 items-center gap-3">
+                <div className="relative hidden flex-1 md:block">
+                  <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-slate-400">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+                      <circle cx="11" cy="11" r="7" />
+                      <path d="m20 20-2-2" strokeLinecap="round" />
+                    </svg>
+                  </span>
+                  <Form.Control
+                    type="search"
+                    placeholder="Search customers, products, or orders"
+                    className="h-11 rounded-3xl border border-slate-200 bg-white pl-11 pr-4 text-sm shadow-none focus:border-brand-primary focus:ring-0"
+                  />
+                </div>
+              </div>
+            )}
+          
+          {/* Right section - Quick actions and user menu */}
           <div className="flex items-center gap-2">
-            {hasQuickActions ? (
+            {/* Hide quick actions for platform owners - they don't manage business operations */}
+            {hasQuickActions && !isPlatformAdmin(user) ? (
               <div className="hidden items-center gap-2 md:flex">
                 {canManageSales ? (
                   <Button variant="primary" className="rounded-pill px-4">
@@ -1055,7 +1306,9 @@ const DashboardLayout = () => {
                 </span>
                 <div className="min-w-[140px]">
                   <p className="mb-0 text-sm font-semibold leading-tight">{user?.name ?? 'Team member'}</p>
-                  <p className="mb-0 text-xs text-slate-500">{business?.name ?? 'Loading business…'}</p>
+                  <p className="mb-0 text-xs text-slate-500">
+                    {isPlatformAdmin(user) ? platformRoleLabel : (business?.name ?? 'Loading business…')}
+                  </p>
                 </div>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round"/>
@@ -1091,57 +1344,59 @@ const DashboardLayout = () => {
           {renderNavigation()}
         </aside>
         <div className="flex min-w-0 flex-1 flex-col gap-6">
-          <header className="rounded-3xl border border-slate-200 bg-white/90 px-6 py-5 shadow-sm backdrop-blur-sm">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="space-y-2">
-                <h1 className="text-2xl font-bold text-slate-900">{business?.name ?? 'Your business'}</h1>
-                <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm font-medium text-slate-700">
-                  <span aria-live="polite">{`Business role: ${businessRoleLabel}`}</span>
-                  <span aria-live="polite">{`Platform role: ${platformRoleLabel}`}</span>
-                  <span aria-live="polite">{formattedToday}</span>
+          {/* Show business header only for business users, not platform owners */}
+          {!isPlatformAdmin(user) && (
+            <header className="rounded-3xl border border-slate-200 bg-white/90 px-6 py-5 shadow-sm backdrop-blur-sm">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="space-y-2">
+                  <h1 className="text-2xl font-bold text-slate-900">{business?.name ?? 'Your business'}</h1>
+                  <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm font-medium text-slate-700">
+                    <span aria-live="polite">{`Business role: ${businessRoleLabel}`}</span>
+                    <span aria-live="polite">{`Platform role: ${platformRoleLabel}`}</span>
+                    <span aria-live="polite">{formattedToday}</span>
+                  </div>
                 </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge 
-                  bg={subscriptionVariant} 
-                  className="rounded-pill px-3 py-2 text-sm"
-                  title={`Business Subscription: ${subscriptionStatusLabel}${activeSubscription?.plan?.name ? ` (${activeSubscription.plan.name})` : ''} - Click to ${subscriptionStatusLabel === 'Inactive' ? 'choose a plan' : 'manage'}`}
-                  style={{ cursor: 'pointer' }}
-                  onClick={() => navigate('/app/subscription')}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      navigate('/app/subscription')
-                    }
-                  }}
-                >
-                  {subscriptionDisplayLabel}
-                </Badge>
-
-                {aiFeaturesEnabled ? (
-                  <Button
-                    variant="outline-secondary"
-                    className={`flex items-center gap-2 rounded-pill border px-3 py-2 text-sm ${
-                      aiLowCredits
-                        ? 'border-amber-300 bg-amber-50 text-amber-700'
-                        : 'border-indigo-200 bg-indigo-50 text-indigo-700'
-                    }`}
-                    onClick={() => navigate('/app/ai')}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge 
+                    bg={subscriptionVariant} 
+                    className="rounded-pill px-3 py-2 text-sm"
+                    title={`Business Subscription: ${subscriptionStatusLabel}${activeSubscription?.plan?.name ? ` (${activeSubscription.plan.name})` : ''} - Click to ${subscriptionStatusLabel === 'Inactive' ? 'choose a plan' : 'manage'}`}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => navigate('/app/subscription')}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        navigate('/app/subscription')
+                      }
+                    }}
                   >
-                    <span aria-hidden="true" className="text-base">🤖</span>
-                    <div className="flex flex-col leading-tight text-left">
-                      <span className="text-xs uppercase tracking-wide text-slate-500">AI Assistant</span>
-                      <span className="text-sm font-semibold">
-                        {aiCreditsLoading ? 'Checking credits…' : aiCredits ? `${aiBalance.toFixed(1)} credits` : 'Buy credits'}
-                      </span>
-                      {!aiCreditsLoading ? (
-                        <span className="text-xs text-slate-500">{aiStatusHelper}</span>
-                      ) : null}
-                    </div>
-                  </Button>
-                ) : null}
+                    {subscriptionDisplayLabel}
+                  </Badge>
+
+                  {aiFeaturesEnabled ? (
+                    <Button
+                      variant="outline-secondary"
+                      className={`flex items-center gap-2 rounded-pill border px-3 py-2 text-sm ${
+                        aiLowCredits
+                          ? 'border-amber-300 bg-amber-50 text-amber-700'
+                          : 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                      }`}
+                      onClick={() => navigate('/app/ai')}
+                    >
+                      <span aria-hidden="true" className="text-base">🤖</span>
+                      <div className="flex flex-col leading-tight text-left">
+                        <span className="text-xs uppercase tracking-wide text-slate-500">AI Assistant</span>
+                        <span className="text-sm font-semibold">
+                          {aiCreditsLoading ? 'Checking credits…' : aiCredits ? `${aiBalance.toFixed(1)} credits` : 'Buy credits'}
+                        </span>
+                        {!aiCreditsLoading ? (
+                          <span className="text-xs text-slate-500">{aiStatusHelper}</span>
+                        ) : null}
+                      </div>
+                    </Button>
+                  ) : null}
                 
                 {/* Platform Admin Access */}
                 {user && isPlatformAdmin(user) && (
@@ -1163,6 +1418,8 @@ const DashboardLayout = () => {
               </div>
             </div>
           </header>
+          )}
+          
           <main
             id="main-content"
             className="min-h-0 flex-1 overflow-y-auto rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm backdrop-blur-sm"

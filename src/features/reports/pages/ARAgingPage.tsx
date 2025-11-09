@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Button } from 'react-bootstrap';
 import { financialReportsService } from '../../../services/reportsService';
 import type { ARAgingResponse, ReportFilters } from '../../../types/reports';
 import { useCurrency } from '../../../hooks/useCurrency';
@@ -7,6 +8,10 @@ import { SummaryCard } from '../components/SummaryCard';
 import { LoadingState, ErrorState, EmptyState } from '../components/ReportStates';
 import { useAppSelector } from '../../../hooks';
 import { selectStorefrontsLoading, selectUserStorefronts } from '../../../store/slices/authSlice';
+import { CollectionMessageModal } from '../../ai/components/CollectionMessageModal';
+import { CreditRiskAssessmentModal } from '../../ai/components/CreditRiskAssessmentModal';
+import { ReportNarrativeWidget } from '../../ai/components/ReportNarrativeWidget';
+import { AIQueryBox } from '../../ai';
 
 const ARAgingPage: React.FC = () => {
   const { formatCurrency } = useCurrency();
@@ -20,6 +25,15 @@ const ARAgingPage: React.FC = () => {
     return new Date().toISOString().split('T')[0];
   });
   const [storefrontId, setStorefrontId] = useState<string>('');
+  const [showCollectionModal, setShowCollectionModal] = useState(false);
+  const [showRiskAssessmentModal, setShowRiskAssessmentModal] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<{
+    id: string;
+    name: string;
+    balance: number;
+    daysPastDue: number;
+    creditLimit: number;
+  } | null>(null);
 
   const storefrontOptions = useMemo(() => {
     const items = storefronts ?? [];
@@ -169,6 +183,27 @@ const ARAgingPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* AI Query Box - Ask questions about AR data */}
+      <div className="mb-4">
+        <AIQueryBox 
+          storefrontId={storefrontId}
+          placeholder="Ask about your AR data... (e.g., 'Which customers have the highest overdue balances?' or 'What's my collection rate trend?')"
+        />
+      </div>
+
+      {/* AI Summary */}
+      {data && (
+        <ReportNarrativeWidget
+          reportType="ar_aging"
+          reportData={{
+            summary: data.summary,
+            results: data.results,
+            as_of_date: asOfDate,
+          }}
+          reportTitle="AR Aging"
+        />
+      )}
 
       {/* Summary Cards */}
       <div className="row g-3 mb-4">
@@ -339,6 +374,7 @@ const ARAgingPage: React.FC = () => {
                   <th className="text-center">Risk</th>
                   <th className="text-end">Retail</th>
                   <th className="text-end">Wholesale</th>
+                  <th className="text-center">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -367,6 +403,56 @@ const ARAgingPage: React.FC = () => {
                     </td>
                     <td className="text-end text-primary">{formatCurrency(customer.retail_balance)}</td>
                     <td className="text-end text-success">{formatCurrency(customer.wholesale_balance)}</td>
+                    <td className="text-center">
+                      {customer.total_balance > 0 && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline-primary"
+                            onClick={() => {
+                              setSelectedCustomer({
+                                id: customer.customer_id,
+                                name: customer.customer_name,
+                                balance: customer.total_balance,
+                                creditLimit: customer.credit_limit,
+                                daysPastDue: Math.max(
+                                  (customer['1_30_days'] > 0 ? 30 : 0),
+                                  (customer['31_60_days'] > 0 ? 60 : 0),
+                                  (customer['61_90_days'] > 0 ? 90 : 0),
+                                  (customer.over_90_days > 0 ? 91 : 0)
+                                ),
+                              });
+                              setShowCollectionModal(true);
+                            }}
+                            className="me-1"
+                          >
+                            💬
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline-success"
+                            onClick={() => {
+                              setSelectedCustomer({
+                                id: customer.customer_id,
+                                name: customer.customer_name,
+                                balance: customer.total_balance,
+                                creditLimit: customer.credit_limit,
+                                daysPastDue: Math.max(
+                                  (customer['1_30_days'] > 0 ? 30 : 0),
+                                  (customer['31_60_days'] > 0 ? 60 : 0),
+                                  (customer['61_90_days'] > 0 ? 90 : 0),
+                                  (customer.over_90_days > 0 ? 91 : 0)
+                                ),
+                              });
+                              setShowRiskAssessmentModal(true);
+                            }}
+                            title="AI Credit Risk Assessment"
+                          >
+                            🎯
+                          </Button>
+                        </>
+                      )}
+                    </td>
                   </tr>
                 ))}
                 {results.length === 0 && (
@@ -381,6 +467,36 @@ const ARAgingPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Collection Message Modal */}
+      {selectedCustomer && (
+        <CollectionMessageModal
+          show={showCollectionModal}
+          onHide={() => {
+            setShowCollectionModal(false);
+            setSelectedCustomer(null);
+          }}
+          customerId={selectedCustomer.id}
+          customerName={selectedCustomer.name}
+          outstandingAmount={selectedCustomer.balance}
+          daysPastDue={selectedCustomer.daysPastDue}
+        />
+      )}
+
+      {/* Credit Risk Assessment Modal */}
+      {selectedCustomer && (
+        <CreditRiskAssessmentModal
+          show={showRiskAssessmentModal}
+          onHide={() => {
+            setShowRiskAssessmentModal(false);
+            setSelectedCustomer(null);
+          }}
+          customerId={selectedCustomer.id}
+          customerName={selectedCustomer.name}
+          currentCreditLimit={selectedCustomer.creditLimit}
+          requestedCreditLimit={selectedCustomer.creditLimit * 1.5}
+        />
+      )}
     </ReportContainer>
   );
 };

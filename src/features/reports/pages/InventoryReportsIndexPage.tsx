@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Package, AlertTriangle, Activity, Warehouse } from 'lucide-react';
+import { InventoryForecastWidget } from '../../ai/components/InventoryForecastWidget';
 
 interface ReportCard {
   id: string;
@@ -93,6 +94,9 @@ const InventoryReportsIndexPage: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* AI Inventory Forecast Widget */}
+      <InventoryForecastWidget forecastDays={30} />
 
       {/* Reports Grid */}
       <div className="grid gap-6 md:grid-cols-2">

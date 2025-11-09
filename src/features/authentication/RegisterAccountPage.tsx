@@ -121,8 +121,8 @@ const RegisterAccountPage = () => {
             <Col lg={5} className="order-2 order-lg-1">
               <div className="h-100 rounded-4 border border-white/15 bg-white/5 p-5">
                 <Stack gap={3}>
-                  <h2 className="h5 mb-0 text-white/90">Your role</h2>
-                  <p className="mb-0 text-sm text-white/70">Select the option that matches how you will use POS Suite.</p>
+                  <h2 className="h5 mb-0 text-white">Your role</h2>
+                  <p className="mb-0 text-sm text-white/90">Select the option that matches how you will use POS Suite.</p>
                   <div className="d-grid gap-3">
                     {(Object.keys(ACCOUNT_TYPE_COPY) as AccountType[]).map((type) => {
                       const copy = ACCOUNT_TYPE_COPY[type]
@@ -131,8 +131,8 @@ const RegisterAccountPage = () => {
                         <Button
                           key={type}
                           variant={isActive ? 'primary' : 'outline-light'}
-                          className={`rounded-4 border-white/20 px-4 py-3 text-start transition ${
-                            isActive ? 'border-0 text-white shadow-lg' : 'text-white/80'
+                          className={`rounded-4 px-4 py-3 text-start transition ${
+                            isActive ? 'border-0 text-white shadow-lg' : ''
                           }`}
                           style={
                             isActive
@@ -140,15 +140,20 @@ const RegisterAccountPage = () => {
                                   backgroundImage: 'linear-gradient(135deg, #2563eb, #7c3aed)',
                                   boxShadow: '0 25px 45px rgba(37, 99, 235, 0.35)',
                                 }
-                              : undefined
+                              : {
+                                  backgroundColor: 'rgba(248, 250, 252, 0.96)',
+                                  borderColor: 'rgba(15, 23, 42, 0.12)',
+                                  color: '#0f172a',
+                                  boxShadow: '0 18px 38px rgba(15, 23, 42, 0.08)',
+                                }
                           }
                           onClick={() => !isSuccess && setAccountType(type)}
                           type="button"
                           disabled={isSuccess}
                         >
-                          <span className="d-block text-xs text-white/60">{copy.badge}</span>
-                          <span className="d-block text-lg fw-semibold">{copy.title}</span>
-                          <span className="d-block text-sm text-white/70">{copy.description}</span>
+                          <span className={`d-block text-xs ${isActive ? 'text-white/80' : 'text-slate-500'}`}>{copy.badge}</span>
+                          <span className={`d-block text-lg fw-semibold ${isActive ? 'text-white' : 'text-slate-900'}`}>{copy.title}</span>
+                          <span className={`d-block text-sm ${isActive ? 'text-white/90' : 'text-slate-600'}`}>{copy.description}</span>
                         </Button>
                       )
                     })}
