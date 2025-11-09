@@ -1,0 +1,30 @@
+/**
+ * Product Description Generator Modal Styles
+ */
+
+.product-info {
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.product-info .bg-light {
+  background: white !important;
+  border: 1px solid #e9ecef;
+}
+
+.result-section .generated-description {
+  max-height: 300px;
+  overflow-y: auto;
+  line-height: 1.8;
+  color: #374151;
+}
+
+.loading-section {
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.loading-section .spinner-border {
+  width: 3rem;
+  height: 3rem;
+}

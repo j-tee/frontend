@@ -6,6 +6,7 @@ import Spinner from 'react-bootstrap/Spinner'
 import Table from 'react-bootstrap/Table'
 import { useLocation } from 'react-router-dom'
 import { useAppDispatch, useAppSelector } from '../../../hooks/index.js'
+import { AIQueryBox } from '../../ai'
 import {
   addCategory,
   addProduct,
@@ -238,6 +239,13 @@ const InventoryPage = () => {
           Create product categories, add catalog items, and keep your stocking workflows moving without leaving the intake
           screen.
         </p>
+      </section>
+
+      {/* AI Query Box - Ask questions about inventory */}
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <AIQueryBox 
+          placeholder="Ask about your inventory... (e.g., 'Which products are low in stock?' or 'What's my best-selling category?')"
+        />
       </section>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,_360px)_1fr]">

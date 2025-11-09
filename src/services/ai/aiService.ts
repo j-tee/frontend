@@ -19,6 +19,10 @@ import type {
   CollectionMessageResponse,
   CreditRiskAssessmentRequest,
   CreditRiskAssessmentResponse,
+  ReportNarrativeRequest,
+  ReportNarrativeResponse,
+  InventoryForecastRequest,
+  InventoryForecastResponse,
   AICreditVerificationResponse,
 } from '../../types/ai'
 
@@ -164,6 +168,32 @@ export const assessCreditRisk = async (
 ): Promise<CreditRiskAssessmentResponse> => {
   const response = await httpClient.post<CreditRiskAssessmentResponse>(
     `${AI_BASE_PATH}/credit/assess/`,
+    data,
+  )
+  return response.data
+}
+
+/**
+ * Generate report narrative
+ */
+export const generateReportNarrative = async (
+  data: ReportNarrativeRequest,
+): Promise<ReportNarrativeResponse> => {
+  const response = await httpClient.post<ReportNarrativeResponse>(
+    `${AI_BASE_PATH}/reports/narrative/`,
+    data,
+  )
+  return response.data
+}
+
+/**
+ * Generate inventory forecast
+ */
+export const generateInventoryForecast = async (
+  data: InventoryForecastRequest,
+): Promise<InventoryForecastResponse> => {
+  const response = await httpClient.post<InventoryForecastResponse>(
+    `${AI_BASE_PATH}/inventory/forecast/`,
     data,
   )
   return response.data

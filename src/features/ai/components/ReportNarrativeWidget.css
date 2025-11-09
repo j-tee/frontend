@@ -1,0 +1,70 @@
+/* Report Narrative Widget Styles */
+
+.report-narrative-widget {
+  margin-bottom: 1rem;
+}
+
+.narrative-container {
+  border: 1px solid #dee2e6;
+  border-radius: 0.375rem;
+  background-color: #fff;
+  padding: 1rem;
+}
+
+.narrative-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.narrative-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+
+.narrative-content {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.section-title {
+  font-weight: 600;
+  color: #495057;
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.insights-list,
+.trends-list,
+.recommendations-list,
+.alerts-list {
+  padding-left: 1.5rem;
+  margin-bottom: 0;
+}
+
+.insights-list li,
+.trends-list li,
+.recommendations-list li,
+.alerts-list li {
+  margin-bottom: 0.5rem;
+}
+
+.narrative-footer {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #dee2e6;
+}

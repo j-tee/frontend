@@ -4,6 +4,7 @@ import Button from 'react-bootstrap/Button'
 import Form from 'react-bootstrap/Form'
 import Modal from 'react-bootstrap/Modal'
 import Stack from 'react-bootstrap/Stack'
+import { ProductDescriptionModal } from '../../ai/components/ProductDescriptionModal'
 import type {
   StockBatch,
   StockProduct,
@@ -100,6 +101,7 @@ const StockProductDetailModal = ({
   const [formValues, setFormValues] = useState<FormValues>(defaultFormValues)
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [showAIModal, setShowAIModal] = useState(false)
 
   const stockBatch = useMemo(() => {
     if (!stockProduct) return null
@@ -152,6 +154,22 @@ const StockProductDetailModal = ({
       ...previous,
       [field]: value,
     }))
+  }
+
+  const handleOpenAIModal = () => {
+    setShowAIModal(true)
+  }
+
+  const handleCloseAIModal = () => {
+    setShowAIModal(false)
+  }
+
+  const handleAcceptAIDescription = (description: string) => {
+    setFormValues((previous) => ({
+      ...previous,
+      description: description,
+    }))
+    setShowAIModal(false)
   }
 
   const parsedQuantity = useMemo(() => {
@@ -244,6 +262,7 @@ const StockProductDetailModal = ({
   const disableDeleteButton = !stockProduct || isUpdating
 
   return (
+    <>
     <Modal show={show} onHide={onClose} size="xl" backdrop="static" centered>
       <Form id="stockProductDetailForm" onSubmit={handleSubmit}>
         <Modal.Header closeButton>
@@ -416,7 +435,19 @@ const StockProductDetailModal = ({
                   />
                 </Form.Group>
                 <Form.Group controlId="stockProductDescription">
-                  <Form.Label>Description</Form.Label>
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <Form.Label className="mb-0">Description</Form.Label>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      onClick={handleOpenAIModal}
+                      disabled={isUpdating || isDeleting}
+                      className="p-0 text-decoration-none"
+                      style={{ fontSize: '0.875rem' }}
+                    >
+                      ✨ Generate with AI
+                    </Button>
+                  </div>
                   <Form.Control
                     as="textarea"
                     rows={3}
@@ -425,6 +456,9 @@ const StockProductDetailModal = ({
                     disabled={isUpdating || isDeleting}
                     placeholder="Add internal notes about this stock item"
                   />
+                  <Form.Text muted>
+                    Use AI to generate professional product descriptions (0.1 credits)
+                  </Form.Text>
                 </Form.Group>
               </div>
             </Stack>
@@ -482,6 +516,19 @@ const StockProductDetailModal = ({
         </Modal.Footer>
       </Form>
     </Modal>
+
+    {/* AI Product Description Modal */}
+    <ProductDescriptionModal
+      show={showAIModal}
+      onHide={handleCloseAIModal}
+      productId={stockProduct?.product}
+      productName={stockProduct?.product_name || ''}
+      productCategory={undefined}
+      productUnit={undefined}
+      currentDescription={formValues.description}
+      onAccept={handleAcceptAIDescription}
+    />
+  </>
   )
 }
 

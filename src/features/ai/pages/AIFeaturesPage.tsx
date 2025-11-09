@@ -20,39 +20,40 @@ const FEATURE_CARDS = [
     title: 'Smart Query',
     description: 'Ask questions about your business in plain English',
     cost: AI_FEATURE_COSTS.natural_language_query,
-    path: '/ai/query',
+    path: null, // Feature is on this page already
+    action: 'scroll-to-query' as const,
     color: '#8b5cf6',
   },
   {
     icon: '💬',
     title: 'Collection Messages',
-    description: 'Generate professional payment reminder messages',
+    description: 'Generate professional payment reminder messages on AR Aging page',
     cost: AI_FEATURE_COSTS.collection_message,
-    path: '/ai/collections',
+    path: '/app/reports/financial/ar-aging',
     color: '#10b981',
   },
   {
     icon: '🎯',
     title: 'Credit Risk Assessment',
-    description: 'AI-powered customer credit analysis',
+    description: 'AI-powered customer credit analysis on AR Aging page',
     cost: AI_FEATURE_COSTS.credit_assessment,
-    path: '/ai/credit-assessment',
+    path: '/app/reports/financial/ar-aging',
     color: '#f59e0b',
   },
   {
     icon: '📝',
     title: 'Product Descriptions',
-    description: 'Generate compelling product descriptions',
+    description: 'Generate compelling product descriptions in inventory',
     cost: AI_FEATURE_COSTS.product_description,
-    path: '/ai/products',
+    path: '/app/inventory',
     color: '#3b82f6',
   },
   {
     icon: '📊',
     title: 'Report Narratives',
-    description: 'Transform data into readable business stories',
+    description: 'Transform sales data into readable business stories',
     cost: AI_FEATURE_COSTS.report_narrative,
-    path: '/reports',
+    path: '/app/reports/sales',
     color: '#ec4899',
   },
   {
@@ -60,10 +61,10 @@ const FEATURE_CARDS = [
     title: 'Inventory Forecasting',
     description: 'Predict inventory needs and prevent stockouts',
     cost: AI_FEATURE_COSTS.inventory_forecast,
-    path: '/ai/inventory',
+    path: '/app/reports/inventory',
     color: '#6366f1',
   },
-] as const
+]
 
 export const AIFeaturesPage: React.FC = () => {
   const dispatch = useAppDispatch()
@@ -120,6 +121,33 @@ export const AIFeaturesPage: React.FC = () => {
   const successRate = normalizedUsageStats && normalizedUsageStats.totalRequests > 0
     ? (normalizedUsageStats.successfulRequests / normalizedUsageStats.totalRequests) * 100
     : 0
+
+  const handleFeatureClick = (feature: typeof FEATURE_CARDS[number]) => {
+    const featureCost = Number(feature.cost ?? 0)
+    const canAfford = availableBalance >= featureCost
+
+    if (!canAfford) {
+      toast.warning(`You need ${featureCost} credits to use this feature. Current balance: ${availableBalance.toFixed(1)} credits`)
+      return
+    }
+
+    if (feature.action === 'scroll-to-query') {
+      // Scroll to the query box on this page
+      const querySection = document.querySelector('.query-section')
+      if (querySection) {
+        querySection.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        // Focus on the input field
+        setTimeout(() => {
+          const input = querySection.querySelector('textarea') as HTMLTextAreaElement
+          if (input) {
+            input.focus()
+          }
+        }, 500)
+      }
+    } else if (feature.path) {
+      navigate(feature.path)
+    }
+  }
 
   return (
     <div className="ai-features-page">
@@ -211,7 +239,7 @@ export const AIFeaturesPage: React.FC = () => {
                 <div
                   key={feature.title}
                   className={`feature-card ${!canAfford ? 'disabled' : ''}`.trim()}
-                  onClick={() => canAfford && navigate(feature.path)}
+                  onClick={() => handleFeatureClick(feature)}
                   style={{ '--feature-color': feature.color } as React.CSSProperties}
                 >
                   <div className="feature-icon">{feature.icon}</div>
